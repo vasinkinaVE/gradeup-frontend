@@ -38,12 +38,6 @@
           />
         </el-form-item>
 
-        <div class="form-actions">
-          <el-link type="primary" :underline="false" @click="handleForgotPassword">
-            Забыли пароль?
-          </el-link>
-        </div>
-
         <el-form-item>
           <el-button
             type="primary"
@@ -75,13 +69,11 @@ const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref<FormInstance>()
 
-// Простая реактивная форма (без vee-validate для начала)
 const formValues = reactive({
   email: '',
   password: '',
 })
 
-// Правила валидации для Element Plus
 const rules = reactive<FormRules>({
   email: [
     { required: true, message: 'Введите email', trigger: 'blur' },
@@ -89,11 +81,10 @@ const rules = reactive<FormRules>({
   ],
   password: [
     { required: true, message: 'Введите пароль', trigger: 'blur' },
-    { min: 8, message: 'Минимум 8 символов', trigger: 'blur' },
+    { min: 5, message: 'Минимум 5 символов', trigger: 'blur' },
   ],
 })
 
-// Обработчик отправки
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -106,16 +97,11 @@ const handleSubmit = async () => {
       ElMessage.success('Добро пожаловать!')
       router.push('/dashboard')
     } else {
-      ElMessage.error('Ошибка авторизации')
+      ElMessage.error(result.error || 'Ошибка авторизации')
     }
   } catch (error) {
-    // Валидация не прошла
     ElMessage.warning('Проверьте правильность заполнения полей')
   }
-}
-
-const handleForgotPassword = () => {
-  ElMessage.info('Функция восстановления пароля будет доступна в следующей версии')
 }
 
 const currentYear = computed(() => new Date().getFullYear())
@@ -123,18 +109,17 @@ const currentYear = computed(() => new Date().getFullYear())
 
 <style scoped>
 .auth-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   min-height: 100vh;
   background: var(--background);
-  padding: 20px;
+  padding: var(--spacing-md);
 }
 
 .auth-card {
   width: 100%;
   max-width: 420px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
 }
 
 .card-header {
@@ -143,8 +128,8 @@ const currentYear = computed(() => new Date().getFullYear())
 
 .logo {
   font-size: 32px;
-  font-weight: 800;
-  margin: 0 0 8px;
+  font-weight: var(--font-weight-bold);
+  margin: 0 0 var(--spacing-sm);
   color: var(--text);
   letter-spacing: -0.5px;
 }
@@ -157,29 +142,25 @@ const currentYear = computed(() => new Date().getFullYear())
   color: var(--el-text-color-secondary);
   margin: 0;
   font-size: 16px;
-  font-weight: 500;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
+  font-weight: var(--font-weight-medium);
 }
 
 .submit-btn {
   width: 100%;
   height: 48px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   background: linear-gradient(135deg, var(--primary), var(--secondary));
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
 }
 
 .submit-btn:hover {
   opacity: 0.95;
   transform: translateY(-1px);
-  transition: all 0.2s ease;
 }
 
 .card-footer {

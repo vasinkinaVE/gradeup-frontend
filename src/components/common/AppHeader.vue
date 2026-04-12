@@ -1,36 +1,42 @@
 <template>
   <header class="main-header">
     <div class="header-left">
+      <!-- Кнопка гамбургер (видна только на мобильных) -->
+      <el-button text :icon="Fold" class="mobile-menu-btn" @click="mobileMenuVisible = true" />
+
       <div class="logo">
         <span class="logo-text">GradeUp</span>
       </div>
-      <nav class="main-nav">
+
+      <!-- Десктопная навигация -->
+      <nav class="main-nav desktop-nav">
         <router-link to="/dashboard" class="nav-link" active-class="active">
           <el-icon><HomeFilled /></el-icon>
-          <span>Личный кабинет</span>
+          <span class="nav-text">Личный кабинет</span>
         </router-link>
         <router-link to="/profile" class="nav-link" active-class="active">
           <el-icon><List /></el-icon>
-          <span>Профиль</span>
+          <span class="nav-text">Профиль</span>
         </router-link>
         <router-link to="/calendar" class="nav-link" active-class="active">
           <el-icon><Calendar /></el-icon>
-          <span>Календарь</span>
+          <span class="nav-text">Календарь</span>
         </router-link>
-        <!-- Кнопка "Моя команда" только для руководителей -->
+
         <router-link v-if="isManager" to="/manager/team" class="nav-link" active-class="active">
           <el-icon><UserFilled /></el-icon>
-          <span>Моя команда</span>
+          <span class="nav-text">Моя команда</span>
         </router-link>
-        <!-- Кнопка "Панель управления" только для SPO и администраторов -->
+
         <router-link v-if="isSPOOrAdmin" to="/admin" class="nav-link" active-class="active">
           <el-icon><Setting /></el-icon>
-          <span>Панель управления</span>
+          <span class="nav-text">Панель управления</span>
         </router-link>
       </nav>
     </div>
 
     <div class="header-right">
+      <!-- Уведомления (скрываем на мобильных) -->
       <el-badge :value="3" class="notification-badge">
         <el-button text :icon="Bell" class="notification-btn" />
       </el-badge>
@@ -52,11 +58,56 @@
         </template>
       </el-dropdown>
     </div>
+
+    <!-- Мобильное меню (Drawer) -->
+    <el-drawer
+      v-model="mobileMenuVisible"
+      title="Меню"
+      direction="ltr"
+      size="280px"
+      class="mobile-drawer"
+    >
+      <nav class="mobile-nav">
+        <router-link
+          v-for="item in navItems"
+          :key="item.path"
+          :to="item.path"
+          class="mobile-nav-link"
+          active-class="active"
+          @click="mobileMenuVisible = false"
+        >
+          <el-icon :size="20"><component :is="item.icon" /></el-icon>
+          <span>{{ item.label }}</span>
+        </router-link>
+
+        <router-link
+          v-if="isManager"
+          to="/manager/team"
+          class="mobile-nav-link"
+          active-class="active"
+          @click="mobileMenuVisible = false"
+        >
+          <el-icon :size="20"><UserFilled /></el-icon>
+          <span>Моя команда</span>
+        </router-link>
+
+        <router-link
+          v-if="isSPOOrAdmin"
+          to="/admin"
+          class="mobile-nav-link"
+          active-class="active"
+          @click="mobileMenuVisible = false"
+        >
+          <el-icon :size="20"><Setting /></el-icon>
+          <span>Панель управления</span>
+        </router-link>
+      </nav>
+    </el-drawer>
   </header>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -67,57 +118,42 @@ import {
   ArrowDown,
   UserFilled,
   Setting,
+  Fold, // Иконка гамбургера
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const mobileMenuVisible = ref(false)
 
-const currentUser = computed(() => authStore.currentUser)
+const currentUser = computed(() => authStore.user)
 
-// Проверка роли: руководитель/менеджер
 const isManager = computed(() => {
-  const user = currentUser.value
-  if (!user) return false
-
-  if (user.role) {
-    return ['MANAGER', 'manager', 'Руководитель', 'руководитель'].includes(user.role)
-  }
-  return false
+  const role = currentUser.value?.role_name
+  if (!role) return false
+  const r = role.toLowerCase()
+  return ['manager', 'руководитель'].includes(r)
 })
 
-// Проверка роли: SPO или администратор
 const isSPOOrAdmin = computed(() => {
-  const user = currentUser.value
-  if (!user) return false
-
-  if (user.role) {
-    return [
-      'SPO',
-      'spo',
-      'Специалист по обучению',
-      'специалист по обучению',
-      'ADMIN',
-      'admin',
-      'Администратор',
-      'администратор',
-      'SUPERUSER',
-      'superuser',
-    ].includes(user.role)
-  }
-  return false
+  const role = currentUser.value?.role_name
+  if (!role) return false
+  const r = role.toLowerCase()
+  return ['spo', 'специалист по обучению', 'admin', 'администратор', 'superuser'].includes(r)
 })
 
 const userShortName = computed(() => {
   const user = currentUser.value
   if (!user) return ''
-  return `${user.lastName} ${user.firstName.charAt(0)}.`
+  const { first_name = '', last_name = '' } = user
+  return `${last_name} ${first_name.charAt(0) || ''}.`.trim()
 })
 
 const userInitials = computed(() => {
   const user = currentUser.value
   if (!user) return '?'
-  return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
+  const { first_name = '', last_name = '' } = user
+  return `${(first_name[0] || '') + (last_name[0] || '')}`.toUpperCase()
 })
 
 const handleLogout = async () => {
@@ -126,12 +162,24 @@ const handleLogout = async () => {
       confirmButtonText: 'Выйти',
       cancelButtonText: 'Отмена',
       type: 'warning',
+      confirmButtonClass: 'el-button--danger',
     })
-    authStore.logout()
+
+    await authStore.logout()
     ElMessage.success('Вы успешно вышли из системы')
-    router.push('/login')
-  } catch {
-    // Отменено
+  } catch (err: any) {
+    const isCancel =
+      err?.type === 'cancel' ||
+      err === 'cancel' ||
+      err?.message?.includes('cancel') ||
+      err?.name === 'ElMessageBox'
+
+    if (isCancel) {
+      return
+    }
+
+    console.error('Logout error:', err)
+    ElMessage.error('Не удалось выйти. Попробуйте ещё раз')
   }
 }
 
@@ -140,6 +188,13 @@ const handleMenuCommand = (command: string) => {
     handleLogout()
   }
 }
+
+// Элементы навигации для мобильного меню
+const navItems = [
+  { path: '/dashboard', label: 'Личный кабинет', icon: HomeFilled },
+  { path: '/profile', label: 'Профиль', icon: List },
+  { path: '/calendar', label: 'Календарь', icon: Calendar },
+]
 </script>
 
 <style scoped>
@@ -147,9 +202,9 @@ const handleMenuCommand = (command: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 var(--spacing-lg);
   height: 64px;
-  background: linear-gradient(135deg, #4a2c6d 0%, #6a4c8d 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
   box-shadow: 0 2px 8px rgba(74, 44, 109, 0.2);
   position: sticky;
   top: 0;
@@ -159,7 +214,15 @@ const handleMenuCommand = (command: string) => {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: var(--spacing-lg);
+}
+
+/* Кнопка гамбургер — скрыта по умолчанию */
+.mobile-menu-btn {
+  color: #fff !important;
+  font-size: 24px;
+  padding: 8px;
+  display: none;
 }
 
 .logo {
@@ -169,47 +232,51 @@ const handleMenuCommand = (command: string) => {
 
 .logo-text {
   font-size: 24px;
-  font-weight: 700;
-  color: white;
+  font-weight: var(--font-weight-bold);
+  color: #fff;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
-.main-nav {
+/* Десктопная навигация */
+.desktop-nav {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   transition: all 0.3s ease;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
   background-color: rgba(255, 255, 255, 0.1);
-  color: white;
+  color: #fff;
 }
 
 .nav-link.active {
   background-color: rgba(255, 255, 255, 0.2);
-  color: white;
+  color: #fff;
 }
 
 .nav-link .el-icon {
   font-size: 16px;
+  flex-shrink: 0;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .notification-badge {
@@ -217,9 +284,9 @@ const handleMenuCommand = (command: string) => {
 }
 
 .notification-btn {
-  color: white;
+  color: #fff;
   font-size: 20px;
-  padding: 8px;
+  padding: var(--spacing-sm);
 }
 
 .notification-btn:hover {
@@ -229,8 +296,8 @@ const handleMenuCommand = (command: string) => {
 .user-menu {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: var(--spacing-sm);
+  padding: 6px var(--spacing-md);
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   cursor: pointer;
@@ -243,14 +310,14 @@ const handleMenuCommand = (command: string) => {
 
 .user-avatar {
   background-color: rgba(255, 255, 255, 0.3);
-  color: white;
-  font-weight: 600;
+  color: #fff;
+  font-weight: var(--font-weight-semibold);
 }
 
 .user-name {
-  color: white;
+  color: #fff;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .user-menu .el-icon {
@@ -259,6 +326,125 @@ const handleMenuCommand = (command: string) => {
 }
 
 .logout-item {
-  color: #f56c6c;
+  color: var(--danger);
+}
+
+/* Мобильная навигация */
+.mobile-nav {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-md);
+}
+
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  color: var(--text);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: var(--font-weight-medium);
+  transition: background-color 0.2s;
+  margin-bottom: var(--spacing-xs);
+}
+
+.mobile-nav-link:hover {
+  background-color: var(--background);
+  color: var(--primary);
+}
+
+.mobile-nav-link.active {
+  background-color: var(--primary);
+  color: #fff;
+}
+
+/* Drawer стили */
+:deep(.mobile-drawer .el-drawer__header) {
+  margin-bottom: 0;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: #fff;
+  border-bottom: none;
+}
+
+:deep(.mobile-drawer .el-drawer__close-btn) {
+  color: #fff;
+}
+
+:deep(.mobile-drawer .el-drawer__body) {
+  padding: 0;
+}
+
+/* ========================================
+   MEDIA QUERIES — АДАПТИВНОСТЬ
+   ======================================== */
+
+/* Планшеты (до 1024px) — скрываем текст навигации */
+@media (max-width: 1024px) {
+  .main-header {
+    padding: 0 var(--spacing-md);
+  }
+
+  .nav-text {
+    display: none;
+  }
+
+  .nav-link {
+    padding: var(--spacing-sm);
+    justify-content: center;
+  }
+
+  .header-left {
+    gap: var(--spacing-md);
+  }
+}
+
+/* Мобильные (до 768px) — показываем гамбургер, скрываем меню */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+
+  .desktop-nav {
+    display: none;
+  }
+
+  .notification-badge {
+    display: none;
+  }
+
+  .header-right {
+    gap: var(--spacing-xs);
+  }
+
+  .user-menu {
+    padding: 4px 8px;
+    gap: var(--spacing-xs);
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .user-menu .el-icon {
+    display: none;
+  }
+
+  .logo-text {
+    font-size: 20px;
+  }
+}
+
+/* Маленькие экраны (до 360px) */
+@media (max-width: 360px) {
+  .main-header {
+    height: 56px;
+  }
+
+  .logo-text {
+    font-size: 18px;
+  }
 }
 </style>
