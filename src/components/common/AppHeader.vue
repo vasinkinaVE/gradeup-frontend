@@ -28,6 +28,12 @@
           <span class="nav-text">Моя команда</span>
         </router-link>
 
+        <!-- 🔹 НОВАЯ ССЫЛКА: Сотрудники (только для SPO/Admin) -->
+        <router-link v-if="isSPOOrAdmin" to="/admin/users" class="nav-link" active-class="active">
+          <el-icon><User /></el-icon>
+          <span class="nav-text">Сотрудники</span>
+        </router-link>
+
         <router-link v-if="isSPOOrAdmin" to="/admin" class="nav-link" active-class="active">
           <el-icon><Setting /></el-icon>
           <span class="nav-text">Панель управления</span>
@@ -91,6 +97,18 @@
           <span>Моя команда</span>
         </router-link>
 
+        <!-- 🔹 НОВАЯ ССЫЛКА в мобильном меню: Сотрудники -->
+        <router-link
+          v-if="isSPOOrAdmin"
+          to="/admin/users"
+          class="mobile-nav-link"
+          active-class="active"
+          @click="mobileMenuVisible = false"
+        >
+          <el-icon :size="20"><User /></el-icon>
+          <span>Сотрудники</span>
+        </router-link>
+
         <router-link
           v-if="isSPOOrAdmin"
           to="/admin"
@@ -118,7 +136,8 @@ import {
   ArrowDown,
   UserFilled,
   Setting,
-  Fold, // Иконка гамбургера
+  User, // 🔹 Добавлена иконка User
+  Fold,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 

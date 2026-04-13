@@ -49,11 +49,17 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/manager/CreateAttestationView.vue'),
     meta: { requiresAuth: true, roles: ['manager'], title: 'Создать аттестацию' },
   },
-  //Маршруты для СПО и админа
+
+  // Маршруты для СПО и админа
   {
     path: '/admin',
-    component: () => import('@/views/admin and spo/ControlPanelView.vue'),
+    component: () => import('@/views/admin_and_spo/ControlPanelView.vue'),
     meta: { requiresAuth: true, roles: ['spo', 'admin'], title: 'Панель управления' },
+  },
+  {
+    path: '/admin/users',
+    component: () => import('@/views/admin_and_spo/EmployeesView.vue'),
+    meta: { requiresAuth: true, roles: ['spo', 'admin'], title: 'Сотрудники' },
   },
   // Маршруты для СПО
   {
@@ -84,11 +90,6 @@ const routes: RouteRecordRaw[] = [
 
   // Маршруты для админа
   {
-    path: '/admin/users',
-    component: () => import('@/views/admin/UsersView.vue'),
-    meta: { requiresAuth: true, roles: ['admin'], title: 'Пользователи' },
-  },
-  {
     path: '/admin/users/:id/edit',
     component: () => import('@/views/admin/UserEditView.vue'),
     meta: { requiresAuth: true, roles: ['admin'], title: 'Редактирование пользователя' },
@@ -118,63 +119,59 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-// Guard
-router.beforeEach((to, _from) => {
+// 🔐 Guard для проверки авторизации и ролей
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
 
-  // Установка заголовка
+  // Установка заголовка страницы
   if (to.meta.title) {
     document.title = `${to.meta.title} | GradeUp`
   }
 
-  // Проверка авторизации
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return '/login'
-  }
-
-  // Редирект с /login
-  if (to.path === '/login' && authStore.isAuthenticated) {
-    const userRole = authStore.currentUser?.role
-
-    // Редирект на соответствующий дашборд
-    switch (userRole) {
-      case 'employee':
-        return '/dashboard'
-      case 'manager':
-        return '/manager/dashboard'
-      case 'spo':
-        return '/spo/dashboard'
-      case 'admin':
-        return '/admin/dashboard'
-      default:
-        return '/dashboard'
+  // 🔹 Если есть токен, но пользователь ещё не загружен — загружаем
+  const token = localStorage.getItem('access_token')
+  if (token && !authStore.user) {
+    try {
+      await authStore.fetchCurrentUser()
+    } catch {
+      // Токен невалиден — очищаем и перенаправляем на вход
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      next('/login')
+      return
     }
   }
 
-  // Проверка ролей
-  const roles = to.meta.roles as string[] | undefined
-  if (roles && roles.length > 0) {
-    const userRole = authStore.currentUser?.role
-    if (!userRole || !roles.includes(userRole)) {
-      console.warn(`Доступ запрещён. Нужны роли: ${roles.join(', ')}`)
+  // 🔹 Проверка авторизации
+  if (to.meta.requiresAuth && !authStore.user) {
+    next('/login')
+    return
+  }
 
-      // Редирект на свой дашборд
-      switch (userRole) {
-        case 'employee':
-          return '/dashboard'
-        case 'manager':
-          return '/manager/dashboard'
-        case 'spo':
-          return '/spo/dashboard'
-        case 'admin':
-          return '/admin/dashboard'
-        default:
-          return '/dashboard'
-      }
+  // 🔹 Если уже авторизован и пытается зайти на /login — редирект на дашборд
+  if (to.path === '/login' && authStore.user) {
+    next('/dashboard')
+    return
+  }
+
+  // 🔹 Проверка ролей (если указаны в meta)
+  const allowedRoles = to.meta.roles as string[] | undefined
+  if (allowedRoles && allowedRoles.length > 0) {
+    // ✅ Исправлено: используем role_name + toLowerCase() для надёжного сравнения
+    const userRole = authStore.user?.role_name?.toLowerCase()
+    const normalizedRoles = allowedRoles.map((r) => r.toLowerCase())
+
+    if (!userRole || !normalizedRoles.includes(userRole)) {
+      console.warn(
+        `Доступ запрещён. Нужны роли: ${allowedRoles.join(', ')}, у пользователя: ${authStore.user?.role_name}`,
+      )
+      next('/dashboard') // Редирект на существующий маршрут
+      return
     }
   }
 
-  return true
+  // Всё ок — разрешаем переход
+  next()
 })
 
 export default router
