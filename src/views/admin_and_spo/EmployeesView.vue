@@ -163,10 +163,10 @@
         class="reg-form"
       >
         <div class="form-row">
-          <el-form-item label="Фамилия *" prop="lastName">
+          <el-form-item label="Фамилия" prop="lastName">
             <el-input v-model="regForm.lastName" placeholder="Иванов" />
           </el-form-item>
-          <el-form-item label="Имя *" prop="firstName">
+          <el-form-item label="Имя" prop="firstName">
             <el-input v-model="regForm.firstName" placeholder="Иван" />
           </el-form-item>
           <el-form-item label="Отчество" prop="patronymic">
@@ -175,10 +175,10 @@
         </div>
 
         <div class="form-row">
-          <el-form-item label="Должность *" prop="position">
+          <el-form-item label="Должность" prop="position">
             <el-input v-model="regForm.position" placeholder="Например: Frontend Developer" />
           </el-form-item>
-          <el-form-item label="Email *" prop="email">
+          <el-form-item label="Email" prop="email">
             <el-input v-model="regForm.email" placeholder="user@example.com" />
           </el-form-item>
         </div>
@@ -207,7 +207,7 @@
         </div>
 
         <div class="form-row">
-          <el-form-item label="Пароль *" prop="password">
+          <el-form-item label="Пароль" prop="password">
             <el-input
               v-model="regForm.password"
               type="password"
@@ -215,7 +215,7 @@
               placeholder="Минимум 6 символов"
             />
           </el-form-item>
-          <el-form-item label="Повторите пароль *" prop="confirmPassword">
+          <el-form-item label="Повторите пароль" prop="confirmPassword">
             <el-input
               v-model="regForm.confirmPassword"
               type="password"

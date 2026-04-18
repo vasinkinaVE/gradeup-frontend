@@ -42,7 +42,7 @@
       </div>
 
       <!-- Таблица навыков -->
-      <el-table :data="filteredSkills" stripe border class="data-table">
+      <el-table :data="filteredSkills" stripe border class="data-table" @row-click="viewSkill">
         <el-table-column prop="name" label="Название навыка" min-width="250" />
         <el-table-column
           prop="description"
@@ -100,7 +100,7 @@
       </div>
 
       <!-- Таблица профилей -->
-      <el-table :data="filteredProfiles" stripe border class="data-table">
+      <el-table :data="filteredProfiles" stripe border class="data-table" @row-click="viewProfile">
         <el-table-column prop="position" label="Название профиля" min-width="250" />
         <el-table-column
           prop="description"
@@ -208,7 +208,110 @@
       </el-table>
     </section>
 
-    <!-- 🔹 Модальное окно: НАВЫК -->
+    <!-- 🔹 Модальное окно: ПРОСМОТР НАВЫКА -->
+    <el-dialog
+      v-model="viewSkillVisible"
+      title="Просмотр навыка"
+      :width="800"
+      class="admin-dialog"
+      destroy-on-close
+    >
+      <div v-if="viewingSkill" class="view-content">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="Название">{{ viewingSkill.name }}</el-descriptions-item>
+          <el-descriptions-item label="Описание">{{
+            viewingSkill.description || '—'
+          }}</el-descriptions-item>
+
+          <el-descriptions-item label="Материалы">
+            <ul v-if="viewingSkill.materials?.length" class="materials-list-view">
+              <li v-for="(mat, i) in viewingSkill.materials" :key="i">{{ mat }}</li>
+            </ul>
+            <span v-else class="empty-text">Нет материалов</span>
+          </el-descriptions-item>
+
+          <el-descriptions-item label="Этапы">
+            <el-collapse v-model="expandedStages" class="stages-collapse">
+              <el-collapse-item
+                v-for="(stage, idx) in viewingSkill.stages"
+                :key="idx"
+                :name="idx"
+                :title="`Этап ${idx + 1}: ${getStageTypeLabel(stage.type)}`"
+              >
+                <div class="stage-questions-view">
+                  <div v-for="(q, qIdx) in stage.questions" :key="qIdx" class="question-view">
+                    <p><strong>В:</strong> {{ q.text }}</p>
+                    <p><strong>О:</strong> {{ q.answer }}</p>
+                  </div>
+                  <el-empty
+                    v-if="!stage.questions?.length"
+                    description="Вопросов нет"
+                    :image-size="50"
+                  />
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="viewSkillVisible = false">Закрыть</el-button>
+        <el-button type="primary" :icon="Edit" @click="handleEditSkill"> Редактировать </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 🔹 Модальное окно: ПРОСМОТР ПРОФИЛЯ -->
+    <el-dialog
+      v-model="viewProfileVisible"
+      title="Просмотр профиля"
+      :width="900"
+      class="admin-dialog"
+      destroy-on-close
+    >
+      <div v-if="viewingProfile" class="view-content">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="Название профиля">{{
+            viewingProfile.position
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Описание">{{
+            viewingProfile.description || '—'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Уровни">
+            <div v-for="(level, lIdx) in viewingProfile.levels" :key="lIdx" class="level-view">
+              <h4 class="level-title">{{ level.name || `Уровень ${lIdx + 1}` }}</h4>
+
+              <div v-if="level.categories?.length" class="categories-view">
+                <div v-for="(cat, cIdx) in level.categories" :key="cIdx" class="category-view">
+                  <strong>Категория:</strong> {{ cat.name }}
+                  <ul class="skills-list-view">
+                    <li v-for="skillId in cat.skills" :key="skillId">
+                      {{ getSkillNameById(skillId) }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div v-if="level.uncategorizedSkills?.length" class="uncategorized-view">
+                <strong>Навыки без категории:</strong>
+                <ul class="skills-list-view">
+                  <li v-for="skillId in level.uncategorizedSkills" :key="skillId">
+                    {{ getSkillNameById(skillId) }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="viewProfileVisible = false">Закрыть</el-button>
+        <el-button type="primary" :icon="Edit" @click="handleEditProfile">
+          Редактировать
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 🔹 Модальное окно: НАВЫК (редактирование) -->
     <el-dialog
       v-model="skillDialogVisible"
       :title="editingSkill ? 'Редактирование навыка' : 'Новый навык'"
@@ -228,6 +331,25 @@
             :rows="2"
             placeholder="Краткое описание навыка"
           />
+        </el-form-item>
+
+        <!-- ✅ Материалы для подготовки -->
+        <el-form-item label="Материалы для подготовки">
+          <div class="materials-list">
+            <div v-for="(mat, idx) in skillForm.materials" :key="idx" class="material-item">
+              <el-input v-model="skillForm.materials[idx]" placeholder="Ссылка, книга, курс..." />
+              <el-button
+                type="danger"
+                :icon="Delete"
+                circle
+                size="small"
+                @click="skillForm.materials.splice(idx, 1)"
+              />
+            </div>
+            <el-button type="primary" link @click="skillForm.materials.push('')">
+              <el-icon><Plus /></el-icon> Добавить материал
+            </el-button>
+          </div>
         </el-form-item>
 
         <!-- Этапы подтверждения -->
@@ -307,7 +429,7 @@
       </template>
     </el-dialog>
 
-    <!-- 🔹 Модальное окно: Профиль -->
+    <!-- 🔹 Модальное окно: Профиль (редактирование) -->
     <el-dialog
       v-model="profileDialogVisible"
       :title="editingProfile ? 'Редактирование профиля' : 'Новый профиль'"
@@ -465,11 +587,11 @@
       </template>
     </el-dialog>
 
-    <!-- 🔹 Модальное окно: Встреча -->
+    <!-- 🔹 Модальное окно: Встреча (ИСПРАВЛЕННОЕ) -->
     <el-dialog
       v-model="meetingDialogVisible"
       :title="editingMeeting ? 'Редактирование встречи' : 'Новая встреча'"
-      :width="900"
+      :width="700"
       class="admin-dialog"
       destroy-on-close
     >
@@ -564,7 +686,7 @@
           />
         </el-form-item>
 
-        <!-- ✅ Описание встречи -->
+        <!-- ✅ Описание встречи (осталось) -->
         <el-form-item label="Описание" prop="description">
           <el-input
             v-model="meetingForm.description"
@@ -573,81 +695,6 @@
             placeholder="Описание встречи, дополнительные заметки"
           />
         </el-form-item>
-
-        <!-- ✅ Материалы для подготовки -->
-        <el-form-item label="Материалы для подготовки">
-          <div class="materials-list">
-            <div v-for="(mat, idx) in meetingForm.materials" :key="idx" class="material-item">
-              <el-input v-model="meetingForm.materials[idx]" placeholder="Ссылка, книга, курс..." />
-              <el-button
-                type="danger"
-                :icon="Delete"
-                circle
-                size="small"
-                @click="meetingForm.materials.splice(idx, 1)"
-              />
-            </div>
-            <el-button type="primary" link @click="meetingForm.materials.push('')">
-              <el-icon><Plus /></el-icon> Добавить материал
-            </el-button>
-          </div>
-        </el-form-item>
-
-        <!-- ✅ Вопросы встречи (независимые от навыка) -->
-        <div class="form-section">
-          <h4 class="section-title">Вопросы для встречи</h4>
-          <p class="section-description">
-            Вопросы можно редактировать, добавлять и менять порядок. Изменения не повлияют на
-            вопросы в навыке.
-          </p>
-
-          <draggable
-            v-model="meetingForm.questions"
-            item-key="id"
-            class="questions-drag-list"
-            @end="onQuestionsReorder"
-          >
-            <template #item="{ element, index }">
-              <div class="question-drag-item">
-                <div class="drag-handle">
-                  <el-icon :size="20"><Rank /></el-icon>
-                </div>
-                <div class="question-content">
-                  <div class="question-header">
-                    <span class="question-number">Вопрос {{ index + 1 }}</span>
-                    <el-button
-                      size="small"
-                      type="danger"
-                      :icon="Delete"
-                      circle
-                      @click="removeMeetingQuestion(index)"
-                    />
-                  </div>
-                  <el-form-item label="Текст вопроса *" size="small">
-                    <el-input
-                      v-model="element.text"
-                      type="textarea"
-                      :rows="2"
-                      placeholder="Введите текст вопроса"
-                    />
-                  </el-form-item>
-                  <el-form-item label="Эталонный ответ *" size="small">
-                    <el-input
-                      v-model="element.answer"
-                      type="textarea"
-                      :rows="3"
-                      placeholder="Введите правильный ответ"
-                    />
-                  </el-form-item>
-                </div>
-              </div>
-            </template>
-          </draggable>
-
-          <el-button type="primary" link @click="addMeetingQuestion" class="add-question-btn">
-            <el-icon><Plus /></el-icon> Добавить вопрос
-          </el-button>
-        </div>
       </el-form>
 
       <template #footer>
@@ -736,15 +783,21 @@ const allEmployees = computed(() => employees.value)
 const skillDialogVisible = ref(false)
 const profileDialogVisible = ref(false)
 const meetingDialogVisible = ref(false)
+const viewSkillVisible = ref(false)
+const viewProfileVisible = ref(false)
 
 const editingSkill = ref(null)
 const editingProfile = ref(null)
 const editingMeeting = ref(null)
+const viewingSkill = ref(null)
+const viewingProfile = ref(null)
+const expandedStages = ref([])
 
 // === Формы ===
 const skillForm = ref({
   name: '',
   description: '',
+  materials: [],
   stages: [],
 })
 
@@ -766,8 +819,6 @@ const meetingForm = ref({
   location: '',
   duration: 60,
   description: '',
-  materials: [],
-  questions: [], // Независимые вопросы встречи
 })
 
 // === Хелперы ===
@@ -799,7 +850,20 @@ const getAvailableStageTypes = (currentIndex) => {
   return allTypes.filter((t) => !usedTypes.includes(t.value))
 }
 
+const getSkillNameById = (id) => skills.value.find((s) => s.id === id)?.name || `Навык #${id}`
+
 // === НАВЫКИ: действия ===
+const viewSkill = (skill) => {
+  viewingSkill.value = skill
+  expandedStages.value = []
+  viewSkillVisible.value = true
+}
+
+const handleEditSkill = () => {
+  openSkillDialog(viewingSkill.value)
+  viewSkillVisible.value = false
+}
+
 const openSkillDialog = (skill = null) => {
   if (skill) {
     editingSkill.value = skill
@@ -809,6 +873,7 @@ const openSkillDialog = (skill = null) => {
     skillForm.value = {
       name: '',
       description: '',
+      materials: [],
       stages: [],
     }
   }
@@ -878,6 +943,16 @@ const deleteSkill = async (skill) => {
 }
 
 // === Профили: действия ===
+const viewProfile = (profile) => {
+  viewingProfile.value = profile
+  viewProfileVisible.value = true
+}
+
+const handleEditProfile = () => {
+  openProfileDialog(viewingProfile.value)
+  viewProfileVisible.value = false
+}
+
 const openProfileDialog = (profile = null) => {
   if (profile) {
     editingProfile.value = profile
@@ -918,7 +993,7 @@ const removeCategory = (levelIdx, catIdx) => {
 
 const saveProfile = () => {
   if (!profileForm.value.position) {
-    ElMessage.warning('Введите должность')
+    ElMessage.warning('Введите название профиля')
     return
   }
 
@@ -955,46 +1030,12 @@ const onSkillChange = (skillId) => {
   const skill = skills.value.find((s) => s.id === skillId)
   if (skill) {
     meetingForm.value.skillName = skill.name
-
-    // Копируем вопросы из навыка (глубокая копия)
-    const skillQuestions = []
-    skill.stages?.forEach((stage) => {
-      stage.questions?.forEach((q) => {
-        skillQuestions.push({
-          id: Date.now() + Math.random(),
-          text: q.text,
-          answer: q.answer,
-        })
-      })
-    })
-
-    // Если встреча новая, копируем вопросы из навыка
-    if (!editingMeeting.value) {
-      meetingForm.value.questions = skillQuestions
-    }
   }
-}
-
-const addMeetingQuestion = () => {
-  meetingForm.value.questions.push({
-    id: Date.now(),
-    text: '',
-    answer: '',
-  })
-}
-
-const removeMeetingQuestion = (index) => {
-  meetingForm.value.questions.splice(index, 1)
-}
-
-const onQuestionsReorder = () => {
-  ElMessage.info('Порядок вопросов изменён')
 }
 
 const openMeetingDialog = (meeting = null) => {
   if (meeting) {
     editingMeeting.value = meeting
-    // Глубокая копия, чтобы не менять оригинал
     meetingForm.value = JSON.parse(JSON.stringify(meeting))
   } else {
     editingMeeting.value = null
@@ -1010,8 +1051,6 @@ const openMeetingDialog = (meeting = null) => {
       location: '',
       duration: 60,
       description: '',
-      materials: [],
-      questions: [],
     }
   }
   meetingDialogVisible.value = true
@@ -1028,7 +1067,6 @@ const saveMeeting = () => {
     return
   }
 
-  // Получаем имена участников
   const attested = employees.value.find((e) => e.id === meetingForm.value.attestedId)
   const attestor = employees.value.find((e) => e.id === meetingForm.value.attestorId)
 
@@ -1154,6 +1192,15 @@ const deleteMeeting = async (meeting) => {
 .data-table {
   width: 100%;
   margin-bottom: var(--spacing-md);
+  cursor: pointer;
+}
+
+.data-table :deep(.el-table__row) {
+  cursor: pointer;
+}
+
+.data-table :deep(.el-table__row:hover) {
+  background-color: var(--background);
 }
 
 /* Участники в таблице */
@@ -1273,48 +1320,6 @@ const deleteMeeting = async (meeting) => {
   color: var(--primary);
 }
 
-/* Вопросы встречи с drag-and-drop */
-.questions-drag-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.question-drag-item {
-  display: flex;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: #fff;
-  border-radius: var(--radius-sm);
-  border: 1px solid #e0e0e0;
-  cursor: move;
-}
-
-.question-drag-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.drag-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--gray);
-  cursor: move;
-  padding: var(--spacing-xs);
-}
-
-.drag-handle:hover {
-  color: var(--primary);
-}
-
-.question-content {
-  flex: 1;
-}
-
-.add-question-btn {
-  margin-top: var(--spacing-md);
-}
-
 /* Уровни и категории */
 .levels-list {
   display: flex;
@@ -1412,6 +1417,90 @@ const deleteMeeting = async (meeting) => {
   flex: 1;
 }
 
+/* === Модальные окна просмотра === */
+.view-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+}
+
+.materials-list-view {
+  list-style: disc;
+  padding-left: var(--spacing-md);
+  margin: 0;
+}
+
+.materials-list-view li {
+  margin-bottom: var(--spacing-xs);
+  font-size: 14px;
+}
+
+.empty-text {
+  color: var(--gray);
+  font-style: italic;
+}
+
+.stages-collapse {
+  border: none;
+  background: transparent;
+  margin-top: var(--spacing-sm);
+}
+
+.stage-questions-view {
+  padding: var(--spacing-sm);
+}
+
+.question-view {
+  background: #fff;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid #e0e0e0;
+  margin-bottom: var(--spacing-sm);
+}
+
+.question-view p {
+  margin: var(--spacing-xs) 0;
+  font-size: 14px;
+}
+
+.question-view strong {
+  color: var(--primary);
+}
+
+.level-view {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: #f9f9f9;
+  border-radius: var(--radius-sm);
+}
+
+.level-title {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+}
+
+.categories-view,
+.uncategorized-view {
+  margin-left: var(--spacing-md);
+}
+
+.category-view {
+  margin-bottom: var(--spacing-sm);
+}
+
+.skills-list-view {
+  list-style: disc;
+  padding-left: var(--spacing-md);
+  margin: var(--spacing-xs) 0;
+}
+
+.skills-list-view li {
+  font-size: 14px;
+  margin-bottom: var(--spacing-xs);
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
   .filters-row {
@@ -1446,5 +1535,10 @@ const deleteMeeting = async (meeting) => {
 
 :deep(.admin-dialog .el-form-item__label) {
   font-weight: var(--font-weight-medium);
+}
+
+:deep(.el-descriptions__label) {
+  font-weight: var(--font-weight-medium);
+  width: 150px !important;
 }
 </style>
