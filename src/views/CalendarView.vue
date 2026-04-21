@@ -1,14 +1,13 @@
 <template>
   <div class="calendar-page">
-    <!-- Заголовок страницы -->
+    <!-- Заголовок -->
     <div class="page-header">
       <h1 class="page-title">Календарь аттестаций</h1>
       <p class="page-subtitle">Все аттестации, в которых вы участвуете</p>
     </div>
 
-    <!-- Поиск и фильтры -->
+    <!-- Фильтры -->
     <div class="filters-bar">
-      <!-- Строка поиска -->
       <div class="search-row">
         <el-input
           v-model="searchQuery"
@@ -20,7 +19,6 @@
         />
       </div>
 
-      <!-- Вторая строка с фильтрами -->
       <div class="filters-row">
         <div class="radio-group-wrapper">
           <el-radio-group v-model="filterStatus" @change="applyFilters">
@@ -71,7 +69,7 @@
       </div>
     </div>
 
-    <!-- Список аттестаций -->
+    <!-- Список аттестаций через MeetingCard -->
     <div class="attestations-list">
       <el-empty
         v-if="filteredAttestations.length === 0"
@@ -83,124 +81,19 @@
         v-for="attestation in filteredAttestations"
         :key="attestation.id"
         class="attestation-card"
-        shadow="hover"
+        shadow="never"
         :class="{ 'is-past': attestation.isPast, 'is-today': attestation.isToday }"
       >
-        <div class="card-header">
-          <div class="card-title-section">
-            <el-tag
-              :type="getTypeTag(attestation.confirmationType)"
-              size="small"
-              effect="plain"
-              class="type-tag"
-            >
-              {{ getTypeLabel(attestation.confirmationType) }}
-            </el-tag>
-            <h3 class="attestation-topic">{{ attestation.topic }}</h3>
-          </div>
-          <el-tag
-            :type="getStatusType(attestation.status)"
-            size="small"
-            effect="plain"
-            class="status-tag"
-          >
-            {{ getStatusLabel(attestation.status) }}
-          </el-tag>
-        </div>
-
-        <div class="card-body">
-          <div class="info-grid">
-            <div class="info-item">
-              <el-icon class="info-icon"><Clock /></el-icon>
-              <div class="info-content">
-                <span class="info-label">Дата и время</span>
-                <span class="info-value">{{ formatDateTime(attestation.startTime) }}</span>
-              </div>
-            </div>
-
-            <div class="info-item">
-              <el-icon class="info-icon"><Location /></el-icon>
-              <div class="info-content">
-                <span class="info-label">Место</span>
-                <span class="info-value">{{ attestation.location }}</span>
-              </div>
-            </div>
-
-            <div class="info-item">
-              <el-icon class="info-icon"><Watch /></el-icon>
-              <div class="info-content">
-                <span class="info-label">Длительность</span>
-                <span class="info-value">{{ attestation.duration }} мин.</span>
-              </div>
-            </div>
-          </div>
-
-          <el-divider class="divider" />
-
-          <div class="participants-section">
-            <span class="section-label">Участники:</span>
-            <div class="participants-list">
-              <div
-                v-for="participant in attestation.participants"
-                :key="participant.id"
-                class="participant-item"
-                :class="{ 'is-current-user': participant.id === currentUserId }"
-              >
-                <el-avatar
-                  :size="24"
-                  class="participant-avatar"
-                  :style="{ backgroundColor: getAvatarColor(participant.name) }"
-                >
-                  {{ getInitials(participant.name) }}
-                </el-avatar>
-                <span class="participant-name">{{ participant.name }}</span>
-                <div class="participant-badges">
-                  <el-tag
-                    v-if="participant.id === currentUserId"
-                    size="small"
-                    type="info"
-                    effect="plain"
-                    class="my-badge"
-                  >
-                    Я
-                  </el-tag>
-                  <el-tag
-                    size="small"
-                    :type="participant.role === 'ATTESTED' ? 'warning' : 'success'"
-                    effect="plain"
-                    class="participant-role"
-                  >
-                    {{ participant.role === 'ATTESTED' ? 'Аттестуемый' : 'Аттестующий' }}
-                  </el-tag>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card-footer">
-          <el-button
-            v-if="attestation.role === 'ATTESTOR'"
-            type="primary"
-            size="small"
-            @click="openControlModal(attestation)"
-          >
-            <el-icon><Setting /></el-icon>
-            Управление аттестацией
-          </el-button>
-          <el-button
-            v-if="attestation.isPast"
-            size="small"
-            plain
-            @click="viewResults(attestation.id)"
-          >
-            Результаты
-          </el-button>
-        </div>
+        <MeetingCard
+          :meeting="mapToMeeting(attestation)"
+          :show-footer="true"
+          @open-control="openControlModal"
+          @view-results="viewResults"
+        />
       </el-card>
     </div>
 
-    <!-- Модальное окно: Управление аттестацией (Аттестующий) -->
+    <!-- Модальное окно: Управление аттестацией -->
     <el-dialog
       v-model="controlDialogVisible"
       title="Управление аттестацией"
@@ -208,6 +101,7 @@
       :close-on-click-modal="false"
     >
       <div v-if="selectedAttestation" class="modal-content">
+        <!-- ... содержимое модалки остаётся без изменений ... -->
         <div class="modal-section">
           <h4 class="modal-title">Тема аттестации</h4>
           <p class="modal-text">{{ selectedAttestation.topic }}</p>
@@ -293,9 +187,9 @@
                 <p class="answer-text">{{ question.idealAnswer }}</p>
               </div>
               <div class="question-status" :class="getQuestionStatus(questionIdx)">
-                <span class="status-text">
-                  {{ getStatusLabelByValue(getQuestionStatus(questionIdx)) }}
-                </span>
+                <span class="status-text">{{
+                  getStatusLabelByValue(getQuestionStatus(questionIdx))
+                }}</span>
               </div>
             </div>
           </div>
@@ -314,7 +208,7 @@
           </div>
         </div>
 
-        <!-- Практическое задание с оценкой -->
+        <!-- Практическое задание -->
         <div v-else-if="selectedAttestation.confirmationType === 'PRACTICE'" class="modal-section">
           <h4 class="modal-title">Практическое задание</h4>
           <div class="task-description">
@@ -339,21 +233,17 @@
               </ul>
             </div>
           </div>
-
           <el-divider />
-
           <div class="task-grading">
             <h4 class="modal-title">Оценка выполнения</h4>
             <div class="grading-options">
               <el-radio-group v-model="taskGrade" size="large">
-                <el-radio-button label="passed">
-                  <el-icon style="margin-right: 4px"><Check /></el-icon>
-                  Зачтено
-                </el-radio-button>
-                <el-radio-button label="failed">
-                  <el-icon style="margin-right: 4px"><Close /></el-icon>
-                  Не зачтено
-                </el-radio-button>
+                <el-radio-button label="passed"
+                  ><el-icon style="margin-right: 4px"><Check /></el-icon>Зачтено</el-radio-button
+                >
+                <el-radio-button label="failed"
+                  ><el-icon style="margin-right: 4px"><Close /></el-icon>Не зачтено</el-radio-button
+                >
               </el-radio-group>
             </div>
             <el-input
@@ -366,7 +256,7 @@
           </div>
         </div>
 
-        <!-- Performance Review с оценкой -->
+        <!-- Performance Review -->
         <div v-else-if="selectedAttestation.confirmationType === 'REVIEW'" class="modal-section">
           <h4 class="modal-title">Метрики для оценки</h4>
           <el-table :data="selectedAttestation.metrics || []" style="width: 100%" border>
@@ -396,7 +286,7 @@
       </div>
       <template #footer>
         <el-button @click="controlDialogVisible = false">Закрыть</el-button>
-        <el-button type="primary" @click="saveGradingAndClose"> Сохранить оценку </el-button>
+        <el-button type="primary" @click="saveGradingAndClose">Сохранить оценку</el-button>
       </template>
     </el-dialog>
   </div>
@@ -418,60 +308,28 @@ import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ru'
+import MeetingCard, { type Meeting } from '@/components/common/MeetingCard.vue'
 
 dayjs.locale('ru')
 
 const authStore = useAuthStore()
 const currentUser = computed(() => authStore.currentUser)
 
-// Поиск и фильтры
+// Фильтры
 const searchQuery = ref('')
 const filterStatus = ref<'all' | 'upcoming' | 'past'>('all')
 const filterRole = ref<'all' | 'ATTESTED' | 'ATTESTOR'>('all')
 const filterType = ref<'all' | 'EXAM' | 'PRACTICE' | 'REVIEW'>('all')
 const dateRange = ref<[string, string] | null>(null)
 
-// Быстрые выборы дат
-const dateShortcuts = [
-  {
-    text: 'Ближайшие 7 дней',
-    value: () => {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - 7)
-      return [dayjs(start).format('YYYY-MM-DD'), dayjs(end).format('YYYY-MM-DD')]
-    },
-  },
-  {
-    text: 'Этот месяц',
-    value: () => {
-      const start = dayjs().startOf('month').format('YYYY-MM-DD')
-      const end = dayjs().endOf('month').format('YYYY-MM-DD')
-      return [start, end]
-    },
-  },
-  {
-    text: 'Следующий месяц',
-    value: () => {
-      const start = dayjs().add(1, 'month').startOf('month').format('YYYY-MM-DD')
-      const end = dayjs().add(1, 'month').endOf('month').format('YYYY-MM-DD')
-      return [start, end]
-    },
-  },
-]
-
-// Модальные окна
+// Модалки
 const controlDialogVisible = ref(false)
 const selectedAttestation = ref<any>(null)
-
-// Оценка для вопросов - используем массив
 const questionGrades = ref<Array<'passed' | 'failed' | 'not_answered'>>([])
-
-// Оценка для практики
 const taskGrade = ref<'passed' | 'failed'>('passed')
 const taskComment = ref('')
 
-// Вспомогательные computed
+// Вспомогательные
 const currentUserId = computed(() => currentUser.value?.id || '1')
 const currentUserFullName = computed(() => {
   const user = currentUser.value
@@ -479,7 +337,7 @@ const currentUserFullName = computed(() => {
   return `${user.lastName} ${user.firstName.charAt(0)}.${user.middleName ? user.middleName.charAt(0) + '.' : ''}`
 })
 
-// Вычисляемые свойства для прогресса оценки
+// Прогресс оценки
 const gradingProgress = computed(() => {
   if (!selectedAttestation.value?.questions?.length) return 0
   const total = selectedAttestation.value.questions.length
@@ -494,9 +352,7 @@ const gradingProgressColor = computed(() => {
 })
 
 const passedCount = computed(() => questionGrades.value.filter((g) => g === 'passed').length)
-
 const failedCount = computed(() => questionGrades.value.filter((g) => g === 'failed').length)
-
 const notAnsweredCount = computed(
   () => questionGrades.value.filter((g) => g === 'not_answered').length,
 )
@@ -507,7 +363,32 @@ const formatGradingProgress = (percentage: number) => {
   return `${answered} из ${total} оценено`
 }
 
-// Mock-данные аттестаций
+// Mapper: конвертируем данные календаря в формат MeetingCard
+const mapToMeeting = (attestation: any): Meeting => {
+  return {
+    id: attestation.id,
+    skill_name: attestation.topic,
+    confirmation_type: attestation.confirmationType,
+    status: attestation.status,
+    date_time: attestation.startTime,
+    location: attestation.location,
+    duration: attestation.duration,
+    description: attestation.description,
+    materials: [], // Можно добавить поле materials в данные календаря при необходимости
+    participants: attestation.participants.map((p: any) => ({
+      id: p.id,
+      full_name: p.name,
+      role: p.role === 'ATTESTED' ? 'Аттестуемый' : 'Аттестующий',
+      is_current_user: p.id === currentUserId.value,
+    })),
+    role: attestation.role,
+    isPast: attestation.isPast,
+    isToday: attestation.isToday,
+    isUpcoming: attestation.isUpcoming,
+  }
+}
+
+// Mock-данные
 const mockAttestations = computed(() => [
   {
     id: '1',
@@ -586,7 +467,7 @@ const mockAttestations = computed(() => [
     duration: 30,
     location: 'Офис, кабинет 205',
     role: 'ATTESTED',
-    status: 'in_progress',
+    status: 'scheduled',
     isPast: false,
     isToday: true,
     isUpcoming: false,
@@ -612,7 +493,6 @@ const mockAttestations = computed(() => [
       { name: 'Bug rate', target: '< 5%', current: '3%', status: 'achieved', grade: 'passed' },
     ],
   },
-  // Новая аттестация для аттестующего с типом EXAM
   {
     id: '5',
     topic: 'Проектирование схем БД',
@@ -653,11 +533,10 @@ const mockAttestations = computed(() => [
   },
 ])
 
-// Вычисляемые свойства
+// Фильтрация
 const filteredAttestations = computed(() => {
   let result = [...mockAttestations.value]
 
-  // Поиск
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter((a) => {
@@ -667,24 +546,13 @@ const filteredAttestations = computed(() => {
     })
   }
 
-  // Фильтр по статусу
-  if (filterStatus.value === 'upcoming') {
-    result = result.filter((a) => a.isUpcoming)
-  } else if (filterStatus.value === 'past') {
-    result = result.filter((a) => a.isPast)
-  }
+  if (filterStatus.value === 'upcoming') result = result.filter((a) => a.isUpcoming)
+  else if (filterStatus.value === 'past') result = result.filter((a) => a.isPast)
 
-  // Фильтр по роли
-  if (filterRole.value !== 'all') {
-    result = result.filter((a) => a.role === filterRole.value)
-  }
-
-  // Фильтр по типу
-  if (filterType.value !== 'all') {
+  if (filterRole.value !== 'all') result = result.filter((a) => a.role === filterRole.value)
+  if (filterType.value !== 'all')
     result = result.filter((a) => a.confirmationType === filterType.value)
-  }
 
-  // Фильтр по дате
   if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
     const [start, end] = dateRange.value
     result = result.filter((a) => {
@@ -696,7 +564,6 @@ const filteredAttestations = computed(() => {
     })
   }
 
-  // Сортировка
   return result.sort((a, b) => {
     if (a.isUpcoming && !b.isUpcoming) return -1
     if (!a.isUpcoming && b.isUpcoming) return 1
@@ -705,13 +572,8 @@ const filteredAttestations = computed(() => {
 })
 
 // Методы
-const applyFilters = () => {
-  // Фильтрация применяется автоматически через computed
-}
-
-const formatDateTime = (date: Date | string) => {
-  return dayjs(date).format('DD.MM.YYYY, HH:mm')
-}
+const applyFilters = () => {}
+const formatDateTime = (date: Date | string) => dayjs(date).format('DD.MM.YYYY, HH:mm')
 
 const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
@@ -744,55 +606,45 @@ const getTypeLabel = (type: string) => {
 
 const getTypeTag = (type: string) => {
   const types: Record<string, '' | 'warning' | 'success' | 'danger'> = {
-    EXAM: '', // желтый (warning без effect)
-    PRACTICE: 'success', // зеленый
-    REVIEW: 'danger', // красный
+    EXAM: '',
+    PRACTICE: 'success',
+    REVIEW: 'danger',
   }
   return types[type] || ''
 }
 
-const getInitials = (name: string) => {
-  return name
+const getInitials = (name: string) =>
+  name
     .split(' ')
     .map((n) => n[0])
     .join('')
     .toUpperCase()
     .slice(0, 2)
-}
-
 const getAvatarColor = (name: string) => {
   const colors = ['#4A2C6D', '#6A4C8D', '#8B6FA8', '#A084B8']
-  const index = name.length % colors.length
-  return colors[index]
+  return colors[name.length % colors.length]
 }
 
-const getQuestionStatus = (index: number): 'passed' | 'failed' | 'not_answered' => {
-  return questionGrades.value[index] || 'not_answered'
-}
-
+const getQuestionStatus = (index: number) => questionGrades.value[index] || 'not_answered'
 const setQuestionStatus = (index: number, status: 'passed' | 'failed' | 'not_answered') => {
   const newGrades = [...questionGrades.value]
   newGrades[index] = status
   questionGrades.value = newGrades
 }
 
-const getStatusLabelByValue = (value: 'passed' | 'failed' | 'not_answered'): string => {
-  const labels = {
-    passed: 'Зачтено',
-    failed: 'Не зачтено',
-    not_answered: 'Не отвечал',
-  }
+const getStatusLabelByValue = (value: 'passed' | 'failed' | 'not_answered') => {
+  const labels = { passed: 'Зачтено', failed: 'Не зачтено', not_answered: 'Не отвечал' }
   return labels[value]
 }
 
-const openControlModal = (attestation: any) => {
+const openControlModal = (meeting: Meeting) => {
+  // Находим оригинальную аттестацию по ID
+  const attestation = mockAttestations.value.find((a) => a.id === meeting.id)
+  if (!attestation) return
+
   selectedAttestation.value = attestation
-  // Инициализируем массив нужной длины
   const questionCount = attestation.questions?.length || 0
-  questionGrades.value = Array.from(
-    { length: questionCount },
-    () => 'not_answered' as 'passed' | 'failed' | 'not_answered',
-  )
+  questionGrades.value = Array.from({ length: questionCount }, () => 'not_answered' as const)
   taskGrade.value = 'passed'
   taskComment.value = ''
   controlDialogVisible.value = true
@@ -800,67 +652,92 @@ const openControlModal = (attestation: any) => {
 
 const saveGradingAndClose = () => {
   if (!selectedAttestation.value) return
-
-  // Валидация: все вопросы должны быть оценены
   if (selectedAttestation.value.confirmationType === 'EXAM') {
-    const totalQuestions = selectedAttestation.value.questions.length
-    const gradedQuestions = questionGrades.value.filter((g) => g !== 'not_answered').length
-    if (gradedQuestions < totalQuestions) {
-      ElMessage.warning(`Оцените все вопросы (${gradedQuestions} из ${totalQuestions})`)
+    const total = selectedAttestation.value.questions.length
+    const graded = questionGrades.value.filter((g) => g !== 'not_answered').length
+    if (graded < total) {
+      ElMessage.warning(`Оцените все вопросы (${graded} из ${total})`)
       return
     }
   }
-
   ElMessage.success('Оценка сохранена')
   controlDialogVisible.value = false
-  // Здесь будет отправка данных на сервер
 }
 
-const viewResults = (id: string) => {
-  ElMessage.info(`Просмотр результатов: ${id}`)
-}
+const viewResults = (id: string) => ElMessage.info(`Просмотр результатов: ${id}`)
+
+// Быстрые даты
+const dateShortcuts = [
+  {
+    text: 'Ближайшие 7 дней',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - 7)
+      return [dayjs(start).format('YYYY-MM-DD'), dayjs(end).format('YYYY-MM-DD')]
+    },
+  },
+  {
+    text: 'Этот месяц',
+    value: () => [
+      dayjs().startOf('month').format('YYYY-MM-DD'),
+      dayjs().endOf('month').format('YYYY-MM-DD'),
+    ],
+  },
+  {
+    text: 'Следующий месяц',
+    value: () => [
+      dayjs().add(1, 'month').startOf('month').format('YYYY-MM-DD'),
+      dayjs().add(1, 'month').endOf('month').format('YYYY-MM-DD'),
+    ],
+  },
+]
 </script>
 
 <style scoped>
 .calendar-page {
-  padding: 24px;
+  padding: var(--spacing-lg);
   max-width: 1200px;
   margin: 0 auto;
-  background-color: #f0f2f5;
+  background-color: var(--background);
   min-height: 100vh;
+  font-family: var(--font-family);
 }
 
 /* Заголовок */
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .page-title {
-  margin: 0 0 4px;
+  margin: 0 0 var(--spacing-xs) 0;
   font-size: 28px;
-  font-weight: 700;
-  color: #333333;
+  font-weight: var(--font-weight-bold);
+  color: var(--text);
+  font-family: var(--font-family);
 }
 
 .page-subtitle {
   margin: 0;
   font-size: 15px;
-  color: #666666;
+  color: var(--gray);
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
-/* Поиск и фильтры */
+/* Фильтры */
 .filters-bar {
-  margin-bottom: 20px;
-  padding: 20px;
-  background: white;
-  border-radius: 8px;
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: #fff;
+  border-radius: 8px; /* Было: var(--radius-md) = 12px */
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   width: 100%;
   box-sizing: border-box;
 }
 
 .search-row {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-sm);
   width: 100%;
 }
 
@@ -870,7 +747,7 @@ const viewResults = (id: string) => {
 
 .filters-row {
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-sm);
   align-items: center;
   flex-wrap: nowrap;
   width: 100%;
@@ -879,11 +756,6 @@ const viewResults = (id: string) => {
 .radio-group-wrapper {
   display: inline-flex;
   flex-shrink: 0;
-}
-
-:deep(.el-radio-button__inner) {
-  padding: 8px 12px !important;
-  font-size: 13px !important;
 }
 
 .filter-select {
@@ -896,499 +768,355 @@ const viewResults = (id: string) => {
   flex-shrink: 0;
 }
 
-:deep(.el-date-editor.el-input__inner) {
-  padding: 0 10px;
-}
-
-:deep(.el-range-input) {
-  font-size: 13px;
-}
-
-/* Deep styles для радио-кнопок */
-:deep(.el-radio-button__inner) {
-  background-color: #f5f5f5 !important;
-  border: 1px solid #d9d9d9 !important;
-  color: #666 !important;
-  box-shadow: none !important;
-  margin-left: 0 !important; /* Убираем наложение */
-}
-
-:deep(.el-radio-button:first-child .el-radio-button__inner) {
-  border-left: 1px solid #d9d9d9 !important;
-  border-radius: 4px 0 0 4px !important; /* Скругление только слева */
-}
-
-:deep(.el-radio-button:nth-child(2) .el-radio-button__inner) {
-  border-left: none !important; /* Убираем левую границу у средней кнопки */
-  border-radius: 0 !important; /* Убираем все скругления */
-}
-
-:deep(.el-radio-button:last-child .el-radio-button__inner) {
-  border-left: none !important; /* Убираем левую границу у последней кнопки */
-  border-radius: 0 4px 4px 0 !important; /* Скругление только справа */
-}
-
-:deep(.el-radio-button__inner:hover) {
-  color: #4a2c6d !important;
-}
-
-:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background-color: #e0e0e0 !important;
-  border-color: #999 !important;
-  color: #333 !important;
-  box-shadow: none !important;
-}
-
-/* Deep styles для селектов */
-:deep(.el-select.is-focus .el-input__inner) {
-  border-color: #d9d9d9 !important;
-  box-shadow: none !important;
-}
-
-:deep(.el-select.is-focus) {
-  --el-select-input-focus-border-color: #d9d9d9 !important;
-}
-
-:deep(.el-select .el-input.is-focus .el-input__inner) {
-  border-color: #d9d9d9 !important;
-}
-
-:deep(.el-select__caret) {
-  color: #666 !important;
-}
-
-:deep(.el-select.is-focus .el-select__caret) {
-  color: #666 !important;
-}
-
-:deep(.el-input__inner) {
-  color: #666 !important;
-}
-
-:deep(.el-input__inner:focus) {
-  color: #666 !important;
-  border-color: #d9d9d9 !important;
-  box-shadow: none !important;
-}
-
-:deep(.el-select .el-input__inner) {
-  color: #666 !important;
-}
-
-:deep(.el-select .el-input__inner:focus) {
-  color: #666 !important;
-  border-color: #d9d9d9 !important;
-  box-shadow: none !important;
-}
-
-/* CSS Variables для Element Plus */
-:deep(.el-select) {
-  --el-select-input-focus-border-color: #d9d9d9 !important;
-  --el-color-primary: #666 !important;
-}
-
-/* Убираем синий цвет у всего компонента */
-:deep(.el-select.is-focus),
-:deep(.el-select.is-focus *),
-:deep(.el-select:focus),
-:deep(.el-select:focus *) {
-  color: #666 !important;
-  border-color: #d9d9d9 !important;
-}
 /* Список аттестаций */
 .attestations-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .attestation-card {
-  transition: all 0.3s ease;
-  border-left: 4px solid #4a2c6d;
+  transition: none !important;
+  box-shadow: none !important;
+  border-radius: 6px; /* Было: var(--radius-md) = 12px */
+}
+
+.attestation-card:hover {
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .attestation-card.is-past {
-  border-left-color: #909399;
   opacity: 0.85;
 }
 
-.attestation-card.is-today {
-  border-left-color: #67c23a;
-  box-shadow: 0 4px 12px rgba(74, 44, 109, 0.15);
+:deep(.el-card__header) {
+  padding: 0;
+  border-bottom: none;
+  background: transparent;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
+:deep(.el-card__body) {
+  padding: 0;
 }
 
-.card-title-section {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+/* Карточка встречи (внутри MeetingCard) */
+:deep(.meeting-card) {
+  font-family: var(--font-family);
+  border-radius: 6px !important;
 }
 
-.type-tag,
-.status-tag {
-  font-weight: 500;
+:deep(.meeting-title) {
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  font-family: var(--font-family);
 }
 
-.attestation-topic {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333333;
-}
-
-.card-body {
-  padding: 0 0 16px;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.info-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.info-icon {
-  font-size: 20px;
-  color: #4a2c6d;
-  margin-top: 2px;
-  flex-shrink: 0;
-}
-
-.info-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.info-label {
-  font-size: 12px;
-  color: #666666;
-}
-
-.info-value {
-  font-size: 14px;
-  color: #333333;
-  font-weight: 500;
-}
-
-.divider {
-  margin: 16px 0 !important;
-}
-
-.participants-section {
-  padding-top: 8px;
-}
-
-.section-label {
-  display: block;
+:deep(.info-label) {
   font-size: 13px;
-  color: #666666;
-  margin-bottom: 10px;
-  font-weight: 500;
+  color: var(--gray);
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
-.participants-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.participant-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  background: #f8f4fc;
-  border-radius: 6px;
-}
-
-.participant-item.is-current-user {
-  background: #e8e0f0;
-  border: 1px solid #d0c0e0;
-}
-
-.participant-avatar {
-  flex-shrink: 0;
-}
-
-.participant-name {
-  flex: 1;
+:deep(.info-value) {
   font-size: 14px;
-  color: #333333;
-  font-weight: 500;
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family);
 }
 
-.participant-badges {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+:deep(.participants-title) {
+  font-size: 14px;
+  color: var(--gray);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family);
 }
 
-.my-badge {
-  font-size: 11px;
-  padding: 0 6px;
-  height: 22px;
-  line-height: 22px;
+:deep(.participant-name) {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family);
 }
 
-.participant-role {
-  font-size: 11px;
-  padding: 0 6px;
+:deep(.participant-role) {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
-.card-footer {
-  display: flex;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
-  justify-content: flex-end;
+:deep(.status-badge) {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--gray);
+  font-family: var(--font-family);
+  border-radius: 4px !important; /* Было: var(--radius-sm) = 8px */
+}
+
+:deep(.confirmation-badge) {
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family);
+  border-radius: 4px !important;
 }
 
 /* Модальные окна */
+:deep(.el-dialog__header) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid #f0f0f0;
+  font-family: var(--font-family);
+}
+
+:deep(.el-dialog__body) {
+  padding: var(--spacing-lg);
+  font-family: var(--font-family);
+}
+
+:deep(.el-dialog__footer) {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-top: 1px solid #f0f0f0;
+}
+
 .modal-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-lg);
   max-height: 70vh;
   overflow-y: auto;
-  padding-right: 10px;
+  padding-right: var(--spacing-sm);
+  font-family: var(--font-family);
 }
 
 .modal-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-xs);
 }
 
 .modal-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
-  color: #333333;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  font-family: var(--font-family);
 }
 
 .modal-text {
   margin: 0;
   font-size: 14px;
-  color: #666666;
-  line-height: 1.6;
+  color: var(--text);
+  line-height: 1.5;
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
 /* Оценка вопросов */
 .grading-instruction {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
   background: #f0f7ff;
-  border-radius: 6px;
+  border-radius: 6px; /* Было: var(--radius-sm) = 8px */
   font-size: 13px;
-  color: #333333;
+  color: var(--text);
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
-.grading-instruction .el-icon {
-  color: #409eff;
+.grading-instruction :deep(.el-icon) {
+  color: var(--primary);
   font-size: 16px;
 }
 
 .questions-grading-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .question-grading-item {
-  padding: 16px;
+  padding: var(--spacing-md);
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: white;
-  transition: all 0.3s ease;
-}
-
-.question-grading-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 6px; /* Было: var(--radius-md) = 12px */
+  background: #fff;
 }
 
 .question-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-sm);
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--spacing-sm);
 }
 
 .question-number {
-  font-weight: 600;
-  color: #4a2c6d;
+  font-weight: var(--font-weight-semibold);
+  color: var(--primary);
   font-size: 14px;
+  font-family: var(--font-family);
 }
 
 .grading-buttons {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-xs);
 }
 
-.grading-buttons .el-button {
+.grading-buttons :deep(.el-button) {
   min-width: 100px;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family);
+  border-radius: 4px;
 }
 
 .question-text {
   font-size: 14px;
-  color: #333333;
-  font-weight: 500;
-  margin-bottom: 10px;
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-sm);
+  font-family: var(--font-family);
 }
 
 .ideal-answer {
-  padding: 10px;
-  background: #f8f4fc;
-  border-radius: 6px;
-  margin-bottom: 10px;
+  padding: var(--spacing-sm);
+  background: var(--background);
+  border-radius: 4px; /* Было: var(--radius-sm) = 8px */
+  margin-bottom: var(--spacing-sm);
 }
 
 .answer-label {
   display: block;
   font-size: 12px;
-  font-weight: 600;
-  color: #4a2c6d;
-  margin-bottom: 4px;
+  font-weight: var(--font-weight-medium);
+  color: var(--gray);
+  margin-bottom: var(--spacing-xs);
+  font-family: var(--font-family);
 }
 
 .answer-text {
   margin: 0;
-  font-size: 13px;
-  color: #666666;
+  font-size: 14px;
+  color: var(--text);
   line-height: 1.5;
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
 .question-status {
   display: inline-flex;
   align-items: center;
   padding: 4px 12px;
-  border-radius: 12px;
+  border-radius: 12px; /* Оставляем 12px для "таблеток" — это уместно */
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family);
 }
 
 .question-status.passed {
   background: #f0f9eb;
-  color: #67c23a;
-  border: 1px solid #67c23a;
+  color: var(--success);
+  border: 1px solid var(--success);
 }
 
 .question-status.failed {
   background: #fef0f0;
-  color: #f56c6c;
-  border: 1px solid #f56c6c;
+  color: var(--danger);
+  border: 1px solid var(--danger);
 }
 
 .question-status.not_answered {
   background: #f5f7fa;
-  color: #909399;
-  border: 1px solid #909399;
-}
-
-.status-text {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  color: var(--gray);
+  border: 1px solid var(--gray);
 }
 
 .grading-summary {
-  margin-top: 16px;
-  padding: 16px;
-  background: #fafafa;
-  border-radius: 8px;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--background);
+  border-radius: 6px;
 }
 
 .grading-stats {
   display: flex;
-  gap: 20px;
-  margin-top: 12px;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-sm);
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family);
 }
 
 .stat-passed {
-  color: #67c23a;
-  font-weight: 500;
+  color: var(--success);
 }
 
 .stat-failed {
-  color: #f56c6c;
-  font-weight: 500;
+  color: var(--danger);
 }
 
 .stat-not-answered {
-  color: #909399;
-  font-weight: 500;
+  color: var(--gray);
 }
 
-/* Оценка практики */
+/* Практическое задание */
 .task-description {
-  padding: 12px;
-  background: #f8f4fc;
-  border-radius: 6px;
+  padding: var(--spacing-sm);
+  background: var(--background);
+  border-radius: 4px;
 }
 
 .task-description p {
-  margin: 0 0 12px;
+  margin: 0 0 var(--spacing-sm);
   font-size: 14px;
-  color: #333333;
-  line-height: 1.6;
+  color: var(--text);
+  line-height: 1.5;
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
 .task-requirements,
 .task-criteria {
-  margin-top: 12px;
+  margin-top: var(--spacing-sm);
 }
 
 .requirements-label,
 .criteria-label {
   font-size: 13px;
-  font-weight: 600;
-  color: #4a2c6d;
-  margin: 0 0 6px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--primary);
+  margin: 0 0 var(--spacing-xs);
+  font-family: var(--font-family);
 }
 
 .task-requirements ul,
 .task-criteria ul {
   margin: 0;
-  padding-left: 20px;
+  padding-left: var(--spacing-lg);
 }
 
 .task-requirements li,
 .task-criteria li {
-  font-size: 13px;
-  color: #666666;
-  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: var(--spacing-xs);
   line-height: 1.5;
+  font-weight: var(--font-weight-normal);
+  font-family: var(--font-family);
 }
 
 .task-grading {
-  padding: 16px;
-  background: #fafafa;
+  padding: var(--spacing-md);
+  background: var(--background);
   border-radius: 6px;
 }
 
 .grading-options {
-  margin-top: 12px;
+  margin-top: var(--spacing-sm);
 }
 
 /* Адаптивность */
@@ -1403,114 +1131,81 @@ const viewResults = (id: string) => {
     flex-shrink: 1;
   }
 
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .card-footer {
-    flex-wrap: wrap;
-  }
-
   .question-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--spacing-sm);
   }
 
   .grading-stats {
     flex-wrap: wrap;
-    gap: 10px;
+    gap: var(--spacing-sm);
   }
 }
 
-/* Deep styles */
-:deep(.el-card__header) {
-  padding: 16px 20px;
-  border-bottom: none;
-  background: transparent;
-}
-
-:deep(.el-card__body) {
-  padding: 0 20px 20px;
-}
-
-:deep(.el-empty) {
-  padding: 40px 0;
-}
-
-:deep(.el-dialog__header) {
-  padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-:deep(.el-dialog__body) {
-  padding: 20px;
-}
-
-:deep(.el-dialog__footer) {
-  padding: 12px 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-:deep(.el-select) {
-  width: 100%;
-}
-
-:deep(.el-date-editor.el-input) {
-  width: 100%;
-}
-
-/* Стили для тегов типов */
-:deep(.el-tag--plain.el-tag--warning) {
-  background-color: #fdf6ec;
-  border-color: #faad14;
-  color: #faad14;
-}
-
-:deep(.el-tag--plain.el-tag--success) {
-  background-color: #f0f9eb;
-  border-color: #67c23a;
-  color: #67c23a;
-}
-
-:deep(.el-tag--plain.el-tag--danger) {
-  background-color: #fef0f0;
-  border-color: #f56c6c;
-  color: #f56c6c;
-}
-
-/* Убираем синее выделение у радио-кнопок, делаем нейтральным серым */
+/* Deep styles для фильтров */
 :deep(.el-radio-button__inner) {
   background-color: #f5f5f5 !important;
   border: 1px solid #d9d9d9 !important;
-  color: #666 !important;
+  color: var(--text) !important;
   box-shadow: none !important;
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
   padding: 8px 16px;
+  font-family: var(--font-family);
+  border-radius: 4px !important;
 }
 
 :deep(.el-radio-button__inner:hover) {
-  color: #4a2c6d !important;
+  color: var(--primary) !important;
 }
 
 :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
   background-color: #e0e0e0 !important;
-  border-color: #999 !important;
-  color: #333 !important;
+  border-color: var(--gray) !important;
+  color: var(--text) !important;
   box-shadow: none !important;
 }
 
-:deep(.el-radio-button:first-child .el-radio-button__inner) {
-  border-left: 1px solid #d9d9d9 !important;
-  border-radius: 4px 0 0 4px !important;
+:deep(.el-select.is-focus .el-input__inner) {
+  border-color: #d9d9d9 !important;
+  box-shadow: none !important;
 }
 
-:deep(.el-radio-button:last-child .el-radio-button__inner) {
-  border-radius: 0 4px 4px 0 !important;
+:deep(.el-select) {
+  --el-select-input-focus-border-color: #d9d9d9 !important;
+  --el-color-primary: var(--primary) !important;
+  font-family: var(--font-family);
 }
 
-:deep(.el-radio-button__inner::before) {
-  display: none;
+:deep(.el-tag--plain.el-tag--warning) {
+  background-color: #fdf6ec;
+  border-color: var(--warning);
+  color: var(--warning);
+  border-radius: 4px;
+}
+
+:deep(.el-tag--plain.el-tag--success) {
+  background-color: #f0f9eb;
+  border-color: var(--success);
+  color: var(--success);
+  border-radius: 4px;
+}
+
+:deep(.el-tag--plain.el-tag--danger) {
+  background-color: #fef0f0;
+  border-color: var(--danger);
+  color: var(--danger);
+  border-radius: 4px;
+}
+
+:deep(.el-button) {
+  font-family: var(--font-family);
+  border-radius: 4px !important;
+}
+
+:deep(.el-input__inner) {
+  font-family: var(--font-family);
+  border-radius: 4px !important;
 }
 </style>

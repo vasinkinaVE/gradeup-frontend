@@ -14,10 +14,6 @@
           <el-icon><HomeFilled /></el-icon>
           <span class="nav-text">Личный кабинет</span>
         </router-link>
-        <router-link to="/profile" class="nav-link" active-class="active">
-          <el-icon><List /></el-icon>
-          <span class="nav-text">Профиль</span>
-        </router-link>
         <router-link to="/calendar" class="nav-link" active-class="active">
           <el-icon><Calendar /></el-icon>
           <span class="nav-text">Календарь</span>
@@ -28,7 +24,7 @@
           <span class="nav-text">Моя команда</span>
         </router-link>
 
-        <!-- 🔹 НОВАЯ ССЫЛКА: Сотрудники (только для SPO/Admin) -->
+        <!-- 🔹 Ссылка: Сотрудники (только для SPO/Admin) -->
         <router-link v-if="isSPOOrAdmin" to="/admin/users" class="nav-link" active-class="active">
           <el-icon><User /></el-icon>
           <span class="nav-text">Сотрудники</span>
@@ -97,7 +93,7 @@
           <span>Моя команда</span>
         </router-link>
 
-        <!-- 🔹 НОВАЯ ССЫЛКА в мобильном меню: Сотрудники -->
+        <!-- 🔹 Ссылка в мобильном меню: Сотрудники -->
         <router-link
           v-if="isSPOOrAdmin"
           to="/admin/users"
@@ -131,12 +127,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Bell,
   HomeFilled,
-  List,
   Calendar,
   ArrowDown,
   UserFilled,
   Setting,
-  User, // 🔹 Добавлена иконка User
+  User,
   Fold,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -208,10 +203,9 @@ const handleMenuCommand = (command: string) => {
   }
 }
 
-// Элементы навигации для мобильного меню
+// Элементы навигации для мобильного меню (без Профиля)
 const navItems = [
   { path: '/dashboard', label: 'Личный кабинет', icon: HomeFilled },
-  { path: '/profile', label: 'Профиль', icon: List },
   { path: '/calendar', label: 'Календарь', icon: Calendar },
 ]
 </script>

@@ -23,11 +23,6 @@ const routes: RouteRecordRaw[] = [
 
   // Общие маршруты
   {
-    path: '/profile',
-    component: () => import('@/views/ProfileView.vue'),
-    meta: { requiresAuth: true, title: 'Профиль' },
-  },
-  {
     path: '/calendar',
     component: () => import('@/views/CalendarView.vue'),
     meta: { requiresAuth: true, title: 'Календарь' },
