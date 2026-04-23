@@ -70,6 +70,31 @@
       </div>
     </div>
 
+    <!-- Футер с кнопками (показывается всегда, если статус не "отменена") -->
+    <div v-if="meeting.status !== 'cancelled'" class="meeting-footer">
+      <!-- Кнопка "Оценить" — только для руководителя (независимо от статуса) -->
+      <el-button
+        v-if="canGrade && meeting.status !== 'completed'"
+        type="primary"
+        size="small"
+        @click="$emit('open-grading', meeting)"
+      >
+        <el-icon><Edit /></el-icon>
+        Оценить
+      </el-button>
+
+      <!-- Кнопка "Результаты" — для аттестуемого, если встреча завершена -->
+      <el-button
+        v-if="meeting.role === 'ATTESTED' && meeting.status === 'completed'"
+        type="primary"
+        size="small"
+        plain
+        @click="$emit('view-results', meeting)"
+      >
+        Результаты
+      </el-button>
+    </div>
+
     <!-- Модалка с деталями встречи -->
     <el-dialog
       v-model="isModalVisible"
@@ -84,8 +109,8 @@
           <p class="section-text">{{ meeting.description || 'Описание не указано' }}</p>
         </div>
 
-        <!-- Вопросы и ответы (только для аттестующих и типа EXAM) -->
-        <div v-if="meeting.role === 'ATTESTOR'" class="modal-section">
+        <!-- ✅ Вопросы и ответы (для аттестующих И руководителей) -->
+        <div v-if="meeting.role === 'ATTESTOR' || canGrade" class="modal-section">
           <h4 class="section-title">Вопросы и ответы</h4>
           <div v-if="meeting.questions && meeting.questions.length > 0" class="questions-list">
             <div
@@ -123,7 +148,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Clock, Location, Timer } from '@element-plus/icons-vue'
+import { Clock, Location, Timer, Edit } from '@element-plus/icons-vue'
 
 export interface MeetingParticipant {
   id: number | string
@@ -142,13 +167,13 @@ export interface Meeting {
   id: number | string
   skill_name: string
   confirmation_type: string
-  status: 'scheduled' | 'completed'
+  status: 'scheduled' | 'completed' | 'cancelled'
   date_time: string | Date
   location: string
   duration: number
   description?: string
   materials?: string[]
-  questions?: Question[] // Вопросы для аттестующих
+  questions?: Question[]
   participants: MeetingParticipant[]
   role?: 'ATTESTED' | 'ATTESTOR'
   isPast?: boolean
@@ -158,9 +183,17 @@ export interface Meeting {
 
 interface Props {
   meeting: Meeting
+  canGrade?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  canGrade: false,
+})
+
+const emit = defineEmits<{
+  'view-results': [meeting: Meeting]
+  'open-grading': [meeting: Meeting]
+}>()
 
 const isModalVisible = ref(false)
 
@@ -191,6 +224,7 @@ const getStatusText = (status: string) => {
   const texts: Record<string, string> = {
     scheduled: 'Запланирована',
     completed: 'Завершена',
+    cancelled: 'Отменена',
   }
   return texts[status] || status
 }
@@ -219,7 +253,7 @@ const getConfirmationColor = (type: string) => {
 .meeting-card {
   position: relative;
   background: #fff;
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   padding: var(--spacing-md);
   width: 100%;
   box-sizing: border-box;
@@ -230,7 +264,7 @@ const getConfirmationColor = (type: string) => {
   top: 0;
   right: 0;
   border: 1px solid var(--gray);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   padding: 2px 10px;
   font-size: 13px;
   font-weight: var(--font-weight-medium);
@@ -253,7 +287,7 @@ const getConfirmationColor = (type: string) => {
 
 .confirmation-badge {
   border: 1px solid;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   padding: 2px 10px;
   font-size: 13px;
   font-weight: var(--font-weight-medium);
@@ -372,6 +406,16 @@ const getConfirmationColor = (type: string) => {
   flex-shrink: 0;
 }
 
+/* Footer с кнопками */
+.meeting-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  border-top: 1px solid #f0f0f0;
+}
+
 /* Модалка */
 .meeting-modal-content {
   padding: var(--spacing-sm) 0;
@@ -409,7 +453,7 @@ const getConfirmationColor = (type: string) => {
 .question-item {
   padding: var(--spacing-md);
   background: var(--background);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
 }
 
 .question-text {
@@ -452,7 +496,7 @@ const getConfirmationColor = (type: string) => {
   font-style: italic;
   padding: var(--spacing-md);
   background: var(--background);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
 }
 
 /* Материалы */
@@ -476,7 +520,7 @@ const getConfirmationColor = (type: string) => {
   font-style: italic;
   padding: var(--spacing-md);
   background: var(--background);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
 }
 
 @media (max-width: 768px) {

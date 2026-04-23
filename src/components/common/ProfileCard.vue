@@ -121,6 +121,27 @@
                 </div>
                 <div v-else class="no-materials">Материалы пока не добавлены</div>
               </div>
+
+              <!-- ✅ Вопросы и ответы (только для руководителя) -->
+              <div v-if="stage.questions?.length" class="stage-section">
+                <h4 class="section-title">Вопросы и ответы</h4>
+                <div class="questions-list">
+                  <div
+                    v-for="(question, qIdx) in stage.questions"
+                    :key="question.id || qIdx"
+                    class="question-item"
+                  >
+                    <div class="question-text">
+                      <span class="question-number">{{ qIdx + 1 }}.</span>
+                      {{ question.text }}
+                    </div>
+                    <div class="answer-block">
+                      <span class="answer-label">Эталонный ответ:</span>
+                      <p class="answer-text">{{ question.answer }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -133,12 +154,19 @@
 import { ref, watch } from 'vue'
 import { ArrowRight, Document, Reading } from '@element-plus/icons-vue'
 
+export interface Question {
+  id?: string | number
+  text: string
+  answer: string
+}
+
 export interface Stage {
   id: number
   type: 'practice' | 'attestation' | 'performance_review'
   description: string
   materials: string[]
   progress: number
+  questions?: Question[] // ✅ Добавлено поле вопросов
 }
 
 export interface Skill {
@@ -503,5 +531,52 @@ const getStageTypeName = (type: string) => {
   padding: var(--spacing-md);
   background: #fafafa;
   border-radius: var(--radius-sm);
+}
+
+/* ✅ Вопросы и ответы */
+.questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.question-item {
+  padding: var(--spacing-md);
+  background: var(--background);
+  border-radius: var(--radius-sm);
+}
+
+.question-text {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.5;
+}
+
+.question-number {
+  font-weight: var(--font-weight-bold);
+  color: var(--primary);
+  margin-right: var(--spacing-xs);
+}
+
+.answer-block {
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid #e4e7ed;
+}
+
+.answer-label {
+  display: block;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--gray);
+  margin-bottom: var(--spacing-xs);
+}
+
+.answer-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0;
 }
 </style>

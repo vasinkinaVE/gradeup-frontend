@@ -146,7 +146,7 @@ const isManager = computed(() => {
   const role = currentUser.value?.role_name
   if (!role) return false
   const r = role.toLowerCase()
-  return ['manager', 'руководитель'].includes(r)
+  return ['supervisor', 'руководитель'].includes(r)
 })
 
 const isSPOOrAdmin = computed(() => {

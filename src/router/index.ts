@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteRecordRaw } from 'vue-router'
+import type { RouteRecordRaw, NavigationGuardNext, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const routes: RouteRecordRaw[] = [
@@ -32,7 +32,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/manager/team',
     component: () => import('@/views/manager/TeamView.vue'),
-    meta: { requiresAuth: true, roles: ['manager'], title: 'Команда' },
+    meta: { requiresAuth: true, roles: ['supervisor'], title: 'Команда' },
   },
   {
     path: '/manager/employee/:id?',
@@ -114,8 +114,8 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-// 🔐 Guard для проверки авторизации и ролей
-router.beforeEach(async (to, _from, next) => {
+// 🔐 Guard для проверки авторизации и ролей (Vue Router 4 syntax)
+router.beforeEach(async (to, from): ReturnType<NavigationGuardNext> | undefined => {
   const authStore = useAuthStore()
 
   // Установка заголовка страницы
@@ -132,21 +132,18 @@ router.beforeEach(async (to, _from, next) => {
       // Токен невалиден — очищаем и перенаправляем на вход
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
-      next('/login')
-      return
+      return '/login' // ✅ Возвращаем путь вместо next('/login')
     }
   }
 
   // 🔹 Проверка авторизации
   if (to.meta.requiresAuth && !authStore.user) {
-    next('/login')
-    return
+    return '/login' // ✅ Возвращаем путь вместо next('/login')
   }
 
   // 🔹 Если уже авторизован и пытается зайти на /login — редирект на дашборд
   if (to.path === '/login' && authStore.user) {
-    next('/dashboard')
-    return
+    return '/dashboard' // ✅ Возвращаем путь вместо next('/dashboard')
   }
 
   // 🔹 Проверка ролей (если указаны в meta)
@@ -160,13 +157,12 @@ router.beforeEach(async (to, _from, next) => {
       console.warn(
         `Доступ запрещён. Нужны роли: ${allowedRoles.join(', ')}, у пользователя: ${authStore.user?.role_name}`,
       )
-      next('/dashboard') // Редирект на существующий маршрут
-      return
+      return '/dashboard' // ✅ Возвращаем путь вместо next('/dashboard')
     }
   }
 
-  // Всё ок — разрешаем переход
-  next()
+  // Всё ок — разрешаем переход (неявный return undefined = разрешить)
+  // ✅ Не нужно писать return true или next(), просто завершаем функцию
 })
 
 export default router
