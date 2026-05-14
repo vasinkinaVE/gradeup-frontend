@@ -21,10 +21,20 @@
             </template>
 
             <div class="employee-info" v-if="currentUser">
+              <!-- 🔹 Три отдельных поля: Фамилия, Имя, Отчество -->
               <div class="info-row">
-                <span class="label">ФИО</span>
-                <span class="value">{{ fullName }}</span>
+                <span class="label">Фамилия</span>
+                <span class="value">{{ currentUser.last_name || '—' }}</span>
               </div>
+              <div class="info-row">
+                <span class="label">Имя</span>
+                <span class="value">{{ currentUser.first_name || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Отчество</span>
+                <span class="value">{{ currentUser.patronymic || '—' }}</span>
+              </div>
+
               <div class="info-row">
                 <span class="label">Должность</span>
                 <span class="value">{{ currentUser.position || '—' }}</span>
@@ -319,17 +329,29 @@ const fetchProfileData = async () => {
   gap: var(--spacing-sm);
 }
 
-/* Личная информация: одинаковые отступы сверху и снизу */
+/* === ВЕРТИКАЛЬНОЕ ЦЕНТРИРОВАНИЕ ДЛЯ "ЛИЧНАЯ ИНФОРМАЦИЯ" === */
+.info-card:first-child :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 220px;
+  padding: var(--spacing-lg);
+}
+
 .employee-info {
-  padding: var(--spacing-md) 0; /* Одинаковый отступ сверху и снизу */
+  width: 100%;
+  padding: var(--spacing-md) 0;
 }
 
 .info-row {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  /* 🔹 Увеличиваем ширину колонки с названиями + добавляем отступ между колонками */
+  grid-template-columns: 160px 1fr;
   align-items: center;
   padding: var(--spacing-sm) 0;
   border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  column-gap: var(--spacing-lg);
 }
 
 .info-row:last-child {
@@ -354,12 +376,22 @@ const fetchProfileData = async () => {
   font-size: 14px;
 }
 
+/* === ВЕРТИКАЛЬНОЕ ЦЕНТРИРОВАНИЕ ДЛЯ "БЛИЖАЙШАЯ ВСТРЕЧА" === */
+.meeting-card-wrapper :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 220px;
+  padding: var(--spacing-lg);
+}
+
 .meeting-placeholder {
   color: var(--gray);
   font-size: 14px;
   line-height: 1.5;
   padding: var(--spacing-md) 0;
   text-align: center;
+  width: 100%;
 }
 
 :deep(.el-card__header) {
@@ -372,9 +404,29 @@ const fetchProfileData = async () => {
   padding: var(--spacing-lg);
 }
 
+/* 🔹 Убираем отступ справа при открытии модалок и меню (drawer) */
+:global(html.el-popup-parent--hidden),
+:global(body.el-popup-parent--hidden) {
+  padding-right: 0 !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+}
+
 @media (max-width: 768px) {
   .top-row {
     grid-template-columns: 1fr;
+  }
+
+  /* На мобильных убираем фиксированную высоту */
+  .info-card:first-child :deep(.el-card__body),
+  .meeting-card-wrapper :deep(.el-card__body) {
+    min-height: auto;
+  }
+}
+
+@media (min-width: 769px) {
+  .meeting-card-wrapper :deep(.meeting-info) {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 </style>

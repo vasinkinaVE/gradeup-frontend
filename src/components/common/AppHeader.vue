@@ -1,7 +1,7 @@
 <template>
   <header class="main-header">
     <div class="header-left">
-      <!-- Кнопка гамбургер (видна только на мобильных) -->
+      <!-- Кнопка гамбургер (видна только на мобильных и планшетах) -->
       <el-button text :icon="Fold" class="mobile-menu-btn" @click="mobileMenuVisible = true" />
 
       <div class="logo">
@@ -38,10 +38,7 @@
     </div>
 
     <div class="header-right">
-      <!-- Уведомления (скрываем на мобильных) -->
-      <el-badge :value="3" class="notification-badge">
-        <el-button text :icon="Bell" class="notification-btn" />
-      </el-badge>
+      <!-- Уведомления убраны по запросу -->
 
       <el-dropdown @command="handleMenuCommand">
         <div class="user-menu">
@@ -68,6 +65,8 @@
       direction="ltr"
       size="280px"
       class="mobile-drawer"
+      :lock-scroll="true"
+      :modal="true"
     >
       <nav class="mobile-nav">
         <router-link
@@ -153,7 +152,7 @@ const isSPOOrAdmin = computed(() => {
   const role = currentUser.value?.role_name
   if (!role) return false
   const r = role.toLowerCase()
-  return ['spo', 'специалист по обучению', 'admin', 'администратор', 'superuser'].includes(r)
+  return ['specialist', 'специалист по обучению', 'admin', 'администратор', 'superuser'].includes(r)
 })
 
 const userShortName = computed(() => {
@@ -292,19 +291,7 @@ const navItems = [
   gap: var(--spacing-md);
 }
 
-.notification-badge {
-  cursor: pointer;
-}
-
-.notification-btn {
-  color: #fff;
-  font-size: 20px;
-  padding: var(--spacing-sm);
-}
-
-.notification-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
+/* notification-badge и notification-btn убраны */
 
 .user-menu {
   display: flex;
@@ -394,37 +381,13 @@ const navItems = [
    MEDIA QUERIES — АДАПТИВНОСТЬ
    ======================================== */
 
-/* Планшеты (до 1024px) — скрываем текст навигации */
+/* Планшеты и мобильные (до 1024px) — показываем гамбургер, скрываем десктопное меню */
 @media (max-width: 1024px) {
-  .main-header {
-    padding: 0 var(--spacing-md);
-  }
-
-  .nav-text {
-    display: none;
-  }
-
-  .nav-link {
-    padding: var(--spacing-sm);
-    justify-content: center;
-  }
-
-  .header-left {
-    gap: var(--spacing-md);
-  }
-}
-
-/* Мобильные (до 768px) — показываем гамбургер, скрываем меню */
-@media (max-width: 768px) {
   .mobile-menu-btn {
     display: inline-flex;
   }
 
   .desktop-nav {
-    display: none;
-  }
-
-  .notification-badge {
     display: none;
   }
 

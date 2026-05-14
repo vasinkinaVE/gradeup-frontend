@@ -1,30 +1,31 @@
 <template>
   <div class="meeting-card">
-    <!-- Статус -->
-    <span class="status-badge">
-      {{ getStatusText(meeting.status) }}
-    </span>
+    <!-- Верхняя строка: тип (слева) + статус (справа) -->
+    <div class="meeting-header-top">
+      <span
+        class="confirmation-badge"
+        :style="{
+          borderColor: getConfirmationColor(meeting.confirmation_type),
+          color: getConfirmationColor(meeting.confirmation_type),
+        }"
+      >
+        {{ getMeetingTypeText(meeting.confirmation_type) }}
+      </span>
 
-    <!-- Заголовок: тип подтверждения + название (кликабельное) -->
-    <div class="meeting-header">
-      <div class="header-left">
-        <span
-          class="confirmation-badge"
-          :style="{
-            borderColor: getConfirmationColor(meeting.confirmation_type),
-            color: getConfirmationColor(meeting.confirmation_type),
-          }"
-        >
-          {{ getMeetingTypeText(meeting.confirmation_type) }}
-        </span>
-        <h3
-          class="meeting-title meeting-title-clickable"
-          @click="openMeetingModal"
-          title="Подробнее о встрече"
-        >
-          {{ meeting.skill_name }}
-        </h3>
-      </div>
+      <span class="status-badge">
+        {{ getStatusText(meeting.status) }}
+      </span>
+    </div>
+
+    <!-- Заголовок: название встречи (кликабельное) -->
+    <div class="meeting-header-bottom">
+      <h3
+        class="meeting-title meeting-title-clickable"
+        @click="openMeetingModal"
+        title="Подробнее о встрече"
+      >
+        {{ meeting.skill_name }}
+      </h3>
     </div>
 
     <!-- Информация: дата, место, длительность -->
@@ -70,9 +71,9 @@
       </div>
     </div>
 
-    <!-- Футер с кнопками (показывается всегда, если статус не "отменена") -->
-    <div v-if="meeting.status !== 'cancelled'" class="meeting-footer">
-      <!-- Кнопка "Оценить" — только для руководителя (независимо от статуса) -->
+    <!-- Футер с кнопками -->
+    <div class="meeting-footer">
+      <!-- Кнопка "Оценить" — только для руководителя, если встреча не завершена -->
       <el-button
         v-if="canGrade && meeting.status !== 'completed'"
         type="primary"
@@ -99,8 +100,11 @@
     <el-dialog
       v-model="isModalVisible"
       :title="meeting.skill_name"
-      width="600px"
+      width="90%"
+      :style="{ maxWidth: '600px' }"
       :close-on-click-modal="true"
+      class="meeting-modal"
+      align-center
     >
       <div class="meeting-modal-content">
         <!-- Описание встречи -->
@@ -167,7 +171,7 @@ export interface Meeting {
   id: number | string
   skill_name: string
   confirmation_type: string
-  status: 'scheduled' | 'completed' | 'cancelled'
+  status: 'scheduled' | 'completed'
   date_time: string | Date
   location: string
   duration: number
@@ -224,7 +228,6 @@ const getStatusText = (status: string) => {
   const texts: Record<string, string> = {
     scheduled: 'Запланирована',
     completed: 'Завершена',
-    cancelled: 'Отменена',
   }
   return texts[status] || status
 }
@@ -257,32 +260,17 @@ const getConfirmationColor = (type: string) => {
   padding: var(--spacing-md);
   width: 100%;
   box-sizing: border-box;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
-.status-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  border: 1px solid var(--gray);
-  border-radius: 4px;
-  padding: 2px 10px;
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  color: var(--gray);
-  background: transparent;
-  white-space: nowrap;
-  line-height: 1.4;
-}
-
-.meeting-header {
-  margin-bottom: var(--spacing-md);
-  padding-right: 100px;
-}
-
-.header-left {
+/* === Верхняя строка: тип (слева) + статус (справа) === */
+.meeting-header-top {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+  min-width: 0;
 }
 
 .confirmation-badge {
@@ -294,6 +282,26 @@ const getConfirmationColor = (type: string) => {
   white-space: nowrap;
   line-height: 1.4;
   background: transparent;
+  flex-shrink: 0;
+}
+
+.status-badge {
+  border: 1px solid var(--gray);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--gray);
+  background: transparent;
+  white-space: nowrap;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+/* === Название встречи — под верхней строкой, по левому краю === */
+.meeting-header-bottom {
+  margin-bottom: var(--spacing-md);
+  min-width: 0;
 }
 
 .meeting-title {
@@ -302,6 +310,9 @@ const getConfirmationColor = (type: string) => {
   font-weight: var(--font-weight-semibold);
   color: var(--text);
   line-height: 1.4;
+  text-align: left;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .meeting-title-clickable {
@@ -314,17 +325,20 @@ const getConfirmationColor = (type: string) => {
   text-decoration: underline;
 }
 
+/* 🔹 ПО УМОЛЧАНИЮ: 3 колонки (для Календаря) */
 .meeting-info {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-md);
+  min-width: 0;
 }
 
 .info-item {
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-sm);
+  min-width: 0;
 }
 
 .info-icon {
@@ -338,19 +352,29 @@ const getConfirmationColor = (type: string) => {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  min-width: 0;
+  width: 100%;
 }
 
 .info-label {
   font-size: 13px;
   color: var(--gray);
   font-weight: var(--font-weight-normal);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .info-value {
   font-size: 14px;
   color: var(--text);
   font-weight: var(--font-weight-medium);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .participants-section {
@@ -358,6 +382,8 @@ const getConfirmationColor = (type: string) => {
   flex-direction: column;
   align-items: flex-start;
   gap: var(--spacing-sm);
+  min-width: 0;
+  width: 100%;
 }
 
 .participants-title {
@@ -365,6 +391,7 @@ const getConfirmationColor = (type: string) => {
   color: var(--gray);
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .participants-list {
@@ -372,6 +399,7 @@ const getConfirmationColor = (type: string) => {
   flex-direction: column;
   gap: var(--spacing-xs);
   width: 100%;
+  min-width: 0;
 }
 
 .participant-item {
@@ -384,6 +412,7 @@ const getConfirmationColor = (type: string) => {
   border-radius: 6px;
   width: 100%;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .participant-item.is-current-user {
@@ -397,6 +426,9 @@ const getConfirmationColor = (type: string) => {
   color: var(--text);
   font-weight: var(--font-weight-medium);
   line-height: 1.5;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .participant-role {
@@ -404,16 +436,20 @@ const getConfirmationColor = (type: string) => {
   color: #000000;
   font-weight: var(--font-weight-normal);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Footer с кнопками */
 .meeting-footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: var(--spacing-sm);
   padding-top: var(--spacing-md);
   margin-top: var(--spacing-md);
   border-top: 1px solid #f0f0f0;
+  /* 🔹 Убрали flex-wrap, чтобы кнопки не переносились на новую строку */
+  flex-shrink: 0;
 }
 
 /* Модалка */
@@ -441,6 +477,7 @@ const getConfirmationColor = (type: string) => {
   line-height: 1.6;
   color: var(--text);
   margin: 0;
+  word-wrap: break-word;
 }
 
 /* Вопросы и ответы */
@@ -454,6 +491,7 @@ const getConfirmationColor = (type: string) => {
   padding: var(--spacing-md);
   background: var(--background);
   border-radius: 6px;
+  min-width: 0;
 }
 
 .question-text {
@@ -462,6 +500,7 @@ const getConfirmationColor = (type: string) => {
   color: var(--text);
   margin-bottom: var(--spacing-sm);
   line-height: 1.5;
+  word-wrap: break-word;
 }
 
 .question-number {
@@ -488,9 +527,11 @@ const getConfirmationColor = (type: string) => {
   line-height: 1.6;
   color: var(--text);
   margin: 0;
+  word-wrap: break-word;
 }
 
-.no-questions {
+.no-questions,
+.no-materials {
   font-size: 14px;
   color: var(--gray);
   font-style: italic;
@@ -512,36 +553,186 @@ const getConfirmationColor = (type: string) => {
   color: var(--text);
   margin: 0;
   padding: 0;
+  word-wrap: break-word;
 }
 
-.no-materials {
-  font-size: 14px;
-  color: var(--gray);
-  font-style: italic;
-  padding: var(--spacing-md);
-  background: var(--background);
-  border-radius: 6px;
-}
+/* ========================================
+   АДАПТИВНОСТЬ (Базовая для компонента)
+   ======================================== */
 
-@media (max-width: 768px) {
-  .meeting-header {
-    padding-right: 0;
-  }
-
-  .status-badge {
-    position: static;
-    margin-bottom: var(--spacing-sm);
-  }
-
+/* Планшеты (до 700px) — 2 колонки */
+@media (max-width: 700px) {
   .meeting-info {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-sm);
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .meeting-header-top {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
   }
 
   .participants-section {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--spacing-xs);
+  }
+
+  .participant-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .participant-role {
+    align-self: flex-end;
+  }
+  /* 🔹 Убрали justify-content: center, чтобы кнопки не смещались */
+}
+
+/* Мобильные (до 480px) — 1 колонка */
+@media (max-width: 480px) {
+  .meeting-info {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .meeting-card {
+    padding: var(--spacing-sm);
+  }
+  /* Шрифты НЕ уменьшаем, как вы просили */
+}
+
+/* ========================================
+   АДАПТИВНОСТЬ МОДАЛЬНОГО ОКНА
+   ======================================== */
+
+/* Глобальные стили для модального окна (через :deep) */
+:deep(.meeting-modal) {
+  border-radius: 12px;
+}
+
+/* 🔹 Центрирование модального окна по вертикали и горизонтали */
+:deep(.meeting-modal .el-overlay) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+}
+
+:deep(.meeting-modal .el-dialog) {
+  margin: auto !important;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+:deep(.meeting-modal .el-dialog__header) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-right: 0;
+  border-bottom: 1px solid #eee;
+}
+
+:deep(.meeting-modal .el-dialog__title) {
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+  word-wrap: break-word;
+}
+
+:deep(.meeting-modal .el-dialog__body) {
+  padding: var(--spacing-lg);
+  flex: 1;
+  overflow-y: auto;
+}
+
+:deep(.meeting-modal .el-dialog__footer) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid #eee;
+}
+
+/* 🔹 Убираем отступ справа при открытии модалки */
+:global(body.el-popup-parent--hidden) {
+  padding-right: 0 !important;
+  overflow-y: scroll !important;
+}
+
+/* Планшеты (до 1024px) — уменьшаем отступы в модалке */
+@media (max-width: 1024px) {
+  :deep(.meeting-modal .el-dialog__header),
+  :deep(.meeting-modal .el-dialog__body),
+  :deep(.meeting-modal .el-dialog__footer) {
+    padding: var(--spacing-md);
+  }
+}
+
+/* Мобильные (до 768px) — адаптация модалки */
+@media (max-width: 768px) {
+  :deep(.meeting-modal) {
+    width: 95% !important;
+  }
+
+  :deep(.meeting-modal .el-dialog) {
+    margin: auto !important;
+    width: 100% !important;
+    max-height: 90vh;
+  }
+
+  :deep(.meeting-modal .el-dialog__header) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  :deep(.meeting-modal .el-dialog__title) {
+    font-size: 16px;
+  }
+
+  :deep(.meeting-modal .el-dialog__body) {
+    padding: var(--spacing-md);
+  }
+
+  :deep(.meeting-modal .el-dialog__footer) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  /* Компактные стили для контента модалки на мобильных */
+  .section-title {
+    font-size: 13px;
+  }
+
+  .section-text,
+  .question-text,
+  .answer-text,
+  .material-text {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .question-item {
+    padding: var(--spacing-sm);
+  }
+
+  .question-number {
+    margin-right: var(--spacing-xs);
+  }
+
+  .answer-label {
+    font-size: 12px;
+  }
+}
+
+/* Очень маленькие экраны (до 480px) — модалка */
+@media (max-width: 480px) {
+  :deep(.meeting-modal) {
+    width: 98% !important;
+  }
+
+  :deep(.meeting-modal .el-dialog__header),
+  :deep(.meeting-modal .el-dialog__body),
+  :deep(.meeting-modal .el-dialog__footer) {
+    padding: var(--spacing-sm);
+  }
+
+  .no-questions,
+  .no-materials {
+    padding: var(--spacing-sm);
   }
 }
 </style>

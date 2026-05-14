@@ -70,12 +70,39 @@
     <el-dialog
       v-model="isModalVisible"
       :title="selectedSkill?.name || ''"
-      width="800px"
+      width="90%"
+      :style="{ maxWidth: '800px' }"
       :close-on-click-modal="false"
+      class="skill-modal"
+      align-center
       @closed="onModalClosed"
     >
       <div class="skill-modal-content" v-if="selectedSkill">
-        <!-- Табы с этапами -->
+        <!-- 🔹 Описание и материалы (ПЕРЕД табами) -->
+        <div class="skill-info-section">
+          <!-- Описание -->
+          <div class="skill-description">
+            <h4 class="section-title">Описание</h4>
+            <p class="section-text">{{ selectedSkill.description || 'Описание не указано' }}</p>
+          </div>
+
+          <!-- Материалы -->
+          <div class="skill-materials">
+            <h4 class="section-title">Материалы для подготовки</h4>
+            <div v-if="selectedSkill.materials?.length" class="materials-text">
+              <p
+                v-for="(material, index) in selectedSkill.materials"
+                :key="index"
+                class="material-text"
+              >
+                {{ material }}
+              </p>
+            </div>
+            <div v-else class="no-materials">Материалы пока не добавлены</div>
+          </div>
+        </div>
+
+        <!-- 🔹 Табы с этапами -->
         <el-tabs v-model="activeTab" class="skill-tabs">
           <el-tab-pane
             v-for="stage in selectedSkill.stages"
@@ -84,60 +111,47 @@
             :name="stage.id.toString()"
           >
             <div class="stage-content">
-              <!-- Прогресс этапа -->
-              <div class="stage-progress-section">
-                <div class="progress-header">
-                  <span class="progress-label">Прогресс этапа</span>
-                  <span class="progress-value">{{ stage.progress }}%</span>
-                </div>
-                <div class="progress-bar">
-                  <div class="progress-bar-fill" :style="{ width: stage.progress + '%' }"></div>
-                </div>
+              <!-- 🔹 Если этап не защищен -->
+              <div v-if="!stage.is_defended" class="stage-not-defended">
+                Этот этап навыка еще не был защищен
               </div>
 
-              <!-- Описание -->
-              <div class="stage-section">
-                <h4 class="section-title">
-                  <el-icon><Document /></el-icon>
-                  Описание
-                </h4>
-                <p class="section-text">{{ stage.description }}</p>
-              </div>
-
-              <!-- Материалы -->
-              <div class="stage-section">
-                <h4 class="section-title">
-                  <el-icon><Reading /></el-icon>
-                  Материалы для подготовки
-                </h4>
-                <div v-if="stage.materials.length > 0" class="materials-text">
-                  <p
-                    v-for="(material, index) in stage.materials"
-                    :key="index"
-                    class="material-text"
+              <!-- 🔹 Если этап защищен -->
+              <div v-else class="stage-defended">
+                <!-- Оценка + дата -->
+                <div class="stage-grade">
+                  <span class="grade-label">Оценка:</span>
+                  <span :class="['grade-value', stage.grade === 'зачтено' ? 'passed' : 'failed']">
+                    {{ stage.grade || 'незачтено' }}
+                  </span>
+                  <span v-if="stage.date_time" class="grade-date"
+                    >, {{ formatDate(stage.date_time) }}</span
                   >
-                    {{ material }}
-                  </p>
                 </div>
-                <div v-else class="no-materials">Материалы пока не добавлены</div>
-              </div>
 
-              <!-- ✅ Вопросы и ответы (только для руководителя) -->
-              <div v-if="stage.questions?.length" class="stage-section">
-                <h4 class="section-title">Вопросы и ответы</h4>
-                <div class="questions-list">
-                  <div
-                    v-for="(question, qIdx) in stage.questions"
-                    :key="question.id || qIdx"
-                    class="question-item"
-                  >
-                    <div class="question-text">
-                      <span class="question-number">{{ qIdx + 1 }}.</span>
-                      {{ question.text }}
-                    </div>
-                    <div class="answer-block">
-                      <span class="answer-label">Эталонный ответ:</span>
-                      <p class="answer-text">{{ question.answer }}</p>
+                <!-- Комментарий -->
+                <div v-if="stage.comment" class="stage-comment">
+                  <span class="comment-label">Комментарий:</span>
+                  <p class="comment-text">{{ stage.comment }}</p>
+                </div>
+
+                <!-- ✅ Вопросы и ответы (только для руководителя) -->
+                <div v-if="stage.questions?.length" class="stage-questions">
+                  <h4 class="section-title">Вопросы и ответы</h4>
+                  <div class="questions-list">
+                    <div
+                      v-for="(question, qIdx) in stage.questions"
+                      :key="question.id || qIdx"
+                      class="question-item"
+                    >
+                      <div class="question-text">
+                        <span class="question-number">{{ qIdx + 1 }}.</span>
+                        {{ question.text }}
+                      </div>
+                      <div class="answer-block">
+                        <span class="answer-label">Эталонный ответ:</span>
+                        <p class="answer-text">{{ question.answer }}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -151,8 +165,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { ArrowRight, Document, Reading } from '@element-plus/icons-vue'
+import { ref } from 'vue'
+import { ArrowRight } from '@element-plus/icons-vue'
 
 export interface Question {
   id?: string | number
@@ -166,13 +180,19 @@ export interface Stage {
   description: string
   materials: string[]
   progress: number
-  questions?: Question[] // ✅ Добавлено поле вопросов
+  is_defended?: boolean
+  grade?: 'зачтено' | 'незачтено'
+  date_time?: string
+  comment?: string
+  questions?: Question[]
 }
 
 export interface Skill {
   id: number
   name: string
   total_progress: number
+  description?: string
+  materials?: string[]
   stages: Stage[]
 }
 
@@ -211,15 +231,9 @@ const toggleLevel = (levelId: number) => {
 const openSkillModal = (skill: Skill) => {
   selectedSkill.value = skill
   isModalVisible.value = true
-  // Инициализация активного таба при открытии
   if (skill.stages.length > 0) {
     activeTab.value = skill.stages[0].id.toString()
   }
-}
-
-// Закрытие модалки
-const closeSkillModal = () => {
-  isModalVisible.value = false
 }
 
 // После закрытия модалки
@@ -235,6 +249,18 @@ const getStageTypeName = (type: string) => {
     performance_review: 'Performance review',
   }
   return names[type] || type
+}
+
+// Форматирование даты
+const formatDate = (dateTime: string) => {
+  const date = new Date(dateTime)
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 </script>
 
@@ -328,6 +354,7 @@ const getStageTypeName = (type: string) => {
   background: #f0f0f0;
   border-radius: 3px;
   overflow: hidden;
+  min-width: 0;
 }
 
 .level-progress-fill {
@@ -429,77 +456,93 @@ const getStageTypeName = (type: string) => {
   display: inline-block;
 }
 
-/* ===== Стили модалки (встроены) ===== */
+/* ========================================
+   АДАПТИВНОСТЬ
+   ======================================== */
+
+/* Планшеты и большие телефоны (до 560px) */
+@media (max-width: 560px) {
+  /* 🔹 Прогресс уровня: процент сверху слева, линия под ним */
+  .level-progress {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+    width: 30%;
+  }
+
+  .level-progress-text {
+    width: auto;
+    text-align: left;
+  }
+
+  /* 🔹 Прогресс уровня уменьшается с экраном */
+  .level-progress-bar {
+    width: 100%;
+  }
+
+  /* 🔹 Прогресс навыка в таблице */
+  .progress-bar-wrapper {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xs);
+  }
+
+  .progress-text {
+    text-align: left;
+  }
+
+  /* 🔹 Заголовок уровня */
+  .level-header {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .level-title {
+    width: 100%;
+  }
+}
+
+/* 🔹 Очень маленькие экраны (до 429px) — уменьшаем шрифт названий навыков */
+@media (max-width: 429px) {
+  .skill-name {
+    font-size: 13px;
+  }
+
+  .skills-table th,
+  .skills-table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}
+
+/* ========================================
+   Стили модалки
+   ======================================== */
+
 .skill-modal-content {
   padding: var(--spacing-sm) 0;
 }
 
-.skill-tabs {
-  margin-top: var(--spacing-md);
-}
-
-.stage-content {
-  padding: var(--spacing-sm) 0;
-}
-
-/* Прогресс этапа */
-.stage-progress-section {
+/* 🔹 Блок с описанием и материалами (перед табами) */
+.skill-info-section {
   margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-md);
-  background: var(--background);
-  border-radius: var(--radius-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid #eee;
 }
 
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-sm);
+.skill-description,
+.skill-materials {
+  margin-bottom: var(--spacing-md);
 }
 
-.progress-label {
-  font-size: 14px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
-}
-
-.progress-value {
-  font-size: 18px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
-}
-
-.progress-bar {
-  height: 6px;
-  background: #f0f0f0;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: #6a4c8d;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-/* Секции */
-.stage-section {
-  margin-bottom: var(--spacing-lg);
+.skill-description:last-child,
+.skill-materials:last-child {
+  margin-bottom: 0;
 }
 
 .section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
   font-size: 14px;
   font-weight: var(--font-weight-semibold);
   color: var(--text);
   margin-bottom: var(--spacing-sm);
-}
-
-.section-title .el-icon {
-  color: var(--primary);
 }
 
 .section-text {
@@ -509,7 +552,7 @@ const getStageTypeName = (type: string) => {
   margin: 0;
 }
 
-/* Материалы - просто текст */
+/* Материалы */
 .materials-text {
   display: flex;
   flex-direction: column;
@@ -533,7 +576,90 @@ const getStageTypeName = (type: string) => {
   border-radius: var(--radius-sm);
 }
 
-/* ✅ Вопросы и ответы */
+/* Табы */
+.skill-tabs {
+  margin-top: var(--spacing-md);
+}
+
+.stage-content {
+  padding: var(--spacing-sm) 0;
+}
+
+/* 🔹 Этап не защищен */
+.stage-not-defended {
+  font-size: 14px;
+  color: var(--gray);
+  font-style: italic;
+  padding: var(--spacing-md);
+  background: var(--background);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+/* 🔹 Этап защищен */
+.stage-defended {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* Оценка */
+.stage-grade {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.grade-label {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--gray);
+}
+
+.grade-value {
+  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.grade-value.passed {
+  color: #4caf50;
+}
+
+.grade-value.failed {
+  color: #f44336;
+}
+
+.grade-date {
+  font-size: 13px;
+  color: var(--gray);
+}
+
+/* Комментарий */
+.stage-comment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.comment-label {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--gray);
+}
+
+.comment-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Вопросы и ответы */
+.stage-questions {
+  margin-top: var(--spacing-md);
+}
+
 .questions-list {
   display: flex;
   flex-direction: column;
@@ -578,5 +704,136 @@ const getStageTypeName = (type: string) => {
   line-height: 1.6;
   color: var(--text);
   margin: 0;
+}
+
+/* ========================================
+   АДАПТИВНОСТЬ МОДАЛЬНОГО ОКНА
+   ======================================== */
+
+:deep(.skill-modal) {
+  border-radius: 12px;
+}
+
+/* 🔹 Центрирование по вертикали и горизонтали */
+:deep(.skill-modal .el-overlay) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+}
+
+:deep(.skill-modal .el-dialog) {
+  margin: auto !important;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+:deep(.skill-modal .el-dialog__header) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-right: 0;
+  border-bottom: 1px solid #eee;
+}
+
+:deep(.skill-modal .el-dialog__title) {
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+  word-wrap: break-word;
+}
+
+:deep(.skill-modal .el-dialog__body) {
+  padding: var(--spacing-lg);
+  flex: 1;
+  overflow-y: auto;
+}
+
+:deep(.skill-modal .el-dialog__footer) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid #eee;
+}
+
+:global(body.el-popup-parent--hidden) {
+  padding-right: 0 !important;
+  overflow-y: scroll !important;
+}
+
+/* Планшеты (до 1024px) */
+@media (max-width: 1024px) {
+  :deep(.skill-modal .el-dialog__header),
+  :deep(.skill-modal .el-dialog__body),
+  :deep(.skill-modal .el-dialog__footer) {
+    padding: var(--spacing-md);
+  }
+}
+
+/* Мобильные (до 768px) */
+@media (max-width: 768px) {
+  :deep(.skill-modal) {
+    width: 95% !important;
+  }
+
+  :deep(.skill-modal .el-dialog) {
+    margin: auto !important;
+    width: 100% !important;
+    max-height: 90vh;
+  }
+
+  :deep(.skill-modal .el-dialog__header) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  :deep(.skill-modal .el-dialog__title) {
+    font-size: 16px;
+  }
+
+  :deep(.skill-modal .el-dialog__body) {
+    padding: var(--spacing-md);
+  }
+
+  :deep(.skill-modal .el-dialog__footer) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .section-title {
+    font-size: 13px;
+  }
+
+  .section-text,
+  .question-text,
+  .answer-text,
+  .material-text {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .question-item {
+    padding: var(--spacing-sm);
+  }
+
+  .question-number {
+    margin-right: var(--spacing-xs);
+  }
+
+  .answer-label {
+    font-size: 12px;
+  }
+}
+
+/* Очень маленькие экраны (до 480px) */
+@media (max-width: 480px) {
+  :deep(.skill-modal) {
+    width: 98% !important;
+  }
+
+  :deep(.skill-modal .el-dialog__header),
+  :deep(.skill-modal .el-dialog__body),
+  :deep(.skill-modal .el-dialog__footer) {
+    padding: var(--spacing-sm);
+  }
+
+  .no-materials {
+    padding: var(--spacing-sm);
+  }
 }
 </style>
