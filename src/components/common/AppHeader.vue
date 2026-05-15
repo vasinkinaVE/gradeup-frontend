@@ -132,6 +132,7 @@ import {
   Setting,
   User,
   Fold,
+  WarningFilled,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -176,6 +177,7 @@ const handleLogout = async () => {
       cancelButtonText: 'Отмена',
       type: 'warning',
       confirmButtonClass: 'el-button--danger',
+      icon: WarningFilled, // ✅ Явно указываем иконку
     })
 
     await authStore.logout()
@@ -422,5 +424,47 @@ const navItems = [
   .logo-text {
     font-size: 18px;
   }
+}
+</style>
+
+<!-- ✅ Глобальные стили для модального окна выхода (не в scoped) -->
+<style>
+/* === Стили для ElMessageBox (модальное окно подтверждения) === */
+
+/* 🔹 Иконка предупреждения — красная */
+.el-message-box .el-message-box__status.el-icon-warning {
+  color: #f44336 !important;
+}
+
+/* 🔹 Крестик закрытия — красный при наведении */
+.el-message-box .el-message-box__headerbtn {
+  transition: color 0.2s;
+}
+
+.el-message-box .el-message-box__headerbtn:hover,
+.el-message-box .el-message-box__headerbtn:hover .el-message-box__close {
+  color: #f44336 !important;
+}
+
+/* 🔹 Кнопка "Отмена" — серая при наведении */
+.el-message-box .el-message-box__btns button:first-child {
+  transition: all 0.2s;
+}
+
+.el-message-box .el-message-box__btns button:first-child:hover {
+  background-color: #c5c5c5 !important;
+  border-color: #909399 !important;
+  color: #fff !important;
+}
+
+/* 🔹 Кнопка "Выйти" (confirm) — оставляем красной как есть */
+.el-message-box .el-message-box__btns button:last-child {
+  background-color: #f44336;
+  border-color: #f44336;
+}
+
+.el-message-box .el-message-box__btns button:last-child:hover {
+  background-color: #c22d2a !important;
+  border-color: #e53935 !important;
 }
 </style>

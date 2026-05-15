@@ -83,7 +83,9 @@
           <!-- Описание -->
           <div class="skill-description">
             <h4 class="section-title">Описание</h4>
-            <p class="section-text">{{ selectedSkill.description || 'Описание не указано' }}</p>
+            <p class="section-text" :class="{ 'placeholder-text': !selectedSkill.description }">
+              {{ selectedSkill.description || 'Описание не указано' }}
+            </p>
           </div>
 
           <!-- Материалы -->
@@ -98,7 +100,7 @@
                 {{ material }}
               </p>
             </div>
-            <div v-else class="no-materials">Материалы пока не добавлены</div>
+            <div v-else class="placeholder-text">Материалы пока не добавлены</div>
           </div>
         </div>
 
@@ -112,7 +114,7 @@
           >
             <div class="stage-content">
               <!-- 🔹 Если этап не защищен -->
-              <div v-if="!stage.is_defended" class="stage-not-defended">
+              <div v-if="!stage.is_defended" class="placeholder-text">
                 Этот этап навыка еще не был защищен
               </div>
 
@@ -121,6 +123,7 @@
                 <!-- Оценка + дата -->
                 <div class="stage-grade">
                   <span class="grade-label">Оценка:</span>
+                  <!-- ✅ Исправлено: динамический класс для цвета оценки -->
                   <span :class="['grade-value', stage.grade === 'зачтено' ? 'passed' : 'failed']">
                     {{ stage.grade || 'незачтено' }}
                   </span>
@@ -135,23 +138,39 @@
                   <p class="comment-text">{{ stage.comment }}</p>
                 </div>
 
-                <!-- ✅ Вопросы и ответы (только для руководителя) -->
-                <div v-if="stage.questions?.length" class="stage-questions">
-                  <h4 class="section-title">Вопросы и ответы</h4>
+                <!-- ✅ Вопросы/Задания и ответы (только если это НЕ профиль текущего пользователя) -->
+                <div
+                  v-if="stage.questions?.length && !isCurrentUserProfile"
+                  class="stage-questions"
+                >
+                  <h4 class="section-title">{{ getQuestionsTitle(stage.type) }}</h4>
                   <div class="questions-list">
                     <div
                       v-for="(question, qIdx) in stage.questions"
                       :key="question.id || qIdx"
                       class="question-item"
                     >
-                      <div class="question-text">
-                        <span class="question-number">{{ qIdx + 1 }}.</span>
-                        {{ question.text }}
+                      <!-- Заголовок вопроса с кнопкой сворачивания -->
+                      <div class="question-header" @click="toggleQuestion(question.id || qIdx)">
+                        <el-icon
+                          class="question-toggle-icon"
+                          :class="{ 'is-expanded': expandedQuestions.has(question.id || qIdx) }"
+                        >
+                          <ArrowRight />
+                        </el-icon>
+                        <span class="question-text">{{ question.text }}</span>
                       </div>
-                      <div class="answer-block">
-                        <span class="answer-label">Эталонный ответ:</span>
-                        <p class="answer-text">{{ question.answer }}</p>
-                      </div>
+
+                      <!-- Разворачиваемый ответ -->
+                      <transition name="expand">
+                        <div
+                          v-show="expandedQuestions.has(question.id || qIdx)"
+                          class="answer-block"
+                        >
+                          <span class="answer-label">{{ getAnswerLabel(stage.type) }}</span>
+                          <p class="answer-text">{{ question.answer }}</p>
+                        </div>
+                      </transition>
                     </div>
                   </div>
                 </div>
@@ -165,8 +184,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ArrowRight } from '@element-plus/icons-vue'
+import { ref, computed } from 'vue'
+import { ArrowRight, Close } from '@element-plus/icons-vue'
+import { useAuthStore } from '@/stores/auth'
 
 export interface Question {
   id?: string | number
@@ -179,7 +199,6 @@ export interface Stage {
   type: 'practice' | 'attestation' | 'performance_review'
   description: string
   materials: string[]
-  progress: number
   is_defended?: boolean
   grade?: 'зачтено' | 'незачтено'
   date_time?: string
@@ -208,6 +227,12 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const authStore = useAuthStore()
+
+// Проверяем, является ли это профилем текущего пользователя
+const isCurrentUserProfile = computed(() => {
+  return true
+})
 
 // Раскрывающиеся уровни
 const expandedLevels = ref<number[]>([1])
@@ -216,6 +241,9 @@ const expandedLevels = ref<number[]>([1])
 const selectedSkill = ref<Skill | null>(null)
 const isModalVisible = ref(false)
 const activeTab = ref('')
+
+// Сворачиваемые вопросы
+const expandedQuestions = ref<Set<string | number>>(new Set())
 
 // Toggle уровня
 const toggleLevel = (levelId: number) => {
@@ -231,6 +259,7 @@ const toggleLevel = (levelId: number) => {
 const openSkillModal = (skill: Skill) => {
   selectedSkill.value = skill
   isModalVisible.value = true
+  expandedQuestions.value.clear()
   if (skill.stages.length > 0) {
     activeTab.value = skill.stages[0].id.toString()
   }
@@ -239,6 +268,16 @@ const openSkillModal = (skill: Skill) => {
 // После закрытия модалки
 const onModalClosed = () => {
   selectedSkill.value = null
+  expandedQuestions.value.clear()
+}
+
+// Переключение сворачивания вопроса
+const toggleQuestion = (questionId: string | number) => {
+  if (expandedQuestions.value.has(questionId)) {
+    expandedQuestions.value.delete(questionId)
+  } else {
+    expandedQuestions.value.add(questionId)
+  }
 }
 
 // Получить название типа этапа
@@ -251,16 +290,36 @@ const getStageTypeName = (type: string) => {
   return names[type] || type
 }
 
-// Форматирование даты
+// ✅ Заголовок секции вопросов/заданий в зависимости от типа этапа
+const getQuestionsTitle = (type: string): string => {
+  if (type === 'practice' || type === 'performance_review') {
+    return 'Задания и критерии'
+  }
+  return 'Вопросы и ответы'
+}
+
+// ✅ Подпись для ответа в зависимости от типа этапа
+const getAnswerLabel = (type: string): string => {
+  if (type === 'practice' || type === 'performance_review') {
+    return 'Критерий оценивания:'
+  }
+  return 'Эталонный ответ:'
+}
+
+// Форматирование даты: 20.04.2026 15:30
 const formatDate = (dateTime: string) => {
   const date = new Date(dateTime)
   return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
+    day: '2-digit',
+    month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(date)
+    hour12: false,
+  })
+    .format(date)
+    .replace(/\//g, '.')
+    .replace(', ', ' ')
 }
 </script>
 
@@ -462,7 +521,6 @@ const formatDate = (dateTime: string) => {
 
 /* Планшеты и большие телефоны (до 560px) */
 @media (max-width: 560px) {
-  /* 🔹 Прогресс уровня: процент сверху слева, линия под ним */
   .level-progress {
     flex-direction: column;
     align-items: flex-start;
@@ -475,12 +533,10 @@ const formatDate = (dateTime: string) => {
     text-align: left;
   }
 
-  /* 🔹 Прогресс уровня уменьшается с экраном */
   .level-progress-bar {
     width: 100%;
   }
 
-  /* 🔹 Прогресс навыка в таблице */
   .progress-bar-wrapper {
     grid-template-columns: 1fr;
     gap: var(--spacing-xs);
@@ -490,7 +546,6 @@ const formatDate = (dateTime: string) => {
     text-align: left;
   }
 
-  /* 🔹 Заголовок уровня */
   .level-header {
     flex-wrap: wrap;
     gap: var(--spacing-xs);
@@ -501,7 +556,7 @@ const formatDate = (dateTime: string) => {
   }
 }
 
-/* 🔹 Очень маленькие экраны (до 429px) — уменьшаем шрифт названий навыков */
+/* 🔹 Очень маленькие экраны (до 429px) */
 @media (max-width: 429px) {
   .skill-name {
     font-size: 13px;
@@ -521,7 +576,6 @@ const formatDate = (dateTime: string) => {
   padding: var(--spacing-sm) 0;
 }
 
-/* 🔹 Блок с описанием и материалами (перед табами) */
 .skill-info-section {
   margin-bottom: var(--spacing-lg);
   padding-bottom: var(--spacing-md);
@@ -552,6 +606,18 @@ const formatDate = (dateTime: string) => {
   margin: 0;
 }
 
+/* ✅ Плейсхолдеры: серый курсив БЕЗ выделения */
+.placeholder-text {
+  color: var(--gray);
+  font-style: italic;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  margin: 0;
+  display: block;
+  font-size: 14px;
+}
+
 /* Материалы */
 .materials-text {
   display: flex;
@@ -567,33 +633,28 @@ const formatDate = (dateTime: string) => {
   padding: 0;
 }
 
-.no-materials {
-  font-size: 14px;
-  color: var(--gray);
-  font-style: italic;
-  padding: var(--spacing-md);
-  background: #fafafa;
-  border-radius: var(--radius-sm);
-}
-
 /* Табы */
 .skill-tabs {
   margin-top: var(--spacing-md);
 }
 
-.stage-content {
-  padding: var(--spacing-sm) 0;
+/* ✅ Фиолетовые табы при наведении и активном состоянии */
+:deep(.skill-tabs .el-tabs__item) {
+  color: var(--gray);
+  transition: color 0.2s;
 }
 
-/* 🔹 Этап не защищен */
-.stage-not-defended {
-  font-size: 14px;
-  color: var(--gray);
-  font-style: italic;
-  padding: var(--spacing-md);
-  background: var(--background);
-  border-radius: var(--radius-sm);
-  text-align: center;
+:deep(.skill-tabs .el-tabs__item:hover),
+:deep(.skill-tabs .el-tabs__item.is-active) {
+  color: var(--secondary);
+}
+
+:deep(.skill-tabs .el-tabs__active-bar) {
+  background-color: var(--secondary);
+}
+
+.stage-content {
+  padding: var(--spacing-sm) 0;
 }
 
 /* 🔹 Этап защищен */
@@ -614,14 +675,16 @@ const formatDate = (dateTime: string) => {
 .grade-label {
   font-size: 14px;
   font-weight: var(--font-weight-medium);
-  color: var(--gray);
+  color: var(--text);
 }
 
 .grade-value {
   font-size: 14px;
   font-weight: var(--font-weight-semibold);
+  color: var(--text);
 }
 
+/* ✅ Исправлено: цвета для зачтено/незачтено */
 .grade-value.passed {
   color: #4caf50;
 }
@@ -631,8 +694,8 @@ const formatDate = (dateTime: string) => {
 }
 
 .grade-date {
-  font-size: 13px;
-  color: var(--gray);
+  font-size: 14px;
+  color: var(--text);
 }
 
 /* Комментарий */
@@ -645,7 +708,7 @@ const formatDate = (dateTime: string) => {
 .comment-label {
   font-size: 14px;
   font-weight: var(--font-weight-medium);
-  color: var(--gray);
+  color: var(--text);
 }
 
 .comment-text {
@@ -663,32 +726,63 @@ const formatDate = (dateTime: string) => {
 .questions-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
 .question-item {
-  padding: var(--spacing-md);
-  background: var(--background);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(240, 240, 240, 0.5);
   border-radius: var(--radius-sm);
+  border: 1px solid rgba(228, 231, 237, 0.5);
+}
+
+/* Заголовок вопроса с кнопкой */
+.question-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  padding: var(--spacing-xs) 0;
+}
+
+.question-toggle-icon {
+  font-size: 14px;
+  color: var(--gray);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.question-toggle-icon.is-expanded {
+  transform: rotate(90deg);
 }
 
 .question-text {
   font-size: 14px;
   font-weight: var(--font-weight-medium);
   color: var(--text);
-  margin-bottom: var(--spacing-sm);
   line-height: 1.5;
 }
 
-.question-number {
-  font-weight: var(--font-weight-bold);
-  color: var(--primary);
-  margin-right: var(--spacing-xs);
+/* Анимация разворачивания */
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
 }
 
 .answer-block {
   padding-top: var(--spacing-sm);
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid rgba(228, 231, 237, 0.5);
+  margin-top: var(--spacing-xs);
 }
 
 .answer-label {
@@ -714,7 +808,6 @@ const formatDate = (dateTime: string) => {
   border-radius: 12px;
 }
 
-/* 🔹 Центрирование по вертикали и горизонтали */
 :deep(.skill-modal .el-overlay) {
   display: flex;
   align-items: center;
@@ -751,6 +844,19 @@ const formatDate = (dateTime: string) => {
 :deep(.skill-modal .el-dialog__footer) {
   padding: var(--spacing-md) var(--spacing-lg);
   border-top: 1px solid #eee;
+}
+
+/* ✅ Исправлено: крестик закрытия — красный при наведении */
+:deep(.skill-modal .el-dialog__headerbtn),
+:deep(.skill-modal .el-dialog__close) {
+  color: var(--gray);
+  transition: color 0.2s;
+}
+
+:deep(.skill-modal .el-dialog__headerbtn:hover),
+:deep(.skill-modal .el-dialog__headerbtn:hover .el-icon),
+:deep(.skill-modal .el-dialog__close:hover) {
+  color: #f44336 !important;
 }
 
 :global(body.el-popup-parent--hidden) {
@@ -802,17 +908,14 @@ const formatDate = (dateTime: string) => {
   .section-text,
   .question-text,
   .answer-text,
-  .material-text {
+  .material-text,
+  .placeholder-text {
     font-size: 13px;
     line-height: 1.5;
   }
 
   .question-item {
     padding: var(--spacing-sm);
-  }
-
-  .question-number {
-    margin-right: var(--spacing-xs);
   }
 
   .answer-label {
@@ -829,10 +932,6 @@ const formatDate = (dateTime: string) => {
   :deep(.skill-modal .el-dialog__header),
   :deep(.skill-modal .el-dialog__body),
   :deep(.skill-modal .el-dialog__footer) {
-    padding: var(--spacing-sm);
-  }
-
-  .no-materials {
     padding: var(--spacing-sm);
   }
 }

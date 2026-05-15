@@ -156,20 +156,52 @@ const fetchProfileData = async () => {
           id: 1,
           name: 'Разработка веб-приложений на Vue.js',
           total_progress: 100,
+          description:
+            'Навык разработки современных SPA-приложений с использованием Vue.js 3, Composition API, Pinia и Vue Router',
+          materials: [
+            'Официальная документация Vue.js: https://vuejs.org/guide/introduction.html',
+            'Vue Router: https://router.vuejs.org/',
+            'Pinia: https://pinia.vuejs.org/',
+            'Vue Style Guide: https://vuejs.org/style-guide/',
+          ],
           stages: [
             {
               id: 1,
               type: 'practice',
               description: 'Практическое задание по созданию SPA приложения',
               materials: ['Vue.js Guide', 'Vue Router Documentation'],
-              progress: 100,
+              // ✅ Заполненные поля для защищённого этапа
+              is_defended: true,
+              grade: 'зачтено',
+              date_time: '2026-04-20T15:30:00',
+              comment:
+                'Отлично выполнена работа с компонентами и роутингом. Рекомендуется углубить знания в области оптимизации производительности и работы с состоянием через Pinia.',
+              questions: [
+                {
+                  id: 1,
+                  text: 'В чём разница между Options API и Composition API?',
+                  answer:
+                    'Options API организует код по опциям (data, methods, computed), а Composition API позволяет группировать логику по функциональности через хуки (setup, ref, reactive). Composition API улучшает переиспользование и типизацию.',
+                },
+                {
+                  id: 2,
+                  text: 'Как работает реактивность в Vue 3?',
+                  answer:
+                    'Vue 3 использует Proxy для отслеживания изменений объектов. При чтении свойства происходит сбор зависимостей, при записи — уведомление подписчиков. Это позволяет автоматически обновлять DOM при изменении данных.',
+                },
+              ],
             },
             {
               id: 2,
               type: 'attestation',
               description: 'Аттестация по Vue.js',
               materials: ['Test questions', 'Practical exam'],
-              progress: 100,
+              // Можно также заполнить для аттестации при необходимости
+              is_defended: true,
+              grade: 'зачтено',
+              date_time: '2026-04-22T10:00:00',
+              comment:
+                'Аттестация пройдена успешно. Кандидат продемонстрировал уверенные знания фреймворка.',
             },
           ],
         },
@@ -183,14 +215,12 @@ const fetchProfileData = async () => {
               type: 'practice',
               description: 'Практика работы с Git',
               materials: ['Git documentation'],
-              progress: 100,
             },
             {
               id: 4,
               type: 'attestation',
               description: 'Аттестация по Git',
               materials: ['Exam'],
-              progress: 100,
             },
           ],
         },
@@ -211,21 +241,18 @@ const fetchProfileData = async () => {
               type: 'practice',
               description: 'Практика по архитектуре',
               materials: ['Architecture patterns'],
-              progress: 50,
             },
             {
               id: 6,
               type: 'attestation',
               description: 'Аттестация',
               materials: [],
-              progress: 0,
             },
             {
               id: 7,
               type: 'performance_review',
               description: 'Performance review',
               materials: [],
-              progress: 0,
             },
           ],
         },
