@@ -19,13 +19,18 @@
           <span class="nav-text">Календарь</span>
         </router-link>
 
-        <router-link v-if="isManager" to="/manager/team" class="nav-link" active-class="active">
+        <!--<router-link v-if="isManager" to="/manager/team" class="nav-link" active-class="active">
           <el-icon><UserFilled /></el-icon>
           <span class="nav-text">Моя команда</span>
-        </router-link>
+        </router-link>-->
 
         <!-- 🔹 Ссылка: Сотрудники (только для SPO/Admin) -->
-        <router-link v-if="isSPOOrAdmin" to="/admin/users" class="nav-link" active-class="active">
+        <router-link
+          v-if="isSPOOrAdminOrManager"
+          to="/admin/users"
+          class="nav-link"
+          active-class="active"
+        >
           <el-icon><User /></el-icon>
           <span class="nav-text">Сотрудники</span>
         </router-link>
@@ -81,7 +86,7 @@
           <span>{{ item.label }}</span>
         </router-link>
 
-        <router-link
+        <!--<router-link
           v-if="isManager"
           to="/manager/team"
           class="mobile-nav-link"
@@ -90,11 +95,11 @@
         >
           <el-icon :size="20"><UserFilled /></el-icon>
           <span>Моя команда</span>
-        </router-link>
+        </router-link>-->
 
         <!-- 🔹 Ссылка в мобильном меню: Сотрудники -->
         <router-link
-          v-if="isSPOOrAdmin"
+          v-if="isSPOOrAdminOrManager"
           to="/admin/users"
           class="mobile-nav-link"
           active-class="active"
@@ -154,6 +159,20 @@ const isSPOOrAdmin = computed(() => {
   if (!role) return false
   const r = role.toLowerCase()
   return ['specialist', 'специалист по обучению', 'admin', 'администратор', 'superuser'].includes(r)
+})
+
+const isSPOOrAdminOrManager = computed(() => {
+  const role = currentUser.value?.role_name
+  if (!role) return false
+  const r = role.toLowerCase()
+  return [
+    'specialist',
+    'специалист по обучению',
+    'admin',
+    'администратор',
+    'supervisor',
+    'руководитель',
+  ].includes(r)
 })
 
 const userShortName = computed(() => {

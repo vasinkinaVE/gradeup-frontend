@@ -587,121 +587,14 @@
       </template>
     </el-dialog>
 
-    <!-- 🔹 Модальное окно: Встреча (ИСПРАВЛЕННОЕ) -->
-    <el-dialog
+    <!-- ✅ Подключенный компонент MeetingDialog -->
+    <MeetingDialog
       v-model="meetingDialogVisible"
-      :title="editingMeeting ? 'Редактирование встречи' : 'Новая встреча'"
-      :width="700"
-      class="admin-dialog"
-      destroy-on-close
-    >
-      <el-form :model="meetingForm" label-position="top" class="meeting-form">
-        <!-- Участники -->
-        <el-form-item label="Участники *" prop="participants">
-          <div class="participants-section">
-            <div class="participant-row">
-              <span class="participant-label">Аттестуемый:</span>
-              <el-select
-                v-model="meetingForm.attestedId"
-                placeholder="Выберите аттестуемого"
-                filterable
-                class="participant-select"
-              >
-                <el-option
-                  v-for="emp in allEmployees"
-                  :key="emp.id"
-                  :label="emp.fullName"
-                  :value="emp.id"
-                />
-              </el-select>
-            </div>
-            <div class="participant-row">
-              <span class="participant-label">Аттестующий:</span>
-              <el-select
-                v-model="meetingForm.attestorId"
-                placeholder="Выберите аттестующего"
-                filterable
-                class="participant-select"
-              >
-                <el-option
-                  v-for="emp in allEmployees"
-                  :key="emp.id"
-                  :label="emp.fullName"
-                  :value="emp.id"
-                  :disabled="emp.id === meetingForm.attestedId"
-                />
-              </el-select>
-            </div>
-          </div>
-        </el-form-item>
-
-        <!-- Навык -->
-        <el-form-item label="Навык *" prop="skillId">
-          <el-select
-            v-model="meetingForm.skillId"
-            placeholder="Выберите навык для защиты"
-            filterable
-            @change="onSkillChange"
-          >
-            <el-option
-              v-for="skill in allSkills"
-              :key="skill.id"
-              :label="skill.name"
-              :value="skill.id"
-            />
-          </el-select>
-        </el-form-item>
-
-        <!-- Тип этапа -->
-        <el-form-item label="Тип этапа *" prop="stageType">
-          <el-select v-model="meetingForm.stageType" placeholder="Выберите тип этапа">
-            <el-option label="Аттестация" value="attestation" />
-            <el-option label="Практика" value="practice" />
-            <el-option label="Perf. Review" value="performance" />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="Дата и время *" prop="date">
-          <el-date-picker
-            v-model="meetingForm.date"
-            type="datetime"
-            placeholder="Выберите дату"
-            value-format="YYYY-MM-DD HH:mm"
-            style="width: 100%"
-          />
-        </el-form-item>
-
-        <el-form-item label="Место *" prop="location">
-          <el-input v-model="meetingForm.location" placeholder="Например: Zoom, переговорная 301" />
-        </el-form-item>
-
-        <el-form-item label="Длительность (минуты) *" prop="duration">
-          <el-input-number
-            v-model="meetingForm.duration"
-            :min="15"
-            :max="180"
-            :step="15"
-            controls-position="right"
-            style="width: 100%"
-          />
-        </el-form-item>
-
-        <!-- ✅ Описание встречи (осталось) -->
-        <el-form-item label="Описание" prop="description">
-          <el-input
-            v-model="meetingForm.description"
-            type="textarea"
-            :rows="3"
-            placeholder="Описание встречи, дополнительные заметки"
-          />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="meetingDialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="saveMeeting">Сохранить</el-button>
-      </template>
-    </el-dialog>
+      :meeting="editingMeeting"
+      :skills="allSkills"
+      :employees="allEmployees"
+      @save="handleMeetingSave"
+    />
   </div>
 </template>
 
@@ -719,6 +612,7 @@ import {
   FolderOpened,
 } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
+import MeetingDialog from '@/components/common/MeetingDialog.vue'
 
 // === Вкладки ===
 const tabs = [
@@ -805,20 +699,6 @@ const profileForm = ref({
   position: '',
   description: '',
   levels: [],
-})
-
-const meetingForm = ref({
-  skillId: null,
-  skillName: '',
-  stageType: 'attestation',
-  attestedId: null,
-  attestorId: null,
-  attestedName: '',
-  attestorName: '',
-  date: '',
-  location: '',
-  duration: 60,
-  description: '',
 })
 
 // === Хелперы ===
@@ -1026,67 +906,24 @@ const deleteProfile = async (profile) => {
 }
 
 // === Встречи: действия ===
-const onSkillChange = (skillId) => {
-  const skill = skills.value.find((s) => s.id === skillId)
-  if (skill) {
-    meetingForm.value.skillName = skill.name
-  }
-}
-
 const openMeetingDialog = (meeting = null) => {
-  if (meeting) {
-    editingMeeting.value = meeting
-    meetingForm.value = JSON.parse(JSON.stringify(meeting))
-  } else {
-    editingMeeting.value = null
-    meetingForm.value = {
-      skillId: null,
-      skillName: '',
-      stageType: 'attestation',
-      attestedId: null,
-      attestorId: null,
-      attestedName: '',
-      attestorName: '',
-      date: '',
-      location: '',
-      duration: 60,
-      description: '',
-    }
-  }
+  editingMeeting.value = meeting
   meetingDialogVisible.value = true
 }
 
-const saveMeeting = () => {
-  if (!meetingForm.value.skillId || !meetingForm.value.date || !meetingForm.value.location) {
-    ElMessage.warning('Заполните все обязательные поля')
-    return
-  }
-
-  if (!meetingForm.value.attestedId || !meetingForm.value.attestorId) {
-    ElMessage.warning('Выберите аттестуемого и аттестующего')
-    return
-  }
-
-  const attested = employees.value.find((e) => e.id === meetingForm.value.attestedId)
-  const attestor = employees.value.find((e) => e.id === meetingForm.value.attestorId)
-
-  if (editingMeeting.value) {
-    const idx = meetings.value.findIndex((m) => m.id === editingMeeting.value.id)
+const handleMeetingSave = (meetingData, originalMeeting) => {
+  if (originalMeeting) {
+    // Редактирование
+    const idx = meetings.value.findIndex((m) => m.id === originalMeeting.id)
     if (idx !== -1) {
-      meetings.value[idx] = {
-        ...meetings.value[idx],
-        ...meetingForm.value,
-        attestedName: attested?.fullName || '',
-        attestorName: attestor?.fullName || '',
-      }
+      meetings.value[idx] = { ...meetings.value[idx], ...meetingData }
     }
     ElMessage.success('Встреча обновлена')
   } else {
+    // Создание
     meetings.value.unshift({
       id: Date.now(),
-      ...meetingForm.value,
-      attestedName: attested?.fullName || '',
-      attestorName: attestor?.fullName || '',
+      ...meetingData,
     })
     ElMessage.success('Встреча создана')
   }
@@ -1212,8 +1049,7 @@ const deleteMeeting = async (meeting) => {
 
 /* Формы */
 .skill-form,
-.profile-form,
-.meeting-form {
+.profile-form {
   max-height: 65vh;
   overflow-y: auto;
   padding-right: var(--spacing-sm);
@@ -1394,29 +1230,6 @@ const deleteMeeting = async (meeting) => {
   border-radius: var(--radius-sm);
 }
 
-/* Участники */
-.participants-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.participant-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.participant-label {
-  min-width: 140px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
-}
-
-.participant-select {
-  flex: 1;
-}
-
 /* === Модальные окна просмотра === */
 .view-content {
   max-height: 60vh;
@@ -1512,19 +1325,8 @@ const deleteMeeting = async (meeting) => {
   }
 
   .skill-form,
-  .profile-form,
-  .meeting-form {
+  .profile-form {
     max-height: 60vh;
-  }
-
-  .participant-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .participant-label {
-    min-width: auto;
-    margin-bottom: var(--spacing-xs);
   }
 }
 

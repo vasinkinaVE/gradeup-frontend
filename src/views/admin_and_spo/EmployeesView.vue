@@ -8,10 +8,6 @@
         <el-button type="primary" @click="openRegisterModal">
           <el-icon><Plus /></el-icon> Зарегистрировать сотрудника
         </el-button>
-        <!-- Кнопка ролей видна только админу -->
-        <el-button v-if="isAdmin" @click="rolesVisible = true">
-          <el-icon><Setting /></el-icon> Настройка ролей
-        </el-button>
       </div>
     </header>
 
@@ -24,44 +20,107 @@
         clearable
         class="search-input"
       />
+      <el-select
+        v-model="filterDepartmentId"
+        placeholder="Все отделы"
+        clearable
+        class="department-filter"
+      >
+        <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
+      </el-select>
     </div>
 
     <!-- Таблица сотрудников -->
-    <el-table :data="filteredEmployees" stripe border class="data-table" @row-click="viewEmployee">
+    <el-table
+      :data="filteredEmployees"
+      stripe
+      border
+      class="data-table"
+      @row-click="viewEmployee"
+      style="cursor: pointer"
+    >
       <el-table-column prop="fullName" label="ФИО" min-width="220" />
       <el-table-column prop="position" label="Должность" width="180" />
       <el-table-column prop="departmentName" label="Отдел" width="180" />
-      <el-table-column prop="profileName" label="Профиль" width="180" />
-      <el-table-column label="Действия" width="120" align="center" fixed="right">
+
+      <!-- Колонка Профиль -->
+      <el-table-column label="Профиль" min-width="240">
         <template #default="{ row }">
-          <el-button type="primary" link @click.stop="viewEmployee(row)">Подробнее</el-button>
+          <div class="profile-cell">
+            <div class="profile-name">
+              {{ row.profileName || 'Не назначен' }}
+              <span v-if="row.profileLevel" class="profile-level">({{ row.profileLevel }})</span>
+            </div>
+            <!-- Процент слева от линии -->
+            <div class="progress-wrapper">
+              <span class="progress-percent">{{ row.profileProgress ?? 0 }}%</span>
+              <el-progress
+                v-if="row.profileProgress !== null && row.profileProgress !== undefined"
+                :percentage="row.profileProgress"
+                :show-text="false"
+                :stroke-width="6"
+                class="profile-progress"
+              />
+            </div>
+          </div>
         </template>
       </el-table-column>
+
+      <!-- Колонка Роль -->
+      <el-table-column prop="roleName" label="Роль" width="150" />
     </el-table>
 
     <!-- 🔹 Модальное окно: Карточка сотрудника -->
-    <el-dialog v-model="detailVisible" title="Карточка сотрудника" width="850px" destroy-on-close>
+    <el-dialog v-model="detailVisible" title="Карточка сотрудника" width="750px" destroy-on-close>
       <div v-if="selectedEmployee" class="employee-detail">
-        <!-- Основная информация -->
+        <!-- Основная информация (режим просмотра / редактирования в одном блоке) -->
         <div class="detail-section">
           <h3 class="section-title">Основная информация</h3>
-          <el-form :model="editForm" label-position="left" label-width="130px" class="info-form">
-            <el-form-item label="ФИО">
-              <span class="read-only-text">{{ selectedEmployee.fullName }}</span>
-            </el-form-item>
-            <el-form-item label="Должность">
-              <span class="read-only-text">{{ selectedEmployee.position }}</span>
-            </el-form-item>
-            <el-form-item label="Email">
-              <span class="read-only-text">{{ selectedEmployee.email }}</span>
-            </el-form-item>
-            <el-form-item label="Отдел">
+          <div class="info-grid">
+            <!-- ФИО -->
+            <div class="info-item">
+              <span class="info-label">ФИО:</span>
+              <span v-if="!isEditMode" class="info-value">{{ selectedEmployee.fullName }}</span>
+              <div v-else class="info-edit-row">
+                <el-input v-model="editForm.lastName" placeholder="Фамилия" class="edit-input" />
+                <el-input v-model="editForm.firstName" placeholder="Имя" class="edit-input" />
+                <el-input v-model="editForm.patronymic" placeholder="Отчество" class="edit-input" />
+              </div>
+            </div>
+            <!-- Должность -->
+            <div class="info-item">
+              <span class="info-label">Должность:</span>
+              <span v-if="!isEditMode" class="info-value">{{ selectedEmployee.position }}</span>
+              <el-input
+                v-else
+                v-model="editForm.position"
+                placeholder="Должность"
+                class="edit-input-full"
+              />
+            </div>
+            <!-- Email -->
+            <div class="info-item">
+              <span class="info-label">Email:</span>
+              <span v-if="!isEditMode" class="info-value">{{ selectedEmployee.email }}</span>
+              <el-input
+                v-else
+                v-model="editForm.email"
+                placeholder="Email"
+                class="edit-input-full"
+              />
+            </div>
+            <!-- Отдел -->
+            <div class="info-item">
+              <span class="info-label">Отдел:</span>
+              <span v-if="!isEditMode" class="info-value">{{
+                selectedEmployee.departmentName || 'Не назначен'
+              }}</span>
               <el-select
+                v-else
                 v-model="editForm.departmentId"
                 placeholder="Не назначен"
                 clearable
-                style="width: 100%"
-                @change="saveEmployeeChanges"
+                class="edit-select-full"
               >
                 <el-option
                   v-for="dept in departments"
@@ -70,79 +129,47 @@
                   :value="dept.id"
                 />
               </el-select>
-            </el-form-item>
-            <el-form-item label="Профиль">
+            </div>
+            <!-- Роль -->
+            <div class="info-item">
+              <span class="info-label">Роль:</span>
+              <span v-if="!isEditMode" class="info-value">{{
+                selectedEmployee.roleName || 'Не назначена'
+              }}</span>
               <el-select
-                v-model="editForm.profileId"
-                placeholder="Не назначен"
+                v-else-if="isAdmin"
+                v-model="editForm.roleId"
+                placeholder="Не назначена"
                 clearable
-                style="width: 100%"
-                @change="saveEmployeeChanges"
+                class="edit-select-full"
               >
                 <el-option
-                  v-for="prof in profiles"
-                  :key="prof.id"
-                  :label="prof.name"
-                  :value="prof.id"
+                  v-for="role in availableRoles"
+                  :key="role.id"
+                  :label="role.name"
+                  :value="role.id"
                 />
               </el-select>
-            </el-form-item>
-          </el-form>
+              <span v-else class="info-value">{{ getRoleNameById(editForm.roleId) }}</span>
+            </div>
+          </div>
+          <!-- Кнопки управления -->
+          <div class="detail-actions">
+            <el-button v-if="!isEditMode" type="primary" @click="enableEditMode"
+              >Редактировать</el-button
+            >
+            <template v-else>
+              <el-button @click="cancelEdit">Отмена</el-button>
+              <el-button type="primary" @click="saveEmployeeChanges">Сохранить</el-button>
+            </template>
+          </div>
         </div>
 
-        <!-- Профиль: Навыки, Этапы, Вопросы -->
-        <div v-if="currentProfileSkills.length > 0" class="detail-section profile-section">
-          <h3 class="section-title">Профиль: {{ selectedEmployee.profileName }}</h3>
-          <p class="section-hint">Нажмите на навык, чтобы увидеть материалы и вопросы</p>
-
-          <el-collapse v-model="activeSkillIds" class="skills-collapse">
-            <el-collapse-item
-              v-for="skill in currentProfileSkills"
-              :key="skill.id"
-              :name="skill.id"
-            >
-              <template #title>
-                <span class="skill-title">{{ skill.name }}</span>
-              </template>
-
-              <div class="skill-content">
-                <!-- Материалы -->
-                <div v-if="skill.materials?.length" class="materials-block">
-                  <h4 class="subsection-title">Материалы для подготовки:</h4>
-                  <ul class="materials-list">
-                    <li v-for="(mat, i) in skill.materials" :key="i" class="material-item">
-                      {{ mat }}
-                    </li>
-                  </ul>
-                </div>
-
-                <!-- Этапы и Вопросы -->
-                <div v-if="skill.stages?.length" class="stages-block">
-                  <h4 class="subsection-title">Вопросы по этапам:</h4>
-                  <el-tabs v-model="activeStageIds[skill.id]" class="stage-tabs">
-                    <el-tab-pane
-                      v-for="stage in skill.stages"
-                      :key="stage.id"
-                      :label="getStageLabel(stage.type)"
-                      :name="stage.id"
-                    >
-                      <div class="questions-list">
-                        <div v-for="(q, i) in stage.questions" :key="i" class="question-item">
-                          <p class="question-text"><strong>В:</strong> {{ q.text }}</p>
-                          <p class="answer-text"><strong>О:</strong> {{ q.answer }}</p>
-                        </div>
-                        <el-empty
-                          v-if="!stage.questions?.length"
-                          description="Вопросов пока нет"
-                          :image-size="60"
-                        />
-                      </div>
-                    </el-tab-pane>
-                  </el-tabs>
-                </div>
-              </div>
-            </el-collapse-item>
-          </el-collapse>
+        <!-- Профиль (всегда виден, только просмотр) -->
+        <div v-if="selectedProfileData" class="detail-section profile-section">
+          <h3 class="section-title">Профиль</h3>
+          <!-- Подгрузка внешней формы профиля -->
+          <ProfileCard :profile="selectedProfileData" />
         </div>
         <el-empty v-else description="Профиль не назначен" :image-size="80" />
       </div>
@@ -163,27 +190,25 @@
         class="reg-form"
       >
         <div class="form-row">
-          <el-form-item label="Фамилия" prop="lastName">
-            <el-input v-model="regForm.lastName" placeholder="Иванов" />
-          </el-form-item>
-          <el-form-item label="Имя" prop="firstName">
-            <el-input v-model="regForm.firstName" placeholder="Иван" />
-          </el-form-item>
-          <el-form-item label="Отчество" prop="patronymic">
-            <el-input v-model="regForm.patronymic" placeholder="Иванович" />
-          </el-form-item>
+          <el-form-item label="Фамилия" prop="lastName"
+            ><el-input v-model="regForm.lastName" placeholder="Иванов"
+          /></el-form-item>
+          <el-form-item label="Имя" prop="firstName"
+            ><el-input v-model="regForm.firstName" placeholder="Иван"
+          /></el-form-item>
         </div>
-
         <div class="form-row">
-          <el-form-item label="Должность" prop="position">
-            <el-input v-model="regForm.position" placeholder="Например: Frontend Developer" />
-          </el-form-item>
-          <el-form-item label="Email" prop="email">
-            <el-input v-model="regForm.email" placeholder="user@example.com" />
-          </el-form-item>
+          <el-form-item label="Отчество" prop="patronymic"
+            ><el-input v-model="regForm.patronymic" placeholder="Иванович"
+          /></el-form-item>
+          <el-form-item label="Email" prop="email"
+            ><el-input v-model="regForm.email" placeholder="user@example.com"
+          /></el-form-item>
         </div>
-
         <div class="form-row">
+          <el-form-item label="Должность" prop="position"
+            ><el-input v-model="regForm.position" placeholder="Например: Frontend Developer"
+          /></el-form-item>
           <el-form-item label="Отдел" prop="departmentId">
             <el-select
               v-model="regForm.departmentId"
@@ -194,18 +219,7 @@
               <el-option v-for="d in departments" :key="d.id" :label="d.name" :value="d.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="Профиль" prop="profileId">
-            <el-select
-              v-model="regForm.profileId"
-              placeholder="Можно назначить позже"
-              clearable
-              style="width: 100%"
-            >
-              <el-option v-for="p in profiles" :key="p.id" :label="p.name" :value="p.id" />
-            </el-select>
-          </el-form-item>
         </div>
-
         <div class="form-row">
           <el-form-item label="Пароль" prop="password">
             <el-input
@@ -225,7 +239,6 @@
           </el-form-item>
         </div>
       </el-form>
-
       <template #footer>
         <el-button @click="registerVisible = false">Отмена</el-button>
         <el-button type="primary" :loading="isRegistering" @click="submitRegistration"
@@ -233,76 +246,35 @@
         >
       </template>
     </el-dialog>
-
-    <!-- 🔹 Модальное окно: Настройка ролей (Только Admin) -->
-    <el-dialog
-      v-model="rolesVisible"
-      title="Настройка ролей сотрудников"
-      width="950px"
-      destroy-on-close
-    >
-      <p class="dialog-hint">Управление правами доступа. Изменения применяются мгновенно.</p>
-      <el-table :data="employees" stripe border class="roles-table">
-        <el-table-column prop="fullName" label="ФИО" min-width="200" fixed />
-        <el-table-column prop="position" label="Должность" width="160" />
-        <el-table-column label="Аттестуемый" width="110" align="center">
-          <template #default="{ row }"
-            ><el-switch v-model="row.roles.attested" @change="updateRole(row)"
-          /></template>
-        </el-table-column>
-        <el-table-column label="Аттестующий" width="110" align="center">
-          <template #default="{ row }"
-            ><el-switch v-model="row.roles.attestor" @change="updateRole(row)"
-          /></template>
-        </el-table-column>
-        <el-table-column label="Руководитель" width="110" align="center">
-          <template #default="{ row }"
-            ><el-switch v-model="row.roles.manager" @change="updateRole(row)"
-          /></template>
-        </el-table-column>
-        <el-table-column label="СПО" width="80" align="center">
-          <template #default="{ row }"
-            ><el-switch v-model="row.roles.spo" @change="updateRole(row)"
-          /></template>
-        </el-table-column>
-        <el-table-column label="Администратор" width="130" align="center">
-          <template #default="{ row }"
-            ><el-switch v-model="row.roles.admin" @change="updateRole(row)"
-          /></template>
-        </el-table-column>
-      </el-table>
-      <template #footer>
-        <el-button @click="rolesVisible = false">Закрыть</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, reactive } from 'vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, Search, Setting } from '@element-plus/icons-vue'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+// Импорт внешней карточки профиля
+import ProfileCard from '@/components/common/ProfileCard.vue'
 
 const authStore = useAuthStore()
-// Проверка роли администратора (учитываем разные варианты написания)
 const isAdmin = computed(() => {
   const role = authStore.user?.role_name?.toLowerCase() || ''
   return role.includes('admin') || role.includes('администратор')
 })
 
-// === Состояние интерфейса ===
+// === Состояние ===
 const search = ref('')
+const filterDepartmentId = ref<number | null>(null)
 const detailVisible = ref(false)
 const registerVisible = ref(false)
-const rolesVisible = ref(false)
 const isRegistering = ref(false)
+const isEditMode = ref(false)
 const selectedEmployee = ref<any>(null)
-const activeSkillIds = ref<number[]>([])
-const activeStageIds = ref<Record<number, number>>({})
 const regFormRef = ref<FormInstance>()
+const editForm = ref<any>({})
 
-// === Моковые данные (замените на API) ===
+// === Данные ===
 const departments = ref([
   { id: 1, name: 'Отдел разработки' },
   { id: 2, name: 'Отдел тестирования' },
@@ -310,77 +282,34 @@ const departments = ref([
   { id: 4, name: 'Проектный офис' },
 ])
 
+const availableRoles = ref([
+  { id: 1, name: 'Сотрудник' },
+  { id: 2, name: 'Руководитель' },
+  { id: 3, name: 'СПО' },
+  { id: 4, name: 'Администратор' },
+])
+
 const profiles = ref([
   {
     id: 1,
     name: 'Frontend Developer',
+    description:
+      'Разработка интерфейсов, работа с Vue 3, TypeScript и современными инструментами сборки.',
     skills: [
-      {
-        id: 101,
-        name: 'Vue 3 Composition API',
-        materials: [
-          'Официальная документация Vue 3',
-          'Видеокурс: Реактивность в Vue',
-          'Статья: Composition vs Options',
-        ],
-        stages: [
-          {
-            id: 1001,
-            type: 'attestation',
-            questions: [
-              {
-                text: 'Что такое реактивность?',
-                answer:
-                  'Способность системы автоматически отслеживать изменения данных и обновлять UI.',
-              },
-            ],
-          },
-          {
-            id: 1002,
-            type: 'practice',
-            questions: [
-              {
-                text: 'Напишите пример использования ref и reactive',
-                answer: 'ref для примитивов, reactive для объектов. Пример кода...',
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: 102,
-        name: 'TypeScript Basics',
-        materials: ['Handbook TypeScript', 'Шпаргалка по Generics'],
-        stages: [
-          {
-            id: 1003,
-            type: 'attestation',
-            questions: [
-              {
-                text: 'В чем разница между interface и type?',
-                answer: 'interface расширяем, type более гибкий для объединений.',
-              },
-            ],
-          },
-        ],
-      },
+      { id: 101, name: 'Vue 3 Composition API', materials: ['Документация Vue 3'], stages: [] },
     ],
   },
   {
     id: 2,
     name: 'QA Engineer',
+    description:
+      'Ручное и автоматизированное тестирование, написание E2E и API тестов, составление тест-планов.',
     skills: [
       {
         id: 201,
         name: 'Автотестирование (Cypress)',
-        materials: ['Документация Cypress', 'Best Practices E2E'],
-        stages: [
-          {
-            id: 2001,
-            type: 'practice',
-            questions: [{ text: 'Как замокать API запрос?', answer: 'cy.intercept()' }],
-          },
-        ],
+        materials: ['Документация Cypress'],
+        stages: [],
       },
     ],
   },
@@ -398,7 +327,10 @@ const employees = ref([
     departmentName: 'Отдел разработки',
     profileId: 1,
     profileName: 'Frontend Developer',
-    roles: { attested: true, attestor: false, manager: false, spo: false, admin: false },
+    profileLevel: '2 уровень',
+    profileProgress: 65,
+    roleId: 1,
+    roleName: 'Сотрудник',
   },
   {
     id: 2,
@@ -411,7 +343,10 @@ const employees = ref([
     departmentName: 'Отдел разработки',
     profileId: null,
     profileName: 'Не назначен',
-    roles: { attested: false, attestor: true, manager: true, spo: false, admin: false },
+    profileLevel: null,
+    profileProgress: null,
+    roleId: 2,
+    roleName: 'Руководитель',
   },
   {
     id: 3,
@@ -424,25 +359,33 @@ const employees = ref([
     departmentName: 'Отдел тестирования',
     profileId: 2,
     profileName: 'QA Engineer',
-    roles: { attested: true, attestor: false, manager: false, spo: false, admin: false },
+    profileLevel: 'Ученик',
+    profileProgress: 25,
+    roleId: 1,
+    roleName: 'Сотрудник',
   },
 ])
 
-// === Вычисляемые свойства ===
+// === Вычисляемые ===
 const filteredEmployees = computed(() => {
-  if (!search.value) return employees.value
-  const q = search.value.toLowerCase()
-  return employees.value.filter(
-    (e) =>
-      `${e.lastName} ${e.firstName} ${e.patronymic || ''}`.toLowerCase().includes(q) ||
-      e.position.toLowerCase().includes(q),
-  )
+  let result = employees.value
+  if (search.value) {
+    const q = search.value.toLowerCase()
+    result = result.filter(
+      (e) =>
+        `${e.lastName} ${e.firstName} ${e.patronymic || ''}`.toLowerCase().includes(q) ||
+        e.position.toLowerCase().includes(q),
+    )
+  }
+  if (filterDepartmentId.value) {
+    result = result.filter((e) => e.departmentId === filterDepartmentId.value)
+  }
+  return result
 })
 
-const currentProfileSkills = computed(() => {
-  if (!selectedEmployee.value?.profileId) return []
-  const prof = profiles.value.find((p) => p.id === selectedEmployee.value.profileId)
-  return prof?.skills || []
+const selectedProfileData = computed(() => {
+  if (!selectedEmployee.value?.profileId) return null
+  return profiles.value.find((p) => p.id === selectedEmployee.value.profileId) || null
 })
 
 // === Форма регистрации ===
@@ -453,7 +396,6 @@ const regForm = reactive({
   position: '',
   email: '',
   departmentId: null as number | null,
-  profileId: null as number | null,
   password: '',
   confirmPassword: '',
 })
@@ -464,7 +406,7 @@ const regRules: FormRules = {
   position: [{ required: true, message: 'Введите должность', trigger: 'blur' }],
   email: [
     { required: true, message: 'Введите email', trigger: 'blur' },
-    { type: 'email', message: 'Некорректный формат email', trigger: 'blur' },
+    { type: 'email', message: 'Некорректный формат', trigger: 'blur' },
   ],
   password: [
     { required: true, message: 'Введите пароль', trigger: 'blur' },
@@ -473,7 +415,7 @@ const regRules: FormRules = {
   confirmPassword: [
     { required: true, message: 'Подтвердите пароль', trigger: 'blur' },
     {
-      validator: (_, value, callback) => {
+      validator: (_, value: string, callback: any) => {
         if (value !== regForm.password) callback(new Error('Пароли не совпадают'))
         else callback()
       },
@@ -483,90 +425,87 @@ const regRules: FormRules = {
 }
 
 // === Методы ===
+const getRoleNameById = (roleId: number | null) => {
+  if (!roleId) return 'Не назначена'
+  return availableRoles.value.find((r) => r.id === roleId)?.name || 'Не назначена'
+}
+
 const viewEmployee = (row: any) => {
-  selectedEmployee.value = row
-  // Копируем данные для редактирования
+  selectedEmployee.value = { ...row }
   editForm.value = { ...row }
-  activeSkillIds.value = []
-  activeStageIds.value = {}
+  isEditMode.value = false
   detailVisible.value = true
 }
 
-const editForm = ref<any>({})
+const enableEditMode = () => {
+  isEditMode.value = true
+}
+const cancelEdit = () => {
+  isEditMode.value = false
+  editForm.value = { ...selectedEmployee.value }
+}
+
 const saveEmployeeChanges = () => {
-  const idx = employees.value.findIndex((e) => e.id === editForm.value.id)
+  const idx = employees.value.findIndex((e: any) => e.id === editForm.value.id)
   if (idx !== -1) {
     employees.value[idx] = {
       ...editForm.value,
       fullName:
         `${editForm.value.lastName} ${editForm.value.firstName} ${editForm.value.patronymic || ''}`.trim(),
       departmentName:
-        departments.value.find((d) => d.id === editForm.value.departmentId)?.name || 'Не назначен',
-      profileName:
-        profiles.value.find((p) => p.id === editForm.value.profileId)?.name || 'Не назначен',
+        departments.value.find((d: any) => d.id === editForm.value.departmentId)?.name ||
+        'Не назначен',
+      roleName: getRoleNameById(editForm.value.roleId),
     }
-    selectedEmployee.value = employees.value[idx]
+    selectedEmployee.value = { ...employees.value[idx] }
   }
-  ElMessage.success('Данные сотрудника обновлены')
+  isEditMode.value = false
+  ElMessage.success('Данные обновлены')
 }
 
 const submitRegistration = async () => {
   if (!regFormRef.value) return
   await regFormRef.value.validate(async (valid) => {
-    if (valid) {
-      isRegistering.value = true
-      try {
-        // TODO: API call for registration
-        await new Promise((resolve) => setTimeout(resolve, 600)) // Имитация запроса
-
-        const newEmp = {
-          id: Date.now(),
-          ...regForm,
-          fullName: `${regForm.lastName} ${regForm.firstName} ${regForm.patronymic || ''}`.trim(),
-          departmentName:
-            departments.value.find((d) => d.id === regForm.departmentId)?.name || 'Не назначен',
-          profileName:
-            profiles.value.find((p) => p.id === regForm.profileId)?.name || 'Не назначен',
-          roles: { attested: false, attestor: false, manager: false, spo: false, admin: false },
-        }
-        employees.value.unshift(newEmp)
-        ElMessage.success('Сотрудник успешно зарегистрирован')
-        registerVisible.value = false
-
-        // Сброс формы
-        Object.assign(regForm, {
-          lastName: '',
-          firstName: '',
-          patronymic: '',
-          position: '',
-          email: '',
-          departmentId: null,
-          profileId: null,
-          password: '',
-          confirmPassword: '',
-        })
-      } catch (err) {
-        ElMessage.error('Ошибка при регистрации')
-      } finally {
-        isRegistering.value = false
+    if (!valid) return
+    isRegistering.value = true
+    try {
+      await new Promise((res) => setTimeout(res, 600))
+      const newEmp = {
+        id: Date.now(),
+        ...regForm,
+        fullName: `${regForm.lastName} ${regForm.firstName} ${regForm.patronymic || ''}`.trim(),
+        departmentName:
+          departments.value.find((d: any) => d.id === regForm.departmentId)?.name || 'Не назначен',
+        roleName: 'Сотрудник',
+        roleId: 1,
+        profileName: 'Не назначен',
+        profileLevel: null,
+        profileProgress: null,
       }
+      employees.value.unshift(newEmp)
+      ElMessage.success('Сотрудник зарегистрирован')
+      registerVisible.value = false
+      Object.assign(regForm, {
+        lastName: '',
+        firstName: '',
+        patronymic: '',
+        position: '',
+        email: '',
+        departmentId: null,
+        password: '',
+        confirmPassword: '',
+      })
+    } catch {
+      ElMessage.error('Ошибка регистрации')
+    } finally {
+      isRegistering.value = false
     }
   })
 }
 
-const updateRole = (row: any) => {
-  // TODO: API call to update roles
-  ElMessage.success(`Роли для ${row.fullName} обновлены`)
+const openRegisterModal = () => {
+  registerVisible.value = true
 }
-
-const getStageLabel = (type: string) =>
-  ({
-    attestation: 'Аттестация',
-    practice: 'Практика',
-    performance: 'Perf. Review',
-  })[type] || type
-
-const openRegisterModal = () => (registerVisible.value = true)
 </script>
 
 <style scoped>
@@ -577,7 +516,6 @@ const openRegisterModal = () => (registerVisible.value = true)
   padding: var(--spacing-md);
   color: var(--text);
 }
-
 .view-header {
   display: flex;
   justify-content: space-between;
@@ -586,196 +524,205 @@ const openRegisterModal = () => (registerVisible.value = true)
   flex-wrap: wrap;
   gap: var(--spacing-md);
 }
-
 .view-header h1 {
   margin: 0;
   font-size: 28px;
   font-weight: var(--font-weight-bold);
-  color: var(--text);
+  color: #000;
 }
-
 .header-actions {
   display: flex;
   gap: var(--spacing-sm);
 }
-
 .filters-row {
   display: flex;
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-md);
   flex-wrap: wrap;
+  align-items: center;
 }
-
 .search-input {
   flex: 1;
   min-width: 200px;
   max-width: 400px;
 }
-
+.department-filter {
+  width: 200px;
+}
 .data-table {
   width: 100%;
   margin-bottom: var(--spacing-md);
 }
 
-/* === Модальные окна === */
-.dialog-hint {
-  margin: 0 0 var(--spacing-md) 0;
+/* Таблица: обычный шрифт для всех ячеек */
+:deep(.el-table .cell) {
+  font-weight: 400 !important;
+}
+
+/* Профиль в таблице */
+.profile-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.profile-name {
+  font-weight: normal;
+  color: #000;
   font-size: 14px;
-  color: var(--gray);
+}
+.profile-level {
+  font-size: 14px;
+  color: #666;
 }
 
-.reg-form {
-  max-height: 60vh;
-  overflow-y: auto;
-  padding-right: var(--spacing-sm);
+/* Обёртка: процент слева, линия справа */
+.progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.progress-percent {
+  font-size: 14px !important;
+  color: #666;
+  white-space: nowrap;
+  min-width: 38px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+.profile-progress {
+  flex: 1;
+  min-width: 0;
+}
+:deep(.profile-progress .el-progress__text) {
+  font-size: 14px !important;
+  font-weight: 400;
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-sm);
-}
-
-/* === Карточка сотрудника === */
+/* Карточка сотрудника */
 .employee-detail {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
 }
-
 .detail-section {
   background: #fff;
   padding: var(--spacing-md);
   border-radius: var(--radius-md);
   border: 1px solid #e0e0e0;
 }
-
 .section-title {
-  margin: 0 0 var(--spacing-sm) 0;
+  margin: 0 0 var(--spacing-xs) 0;
   font-size: 18px;
   font-weight: var(--font-weight-semibold);
-  color: var(--primary);
+  color: #000;
 }
-
-.section-hint {
-  margin: 0 0 var(--spacing-md) 0;
-  font-size: 13px;
-  color: var(--gray);
-  font-style: italic;
+.info-grid {
+  display: grid;
+  gap: var(--spacing-xs);
 }
-
-.info-form {
-  margin-top: var(--spacing-md);
-}
-
-.read-only-text {
-  color: var(--text);
-  font-weight: var(--font-weight-medium);
-  display: block;
+.info-item {
+  display: flex;
+  gap: var(--spacing-sm);
   padding: var(--spacing-xs) 0;
+  align-items: center;
 }
-
-/* === Навыки и этапы === */
-.skills-collapse {
-  border: none;
-  background: transparent;
-}
-
-.skill-title {
-  font-weight: var(--font-weight-semibold);
-  color: var(--text);
-  font-size: 15px;
-}
-
-.skill-content {
-  padding: var(--spacing-md);
-  background: var(--background);
-  border-radius: var(--radius-sm);
-}
-
-.subsection-title {
-  margin: 0 0 var(--spacing-sm) 0;
-  font-size: 14px;
+.info-label {
   font-weight: var(--font-weight-medium);
-  color: var(--secondary);
+  color: #000;
+  min-width: 100px;
 }
-
-.materials-list {
-  list-style: disc;
-  padding-left: var(--spacing-md);
-  margin: 0 0 var(--spacing-md) 0;
-}
-
-.material-item {
+.info-value {
+  color: #000;
+  flex: 1;
   font-size: 14px;
-  color: var(--text);
-  margin-bottom: var(--spacing-xs);
 }
 
-.stage-tabs {
-  margin-top: var(--spacing-sm);
+/* Редактируемые поля в карточке - нормальный шрифт */
+.info-edit-row {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex: 1;
 }
-
-.questions-list {
-  padding: var(--spacing-sm);
+.edit-input {
+  flex: 1;
+  min-width: 0;
 }
-
-.question-item {
-  background: #fff;
-  padding: var(--spacing-md);
-  border-radius: var(--radius-sm);
-  border: 1px solid #e0e0e0;
-  margin-bottom: var(--spacing-sm);
-}
-
-.question-text {
-  margin: 0 0 var(--spacing-xs) 0;
-  font-size: 14px;
-  color: var(--text);
-}
-
-.answer-text {
-  margin: 0;
-  font-size: 14px;
-  color: var(--gray);
-  background: var(--background);
-  padding: var(--spacing-xs);
-  border-radius: var(--radius-sm);
-}
-
-/* === Таблица ролей === */
-.roles-table {
+.edit-input-full {
   width: 100%;
 }
-
-.roles-table :deep(.el-switch) {
-  --el-switch-on-color: var(--primary);
+.edit-select-full {
+  width: 100%;
+}
+:deep(.info-item .el-input__inner),
+:deep(.info-item .el-select__input) {
+  font-size: 14px !important;
+  color: #000;
+}
+:deep(.info-item .el-input),
+:deep(.info-item .el-select) {
+  font-size: 14px;
 }
 
-/* === Адаптивность === */
+.detail-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  justify-content: flex-end;
+}
+
+/* Форма регистрации */
+.reg-form {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+}
+.form-row {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  width: 100%;
+}
+.form-row :deep(.el-form-item) {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* Адаптивность */
 @media (max-width: 768px) {
   .view-header {
     flex-direction: column;
     align-items: flex-start;
   }
-
   .header-actions {
     width: 100%;
     justify-content: space-between;
   }
-
+  .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .department-filter {
+    width: 100%;
+  }
   .form-row {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+  .info-edit-row {
+    flex-direction: column;
   }
 }
 
-/* Deep styles для Element Plus */
+/* Deep styles */
 :deep(.el-dialog__body) {
   padding: var(--spacing-md) var(--spacing-lg);
 }
-
 :deep(.el-form-item__label) {
   font-weight: var(--font-weight-medium);
+  color: #000;
+}
+:deep(.el-progress-bar__inner) {
+  background-color: var(--secondary);
 }
 </style>

@@ -54,7 +54,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/users',
     component: () => import('@/views/admin_and_spo/EmployeesView.vue'),
-    meta: { requiresAuth: true, roles: ['specialist', 'admin'], title: 'Сотрудники' },
+    meta: { requiresAuth: true, roles: ['specialist', 'admin', 'supervisor'], title: 'Сотрудники' },
   },
   // Маршруты для СПО
   {

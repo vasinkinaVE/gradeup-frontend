@@ -2,8 +2,7 @@
   <div class="calendar-page">
     <!-- Заголовок -->
     <div class="page-header">
-      <h1 class="page-title">Календарь аттестаций</h1>
-      <p class="page-subtitle">Все аттестации, в которых вы участвуете</p>
+      <h1 class="page-title">Календарь</h1>
     </div>
 
     <!-- Фильтры -->
@@ -21,19 +20,35 @@
 
       <div class="filters-row">
         <div class="radio-group-wrapper">
-          <el-radio-group v-model="filterStatus" @change="applyFilters">
+          <el-radio-group v-model="filterStatus" @change="applyFilters" class="custom-radio-group">
             <el-radio-button value="all">Все</el-radio-button>
             <el-radio-button value="upcoming">Предстоящие</el-radio-button>
             <el-radio-button value="past">Прошедшие</el-radio-button>
           </el-radio-group>
         </div>
 
+        <!-- ✅ Фильтр по встречам (только для руководителя) -->
+        <el-select
+          v-if="canGradeMeeting"
+          v-model="filterMeetings"
+          placeholder="Все встречи"
+          size="default"
+          class="filter-select custom-select"
+          @change="applyFilters"
+          popper-class="custom-select-popper"
+        >
+          <el-option label="Все встречи" value="all" />
+          <el-option label="Мои встречи" value="my" />
+          <el-option label="Встречи подчиненных" value="subordinates" />
+        </el-select>
+
         <el-select
           v-model="filterRole"
           placeholder="Все роли"
           size="default"
-          class="filter-select"
+          class="filter-select custom-select"
           @change="applyFilters"
+          popper-class="custom-select-popper"
         >
           <el-option label="Все роли" value="all" />
           <el-option label="Аттестуемый" value="ATTESTED" />
@@ -44,8 +59,9 @@
           v-model="filterType"
           placeholder="Все типы"
           size="default"
-          class="filter-select"
+          class="filter-select custom-select"
           @change="applyFilters"
+          popper-class="custom-select-popper"
         >
           <el-option label="Все типы" value="all" />
           <el-option label="Аттестация" value="EXAM" />
@@ -53,6 +69,7 @@
           <el-option label="Performance Review" value="REVIEW" />
         </el-select>
 
+        <!-- ✅ Добавлен clearable и исправлена работа очистки -->
         <el-date-picker
           v-model="dateRange"
           type="daterange"
@@ -61,10 +78,14 @@
           end-placeholder="Конец"
           size="default"
           :shortcuts="dateShortcuts"
+          :disabled-date="disabledDate"
           @change="applyFilters"
+          @clear="handleDateClear"
           format="DD.MM.YYYY"
           value-format="YYYY-MM-DD"
-          class="date-range-picker"
+          clearable
+          :popper-options="{ placement: 'bottom-end' }"
+          class="date-range-picker custom-date-picker"
         />
       </div>
     </div>
@@ -98,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -123,6 +144,7 @@ const canGradeMeeting = computed(() => {
 // Фильтры
 const searchQuery = ref('')
 const filterStatus = ref<'all' | 'upcoming' | 'past'>('all')
+const filterMeetings = ref<'all' | 'my' | 'subordinates'>('all') // ✅ Новый фильтр
 const filterRole = ref<'all' | 'ATTESTED' | 'ATTESTOR'>('all')
 const filterType = ref<'all' | 'EXAM' | 'PRACTICE' | 'REVIEW'>('all')
 const dateRange = ref<[string, string] | null>(null)
@@ -245,11 +267,18 @@ const mockAttestations = computed(() => [
 const filteredAttestations = computed(() => {
   let result = [...mockAttestations.value]
 
-  if (!canGradeMeeting.value) {
-    result = result.filter((a) => {
-      const isParticipant = a.participants.some((p: any) => p.id === currentUserId.value)
-      return isParticipant
-    })
+  // ✅ Фильтр по встречам (только для руководителя)
+  if (canGradeMeeting.value && filterMeetings.value !== 'all') {
+    if (filterMeetings.value === 'my') {
+      // Только встречи, где текущий пользователь является участником
+      result = result.filter((a) => a.participants.some((p: any) => p.id === currentUserId.value))
+    } else if (filterMeetings.value === 'subordinates') {
+      // Только встречи подчиненных (где текущий пользователь НЕ участвует)
+      result = result.filter((a) => !a.participants.some((p: any) => p.id === currentUserId.value))
+    }
+  } else if (!canGradeMeeting.value) {
+    // Для не-руководителей показываем только их встречи
+    result = result.filter((a) => a.participants.some((p: any) => p.id === currentUserId.value))
   }
 
   if (searchQuery.value.trim()) {
@@ -288,11 +317,41 @@ const filteredAttestations = computed(() => {
 
 // Методы
 const applyFilters = () => {}
-const formatDateTime = (date: Date | string) => dayjs(date).format('DD.MM.YYYY, HH:mm')
+
+// ✅ Обработчик очистки даты
+const handleDateClear = () => {
+  dateRange.value = null
+  applyFilters()
+}
+
+// ✅ Валидация: блокируем выбор даты начала позже даты конца
+const disabledDate = (date: Date) => {
+  if (dateRange.value?.[1]) {
+    const endDate = dayjs(dateRange.value[1])
+    if (!dateRange.value[0]) {
+      return date > endDate.toDate()
+    }
+  }
+  if (dateRange.value?.[0]) {
+    const startDate = dayjs(dateRange.value[0])
+    return date < startDate.startOf('day').toDate()
+  }
+  return false
+}
+
+// ✅ Валидация при изменении диапазона - ИСПРАВЛЕНО: не сбрасываем если значение null
+watch(dateRange, ([start, end]) => {
+  // Если очищаем - не показываем ошибку
+  if (!start && !end) return
+
+  if (start && end && dayjs(start).isAfter(dayjs(end))) {
+    ElMessage.warning('Дата начала не может быть позже даты окончания')
+    dateRange.value = null
+  }
+})
 
 // ✅ Обработчики событий от MeetingCard
 const handleViewResults = (meeting: Meeting) => {
-  // Находим соответствующий MeetingCard и открываем модалку результатов
   const card = meetingCardRefs.value.find((ref) => ref?.$el.contains(document.activeElement))
   card?.openResultsModal()
 }
@@ -303,7 +362,6 @@ const handleOpenGrading = (meeting: Meeting) => {
 }
 
 const handleSaveGrade = (meeting: Meeting, grade: 'зачтено' | 'незачтено', comment: string) => {
-  // Обновляем данные в моке
   const attestation = mockAttestations.value.find((a) => a.id === meeting.id)
   if (attestation) {
     attestation.result = {
@@ -321,10 +379,10 @@ const dateShortcuts = [
   {
     text: 'Ближайшие 7 дней',
     value: () => {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - 7)
-      return [dayjs(start).format('YYYY-MM-DD'), dayjs(end).format('YYYY-MM-DD')]
+      // ✅ Исправлено: от сегодня до +7 дней вперед
+      const start = dayjs().startOf('day')
+      const end = dayjs().add(7, 'day').endOf('day')
+      return [start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
     },
   },
   {
@@ -361,12 +419,6 @@ const dateShortcuts = [
   font-weight: var(--font-weight-bold);
   color: var(--text);
 }
-.page-subtitle {
-  margin: 0;
-  font-size: 15px;
-  color: var(--gray);
-  font-weight: var(--font-weight-normal);
-}
 .filters-bar {
   margin-bottom: var(--spacing-md);
   padding: var(--spacing-md);
@@ -402,6 +454,35 @@ const dateShortcuts = [
   width: 240px !important;
   flex-shrink: 0;
 }
+
+/* === Стили для date-picker с форматом __.__.____г. === */
+:deep(.custom-date-picker .el-input__inner) {
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+}
+:deep(.custom-date-picker .el-range-input) {
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+}
+
+/* Фокус с фиолетовой обводкой */
+:deep(.custom-date-picker .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #4a2c6d inset !important;
+  border-color: #4a2c6d !important;
+}
+:deep(.custom-date-picker .el-input__wrapper) {
+  border-radius: 4px !important;
+}
+
+/* === Стили для кнопки очистки (крестик) === */
+:deep(.custom-date-picker .el-input__clear) {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+:deep(.custom-date-picker .el-input__clear:hover) {
+  color: var(--danger);
+}
+
 .attestations-list {
   display: flex;
   flex-direction: column;
@@ -492,6 +573,85 @@ const dateShortcuts = [
 :deep(.el-input__inner) {
   border-radius: 4px !important;
 }
+
+/* === Стили для кастомных селектов === */
+:deep(.custom-select .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #4a2c6d inset !important;
+  border-color: #4a2c6d !important;
+}
+:deep(.custom-select .el-input__wrapper),
+:deep(.custom-date-picker .el-input__wrapper) {
+  border-radius: 4px !important;
+}
+
+/* === Стили для радио-кнопок === */
+:deep(.custom-radio-group .el-radio-button__inner) {
+  background-color: #f5f5f5 !important;
+  border: 1px solid #d9d9d9 !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  padding: 8px 16px;
+}
+:deep(.custom-radio-group .el-radio-button__inner:hover) {
+  color: var(--primary) !important;
+}
+:deep(.custom-radio-group .el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 4px 0 0 4px !important;
+}
+:deep(
+  .custom-radio-group
+    .el-radio-button:first-child
+    .el-radio-button__original-radio:checked
+    + .el-radio-button__inner
+) {
+  border-right: 1px solid #4a2c6d !important;
+}
+:deep(.custom-radio-group .el-radio-button:nth-child(2) .el-radio-button__inner) {
+  border-radius: 0 !important;
+  border-left: none !important;
+}
+:deep(
+  .custom-radio-group
+    .el-radio-button:nth-child(2)
+    .el-radio-button__original-radio:checked
+    + .el-radio-button__inner
+) {
+  border-right: 1px solid #4a2c6d !important;
+}
+:deep(.custom-radio-group .el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 0 4px 4px 0 !important;
+  border-left: none !important;
+}
+:deep(.custom-radio-group .el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background-color: #e0e0e0 !important;
+  border-color: var(--gray) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+/* === Стили для выпадающих списков селектов === */
+:global(.custom-select-popper .el-select-dropdown__item) {
+  background-color: transparent !important;
+  color: var(--text) !important;
+}
+:global(.custom-select-popper .el-select-dropdown__item.is-selected) {
+  background-color: #f8f4fc !important;
+  color: #4a2c6d !important;
+}
+:global(.custom-select-popper .el-select-dropdown__item.is-selected:hover),
+:global(.custom-select-popper .el-select-dropdown__item.is-selected.hover) {
+  background-color: #f8f4fc !important;
+  color: #4a2c6d !important;
+}
+:global(.custom-select-popper .el-select-dropdown__item:not(.is-selected):hover),
+:global(.custom-select-popper .el-select-dropdown__item:not(.is-selected).hover) {
+  background-color: transparent !important;
+  color: #4a2c6d !important;
+}
+
+/* === Адаптив === */
 @media (max-width: 768px) {
   .filters-row {
     flex-wrap: wrap;
@@ -502,31 +662,18 @@ const dateShortcuts = [
     flex-shrink: 1;
   }
 }
-:deep(.el-radio-button__inner) {
-  background-color: #f5f5f5 !important;
-  border: 1px solid #d9d9d9 !important;
-  color: var(--text) !important;
-  box-shadow: none !important;
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  padding: 8px 16px;
-  border-radius: 4px !important;
-}
-:deep(.el-radio-button__inner:hover) {
-  color: var(--primary) !important;
-}
-:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background-color: #e0e0e0 !important;
-  border-color: var(--gray) !important;
-  color: var(--text) !important;
-  box-shadow: none !important;
+
+/* === Дополнительные стили для фокуса === */
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #4a2c6d inset !important;
+  border-color: #4a2c6d !important;
 }
 :deep(.el-select.is-focus .el-input__inner) {
-  border-color: #d9d9d9 !important;
+  border-color: #4a2c6d !important;
   box-shadow: none !important;
 }
 :deep(.el-select) {
-  --el-select-input-focus-border-color: #d9d9d9 !important;
-  --el-color-primary: var(--primary) !important;
+  --el-select-input-focus-border-color: #4a2c6d !important;
+  --el-color-primary: #4a2c6d !important;
 }
 </style>
