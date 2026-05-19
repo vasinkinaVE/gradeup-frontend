@@ -2,12 +2,29 @@
   <el-dialog
     v-model="dialogVisible"
     :title="isEditing ? 'Редактирование встречи' : 'Новая встреча'"
-    :width="700"
+    :width="550"
     class="admin-dialog meeting-dialog"
     destroy-on-close
     @close="handleClose"
   >
     <el-form :model="form" label-position="top" class="meeting-form">
+      <!-- Отдел (для admin и specialist) -->
+      <el-form-item v-if="isAdmin || isSpecialist" label="Отдел *" prop="departmentId">
+        <el-select
+          v-model="form.departmentId"
+          placeholder="Выберите отдел"
+          filterable
+          class="department-select"
+        >
+          <el-option
+            v-for="dept in departments"
+            :key="dept.id"
+            :label="dept.name"
+            :value="dept.id"
+          />
+        </el-select>
+      </el-form-item>
+
       <!-- Участники -->
       <el-form-item label="Участники *" prop="participants">
         <div class="participants-section">
@@ -47,55 +64,63 @@
         </div>
       </el-form-item>
 
-      <!-- Навык -->
-      <el-form-item label="Навык *" prop="skillId">
-        <el-select
-          v-model="form.skillId"
-          placeholder="Выберите навык для защиты"
-          filterable
-          @change="onSkillChange"
-        >
-          <el-option
-            v-for="skill in skills"
-            :key="skill.id"
-            :label="skill.name"
-            :value="skill.id"
+      <!-- Навык и Тип этапа -->
+      <div class="form-row">
+        <el-form-item label="Навык *" prop="skillId" class="form-col">
+          <el-select
+            v-model="form.skillId"
+            placeholder="Выберите навык для защиты"
+            filterable
+            class="full-width-select"
+            @change="onSkillChange"
+          >
+            <el-option
+              v-for="skill in skills"
+              :key="skill.id"
+              :label="skill.name"
+              :value="skill.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Тип этапа *" prop="stageType" class="form-col">
+          <el-select
+            v-model="form.stageType"
+            placeholder="Выберите тип этапа"
+            class="full-width-select"
+          >
+            <el-option label="Аттестация" value="attestation" />
+            <el-option label="Практика" value="practice" />
+            <el-option label="Perf. Review" value="performance" />
+          </el-select>
+        </el-form-item>
+      </div>
+
+      <!-- Дата и время и Длительность -->
+      <div class="form-row with-top-margin">
+        <el-form-item label="Дата и время *" prop="date" class="form-col">
+          <el-date-picker
+            v-model="form.date"
+            type="datetime"
+            placeholder="Выберите дату"
+            value-format="YYYY-MM-DD HH:mm"
+            class="full-width-select"
           />
-        </el-select>
-      </el-form-item>
+        </el-form-item>
+        <el-form-item label="Длительность (мин) *" prop="duration" class="form-col">
+          <el-input-number
+            v-model="form.duration"
+            :min="15"
+            :max="180"
+            :step="15"
+            controls-position="right"
+            class="full-width-input"
+          />
+        </el-form-item>
+      </div>
 
-      <!-- Тип этапа -->
-      <el-form-item label="Тип этапа *" prop="stageType">
-        <el-select v-model="form.stageType" placeholder="Выберите тип этапа">
-          <el-option label="Аттестация" value="attestation" />
-          <el-option label="Практика" value="practice" />
-          <el-option label="Perf. Review" value="performance" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="Дата и время *" prop="date">
-        <el-date-picker
-          v-model="form.date"
-          type="datetime"
-          placeholder="Выберите дату"
-          value-format="YYYY-MM-DD HH:mm"
-          style="width: 100%"
-        />
-      </el-form-item>
-
-      <el-form-item label="Место *" prop="location">
+      <!-- Место -->
+      <el-form-item label="Место *" prop="location" class="with-top-margin">
         <el-input v-model="form.location" placeholder="Например: Zoom, переговорная 301" />
-      </el-form-item>
-
-      <el-form-item label="Длительность (минуты) *" prop="duration">
-        <el-input-number
-          v-model="form.duration"
-          :min="15"
-          :max="180"
-          :step="15"
-          controls-position="right"
-          style="width: 100%"
-        />
       </el-form-item>
 
       <!-- Описание встречи -->
@@ -119,21 +144,30 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
   modelValue: Boolean,
   meeting: Object,
-  skills: {
-    type: Array,
-    default: () => [],
-  },
-  employees: {
-    type: Array,
-    default: () => [],
-  },
+  skills: { type: Array, default: () => [] },
+  employees: { type: Array, default: () => [] },
+  departments: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:modelValue', 'save', 'close'])
+
+const authStore = useAuthStore()
+
+// Определение ролей
+const isAdmin = computed(() => {
+  const role = authStore.user?.role_name?.toLowerCase() || ''
+  return role.includes('admin') || role.includes('администратор')
+})
+
+const isSpecialist = computed(() => {
+  const role = authStore.user?.role_name?.toLowerCase() || ''
+  return role.includes('specialist') || role.includes('специалист')
+})
 
 const dialogVisible = computed({
   get: () => props.modelValue,
@@ -143,6 +177,8 @@ const dialogVisible = computed({
 const isEditing = computed(() => !!props.meeting)
 
 const form = ref({
+  departmentId: null,
+  departmentName: '',
   skillId: null,
   skillName: '',
   stageType: 'attestation',
@@ -158,6 +194,8 @@ const form = ref({
 
 const resetForm = () => {
   form.value = {
+    departmentId: null,
+    departmentName: '',
     skillId: null,
     skillName: '',
     stageType: 'attestation',
@@ -220,11 +258,13 @@ const handleSave = () => {
 
   const attested = props.employees.find((e) => e.id === form.value.attestedId)
   const attestor = props.employees.find((e) => e.id === form.value.attestorId)
+  const department = props.departments.find((d) => d.id === form.value.departmentId)
 
   const meetingData = {
     ...form.value,
     attestedName: attested?.fullName || '',
     attestorName: attestor?.fullName || '',
+    departmentName: department?.name || '',
   }
 
   emit('save', meetingData, isEditing.value ? props.meeting : null)
@@ -245,29 +285,60 @@ const handleClose = () => {
 .meeting-form {
   max-height: 65vh;
   overflow-y: auto;
-  padding-right: var(--spacing-sm);
+  padding-right: var(--spacing-sm, 8px);
+}
+
+.form-row {
+  display: flex;
+  gap: var(--spacing-md, 12px);
+  margin-bottom: 0;
+}
+
+.form-row.with-top-margin {
+  margin-top: 18px;
+}
+
+.form-row .el-form-item {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.el-form-item.with-top-margin {
+  margin-top: 18px;
+}
+
+.full-width-select,
+.full-width-input {
+  width: 100%;
+}
+
+.department-select {
+  width: auto;
+  min-width: 200px;
 }
 
 .participants-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-md, 12px);
 }
 
 .participant-row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: var(--spacing-md, 12px);
 }
 
 .participant-label {
   min-width: 140px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
+  flex-shrink: 0;
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--text, #303133);
 }
 
 .participant-select {
   flex: 1;
+  min-width: 200px;
 }
 
 @media (max-width: 768px) {
@@ -278,7 +349,17 @@ const handleClose = () => {
 
   .participant-label {
     min-width: auto;
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs, 4px);
+  }
+
+  .participant-select {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: var(--spacing-sm, 8px);
   }
 
   .meeting-form {

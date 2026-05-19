@@ -40,7 +40,7 @@
     <el-dialog
       v-model="viewProfileVisible"
       title="Просмотр профиля"
-      :width="900"
+      :width="700"
       class="admin-dialog"
       destroy-on-close
     >
@@ -77,31 +77,154 @@
               <!-- Содержимое уровня (навыки) -->
               <el-collapse-transition>
                 <div v-show="expandedViewLevels.includes(lIdx)" class="level-collapse-content">
-                  <div v-if="level.categories?.length" class="categories-view">
-                    <div v-for="(cat, cIdx) in level.categories" :key="cIdx" class="category-view">
-                      <strong>Категория:</strong> {{ cat.name }}
-                      <ul class="skills-list-view">
-                        <li v-for="skillId in cat.skills" :key="skillId">
-                          {{ getSkillNameById(skillId) }}
-                        </li>
-                      </ul>
+                  <div class="skills-section-label">Навыки</div>
+                  <div v-if="getAllSkillIdsForLevel(level).length" class="skills-list-container">
+                    <div
+                      v-for="skillId in getAllSkillIdsForLevel(level)"
+                      :key="skillId"
+                      class="skill-collapse-item"
+                    >
+                      <!-- Заголовок навыка -->
+                      <div class="skill-collapse-header" @click="toggleViewSkillExpand(skillId)">
+                        <span class="skill-collapse-title">{{ getSkillNameById(skillId) }}</span>
+                        <el-icon
+                          class="collapse-icon"
+                          :class="{ expanded: expandedViewSkills.includes(skillId) }"
+                        >
+                          <ArrowRight />
+                        </el-icon>
+                      </div>
+
+                      <!-- Содержимое навыка (как в просмотре навыка, без категории) -->
+                      <el-collapse-transition>
+                        <div
+                          v-show="expandedViewSkills.includes(skillId)"
+                          class="skill-collapse-content"
+                        >
+                          <div class="skill-detail-section">
+                            <!-- Название -->
+                            <div class="skill-detail-row">
+                              <span class="skill-detail-label">Название:</span>
+                              <span class="skill-detail-value">{{
+                                getSkillNameById(skillId)
+                              }}</span>
+                            </div>
+                            <!-- Описание -->
+                            <div class="skill-detail-row">
+                              <span class="skill-detail-label">Описание:</span>
+                              <span class="skill-detail-value">{{
+                                getSkillDescription(skillId)
+                              }}</span>
+                            </div>
+                            <!-- Материалы -->
+                            <div class="skill-detail-row">
+                              <span class="skill-detail-label">Материалы:</span>
+                              <span class="skill-detail-value">{{
+                                getSkillMaterials(skillId)
+                              }}</span>
+                            </div>
+
+                            <!-- Этапы навыка -->
+                            <div
+                              v-if="getSkillStages(skillId)?.length"
+                              class="skill-stages-section"
+                            >
+                              <div class="skill-stages-label">Этапы:</div>
+                              <!-- Табы этапов -->
+                              <div class="skill-stages-tabs">
+                                <div
+                                  v-for="stageType in getSkillStageTypesWithContent(skillId)"
+                                  :key="stageType.key"
+                                  class="skill-stage-tab"
+                                  :class="{
+                                    active: getSkillSelectedStageType(skillId) === stageType.key,
+                                  }"
+                                  @click.stop="selectSkillStageType(skillId, stageType.key)"
+                                >
+                                  {{ stageType.label }}
+                                </div>
+                              </div>
+                              <!-- Содержимое этапа -->
+                              <div class="skill-stage-content">
+                                <div
+                                  v-for="(stage, sIdx) in getSkillStagesByType(
+                                    skillId,
+                                    getSkillSelectedStageType(skillId),
+                                  )"
+                                  :key="stage.id || sIdx"
+                                  class="skill-stage-item"
+                                >
+                                  <div class="skill-stage-title">
+                                    {{
+                                      getSkillStageContentTitle(getSkillSelectedStageType(skillId))
+                                    }}
+                                  </div>
+                                  <!-- Вопросы/Задания -->
+                                  <div v-if="stage.questions?.length" class="skill-stage-qa-list">
+                                    <div
+                                      v-for="(q, qIdx) in stage.questions"
+                                      :key="qIdx"
+                                      class="skill-qa-item"
+                                    >
+                                      <div
+                                        class="skill-qa-question"
+                                        @click.stop="
+                                          toggleSkillQAExpand(skillId, stage.id || sIdx, qIdx)
+                                        "
+                                      >
+                                        <span>{{ qIdx + 1 }}.</span>
+                                        <span class="skill-qa-question-text">{{ q.text }}</span>
+                                        <el-icon
+                                          class="collapse-icon"
+                                          :class="{
+                                            expanded:
+                                              expandedSkillQA[
+                                                `${skillId}_${stage.id || sIdx}_${qIdx}`
+                                              ],
+                                          }"
+                                        >
+                                          <ArrowRight />
+                                        </el-icon>
+                                      </div>
+                                      <el-collapse-transition>
+                                        <div
+                                          v-show="
+                                            expandedSkillQA[
+                                              `${skillId}_${stage.id || sIdx}_${qIdx}`
+                                            ]
+                                          "
+                                          class="skill-qa-answer"
+                                        >
+                                          <strong>{{
+                                            isPracticeOrPerformance(stage.type)
+                                              ? 'Критерий оценивания:'
+                                              : 'Эталонный ответ:'
+                                          }}</strong>
+                                          {{ q.answer }}
+                                        </div>
+                                      </el-collapse-transition>
+                                    </div>
+                                  </div>
+                                  <el-empty
+                                    v-else
+                                    description="Нет вопросов/заданий"
+                                    :image-size="40"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <el-empty
+                              v-else
+                              description="Этапы не добавлены"
+                              :image-size="40"
+                              class="skill-no-stages"
+                            />
+                          </div>
+                        </div>
+                      </el-collapse-transition>
                     </div>
                   </div>
-
-                  <div v-if="level.uncategorizedSkills?.length" class="uncategorized-view">
-                    <strong>Навыки без категории:</strong>
-                    <ul class="skills-list-view">
-                      <li v-for="skillId in level.uncategorizedSkills" :key="skillId">
-                        {{ getSkillNameById(skillId) }}
-                      </li>
-                    </ul>
-                  </div>
-
-                  <el-empty
-                    v-if="!level.categories?.length && !level.uncategorizedSkills?.length"
-                    description="Нет навыков"
-                    :image-size="50"
-                  />
+                  <el-empty v-else description="Нет навыков" :image-size="50" />
                 </div>
               </el-collapse-transition>
             </div>
@@ -109,10 +232,8 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="viewProfileVisible = false">Закрыть</el-button>
-        <el-button type="primary" :icon="Edit" @click="handleEditProfile">
-          Редактировать
-        </el-button>
+        <el-button :icon="Edit" @click="handleEditProfile">Редактировать</el-button>
+        <el-button type="danger" :icon="Delete" @click="confirmDeleteProfile">Удалить</el-button>
       </template>
     </el-dialog>
 
@@ -120,7 +241,7 @@
     <el-dialog
       v-model="profileDialogVisible"
       :title="editingProfile ? 'Редактирование профиля' : 'Новый профиль'"
-      :width="1000"
+      :width="700"
       class="admin-dialog"
       destroy-on-close
     >
@@ -166,14 +287,37 @@
                     v-model="level.skills[sIdx]"
                     placeholder="Выберите навык"
                     filterable
+                    remote
+                    :remote-method="(query) => filterSkillsByQuery(query, lIdx, sIdx)"
+                    :filter-method="filterSkills"
                     class="skill-select"
+                    popper-class="skill-select-popper"
                   >
-                    <el-option
-                      v-for="skill in allSkills"
-                      :key="skill.id"
-                      :label="skill.name"
-                      :value="skill.id"
-                    />
+                    <!-- Навыки без категории (сначала) -->
+                    <el-option-group
+                      v-if="getUncategorizedSkillsList().length"
+                      label="Без категории"
+                    >
+                      <el-option
+                        v-for="skill in getUncategorizedSkillsList()"
+                        :key="skill.id"
+                        :label="skill.name"
+                        :value="skill.id"
+                      />
+                    </el-option-group>
+                    <!-- Навыки по категориям -->
+                    <el-option-group
+                      v-for="group in getSkillsByCategoryList()"
+                      :key="group.categoryId"
+                      :label="group.categoryName"
+                    >
+                      <el-option
+                        v-for="skill in group.skills"
+                        :key="skill.id"
+                        :label="skill.name"
+                        :value="skill.id"
+                      />
+                    </el-option-group>
                   </el-select>
                   <el-button
                     size="small"
@@ -217,6 +361,10 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  categories: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['update:profiles'])
@@ -239,6 +387,9 @@ const viewingProfile = ref(null)
 
 // === Для просмотра профиля ===
 const expandedViewLevels = ref([])
+const expandedViewSkills = ref([])
+const expandedSkillQA = ref({})
+const skillSelectedStageTypes = ref({})
 
 // === Форма профиля ===
 const profileForm = ref({
@@ -247,10 +398,156 @@ const profileForm = ref({
   levels: [],
 })
 
+// === Поиск по навыкам (для каждого селекта отдельно) ===
+const skillSearchQueries = ref({})
+
+const setSkillSearchQuery = (levelIdx, skillIdx, query) => {
+  const key = `${levelIdx}_${skillIdx}`
+  skillSearchQueries.value[key] = query?.toLowerCase() || ''
+}
+
+const getSkillSearchQuery = (levelIdx, skillIdx) => {
+  const key = `${levelIdx}_${skillIdx}`
+  return skillSearchQueries.value[key] || ''
+}
+
+const filterSkillsByQuery = (query, levelIdx, skillIdx) => {
+  setSkillSearchQuery(levelIdx, skillIdx, query)
+}
+
+const filterSkills = (value) => {
+  return true
+}
+
+// === Хелперы для группировки навыков (для формы) ===
+const getUncategorizedSkillsList = () => {
+  return props.allSkills.filter((s) => !s.categoryId)
+}
+
+const getSkillsByCategoryList = () => {
+  const result = []
+  const grouped = {}
+
+  props.allSkills.forEach((skill) => {
+    if (skill.categoryId) {
+      if (!grouped[skill.categoryId]) {
+        grouped[skill.categoryId] = []
+      }
+      grouped[skill.categoryId].push(skill)
+    }
+  })
+
+  Object.entries(grouped).forEach(([categoryId, skills]) => {
+    const category = props.categories.find(
+      (c) => c.id === Number(categoryId) || c.id === categoryId,
+    )
+    result.push({
+      categoryId: categoryId,
+      categoryName: category?.name || `Категория #${categoryId}`,
+      skills: skills,
+    })
+  })
+
+  return result
+}
+
+// === Хелперы для отображения навыков в просмотре ===
+const getAllSkillIdsForLevel = (level) => {
+  if (level.skills?.length) {
+    return level.skills.filter((id) => id)
+  }
+  const allIds = []
+  if (level.uncategorizedSkills?.length) {
+    allIds.push(...level.uncategorizedSkills)
+  }
+  if (level.categories?.length) {
+    level.categories.forEach((cat) => {
+      if (cat.skills?.length) {
+        allIds.push(...cat.skills)
+      }
+    })
+  }
+  return allIds
+}
+
+const getSkillById = (skillId) => {
+  return props.allSkills.find((s) => s.id === skillId)
+}
+
+const getSkillNameById = (skillId) => getSkillById(skillId)?.name || `Навык #${skillId}`
+const getSkillDescription = (skillId) => getSkillById(skillId)?.description || '—'
+const getSkillMaterials = (skillId) => getSkillById(skillId)?.materials || 'Нет материалов'
+const getSkillStages = (skillId) => getSkillById(skillId)?.stages || []
+
+// === Хелперы для этапов навыка в просмотре профиля ===
+const isPracticeOrPerformance = (type) => type === 'practice' || type === 'performance'
+
+const skillStageTypes = [
+  { key: 'practice', label: 'Практика' },
+  { key: 'attestation', label: 'Аттестация' },
+  { key: 'performance', label: 'Performance Review' },
+]
+
+const getSkillStageTypesWithContent = (skillId) => {
+  const stages = getSkillStages(skillId)
+  return skillStageTypes.filter((type) =>
+    stages?.some((stage) => stage.type === type.key && stage.questions?.length > 0),
+  )
+}
+
+const getSkillStagesByType = (skillId, type) => {
+  return getSkillStages(skillId)?.filter((stage) => stage.type === type) || []
+}
+
+const getSkillStageContentTitle = (type) => {
+  if (type === 'attestation') return 'Вопросы и ответы'
+  return 'Задания и критерии'
+}
+
+const getSkillSelectedStageType = (skillId) => {
+  return skillSelectedStageTypes.value[skillId] || 'practice'
+}
+
+const selectSkillStageType = (skillId, type) => {
+  skillSelectedStageTypes.value[skillId] = type
+}
+
+// === Управление раскрытием ===
+const toggleViewLevelExpand = (levelIdx) => {
+  const idx = expandedViewLevels.value.indexOf(levelIdx)
+  if (idx === -1) {
+    expandedViewLevels.value.push(levelIdx)
+  } else {
+    expandedViewLevels.value.splice(idx, 1)
+  }
+}
+
+const toggleViewSkillExpand = (skillId) => {
+  const idx = expandedViewSkills.value.indexOf(skillId)
+  if (idx === -1) {
+    expandedViewSkills.value.push(skillId)
+    // Инициализируем выбранный тип этапа при первом раскрытии
+    if (!skillSelectedStageTypes.value[skillId]) {
+      const firstAvailable = getSkillStageTypesWithContent(skillId)[0]?.key || 'practice'
+      skillSelectedStageTypes.value[skillId] = firstAvailable
+    }
+  } else {
+    expandedViewSkills.value.splice(idx, 1)
+  }
+}
+
+const toggleSkillQAExpand = (skillId, stageId, idx) => {
+  const key = `${skillId}_${stageId}_${idx}`
+  expandedSkillQA.value[key] = !expandedSkillQA.value[key]
+}
+
 // === Хелперы ===
 const countProfileSkills = (profile) => {
   if (!profile.levels) return 0
   return profile.levels.reduce((total, level) => {
+    if (level.skills?.length) {
+      return total + level.skills.filter((s) => s).length
+    }
     let levelSkills = 0
     if (level.categories) {
       level.categories.forEach((cat) => {
@@ -262,21 +559,13 @@ const countProfileSkills = (profile) => {
   }, 0)
 }
 
-const getSkillNameById = (id) => props.allSkills.find((s) => s.id === id)?.name || `Навык #${id}`
-
-const toggleViewLevelExpand = (levelIdx) => {
-  const idx = expandedViewLevels.value.indexOf(levelIdx)
-  if (idx === -1) {
-    expandedViewLevels.value.push(levelIdx)
-  } else {
-    expandedViewLevels.value.splice(idx, 1)
-  }
-}
-
 // === Профили: действия ===
 const viewProfile = (profile) => {
   viewingProfile.value = profile
   expandedViewLevels.value = []
+  expandedViewSkills.value = []
+  expandedSkillQA.value = {}
+  skillSelectedStageTypes.value = {}
   viewProfileVisible.value = true
 }
 
@@ -285,10 +574,61 @@ const handleEditProfile = () => {
   viewProfileVisible.value = false
 }
 
+const confirmDeleteProfile = async () => {
+  if (!viewingProfile.value) return
+  try {
+    await ElMessageBox.confirm(
+      `Удалить профиль "${viewingProfile.value.position}"?`,
+      'Подтверждение',
+      {
+        type: 'warning',
+        confirmButtonText: 'Удалить',
+        cancelButtonText: 'Отмена',
+      },
+    )
+    emit(
+      'update:profiles',
+      props.profiles.filter((p) => p.id !== viewingProfile.value.id),
+    )
+    ElMessage.success('Профиль удалён')
+    viewProfileVisible.value = false
+  } catch {
+    // отменено
+  }
+}
+
 const openProfileDialog = (profile = null) => {
   if (profile) {
     editingProfile.value = profile
-    profileForm.value = JSON.parse(JSON.stringify(profile))
+    const normalizedLevels =
+      profile.levels?.map((level) => {
+        if (level.skills?.length) {
+          return { ...level, skills: [...level.skills] }
+        }
+        const allSkillIds = []
+        if (level.uncategorizedSkills?.length) {
+          allSkillIds.push(...level.uncategorizedSkills)
+        }
+        if (level.categories?.length) {
+          level.categories.forEach((cat) => {
+            if (cat.skills?.length) {
+              allSkillIds.push(...cat.skills)
+            }
+          })
+        }
+        return {
+          ...level,
+          skills: allSkillIds,
+          categories: undefined,
+          uncategorizedSkills: undefined,
+        }
+      }) || []
+
+    profileForm.value = {
+      position: profile.position || '',
+      description: profile.description || '',
+      levels: normalizedLevels,
+    }
   } else {
     editingProfile.value = null
     profileForm.value = {
@@ -297,6 +637,7 @@ const openProfileDialog = (profile = null) => {
       levels: [],
     }
   }
+  skillSearchQueries.value = {}
   profileDialogVisible.value = true
 }
 
@@ -521,24 +862,155 @@ const deleteProfile = async (profile) => {
   background: #fff;
 }
 
-.categories-view,
-.uncategorized-view {
-  margin-left: var(--spacing-md);
-}
-
-.category-view {
-  margin-bottom: var(--spacing-sm);
-}
-
-.skills-list-view {
-  list-style: disc;
-  padding-left: var(--spacing-md);
-  margin: var(--spacing-xs) 0;
-}
-
-.skills-list-view li {
+.skills-section-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  margin: var(--spacing-sm) 0 var(--spacing-xs) 0;
   font-size: 14px;
+}
+
+.skills-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+/* Навыки - сворачиваемые */
+.skill-collapse-item {
+  border: 1px solid #d0d0d0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-top: var(--spacing-xs);
+}
+.skill-collapse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.skill-collapse-header:hover {
+  background: #e5e5e5;
+}
+.skill-collapse-title {
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+  font-size: 13px;
+}
+.skill-collapse-content {
+  padding: var(--spacing-md);
+  background: #fafafa;
+}
+
+/* Детали навыка внутри профиля */
+.skill-detail-section {
+  font-size: 13px;
+}
+.skill-detail-row {
   margin-bottom: var(--spacing-xs);
+  display: flex;
+  gap: var(--spacing-xs);
+}
+.skill-detail-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+.skill-detail-value {
+  color: var(--text);
+  flex: 1;
+}
+
+/* Этапы навыка */
+.skill-stages-section {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px dashed #ccc;
+}
+.skill-stages-label {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-xs);
+  font-size: 13px;
+}
+
+/* Табы этапов навыка */
+.skill-stages-tabs {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  border-bottom: 2px solid #d0d0d0;
+}
+.skill-stage-tab {
+  padding: var(--spacing-xs) var(--spacing-md);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: #888;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+.skill-stage-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* Содержимое этапа навыка */
+.skill-stage-content {
+  margin-top: var(--spacing-sm);
+}
+.skill-stage-item {
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  border: 1px solid #e0e0e0;
+}
+.skill-stage-title {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-xs);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* Вопросы/ответы навыка */
+.skill-stage-qa-list {
+  margin-top: var(--spacing-xs);
+}
+.skill-qa-item {
+  margin-bottom: var(--spacing-xs);
+  border: 1px solid #e0e0e0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.skill-qa-question {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: #f5f5f5;
+  cursor: pointer;
+  font-size: 12px;
+}
+.skill-qa-question:hover {
+  background: #ebebeb;
+}
+.skill-qa-question-text {
+  flex: 1;
+}
+.skill-qa-answer {
+  padding: var(--spacing-sm);
+  background: #fff;
+  font-size: 12px;
+  color: var(--text);
+  border-top: 1px solid #e0e0e0;
+}
+
+.skill-no-stages {
+  padding: var(--spacing-sm) 0;
 }
 
 /* Кнопки */
@@ -577,5 +1049,19 @@ const deleteProfile = async (profile) => {
 
 :deep(.admin-dialog .el-form-item__label) {
   font-weight: var(--font-weight-medium);
+}
+
+/* Стили для группировки навыков в селекте */
+:deep(.skill-select-popper .el-select-group__title) {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  padding-left: 12px;
+  font-size: 13px;
+}
+
+:deep(.skill-select-popper .el-select-group__wrap:not(:last-of-type)) {
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
 }
 </style>

@@ -35,19 +35,51 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" label="Описание" min-width="250" show-overflow-tooltip />
-      <el-table-column label="Действия" width="120" align="center" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" size="small" @click.stop="editDepartment(row)">
-            <el-icon><Edit /></el-icon>
-          </el-button>
-          <el-button link type="danger" size="small" @click.stop="deleteDepartment(row)">
-            <el-icon><Delete /></el-icon>
-          </el-button>
-        </template>
-      </el-table-column>
     </el-table>
 
-    <!-- 🔹 Модальное окно: Отдел -->
+    <!-- 🔹 Модальное окно: ПРОСМОТР ОТДЕЛА -->
+    <el-dialog
+      v-model="viewDepartmentVisible"
+      title="Просмотр отдела"
+      :width="600"
+      class="admin-dialog"
+      destroy-on-close
+    >
+      <div v-if="viewingDepartment" class="view-content">
+        <div class="view-row">
+          <div class="view-label">Название отдела</div>
+          <div class="view-value">{{ viewingDepartment.name }}</div>
+        </div>
+
+        <div class="view-row">
+          <div class="view-label">Описание</div>
+          <div class="view-value">{{ viewingDepartment.description || '—' }}</div>
+        </div>
+
+        <div class="view-row">
+          <div class="view-label">Доступные профили</div>
+          <div class="view-value">
+            <div v-if="viewingDepartment.profiles?.length" class="profiles-list">
+              <el-tag
+                v-for="profile in viewingDepartment.profiles"
+                :key="profile.id"
+                size="small"
+                class="profile-tag"
+              >
+                {{ profile.position }}
+              </el-tag>
+            </div>
+            <span v-else>Профили не добавлены</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button :icon="Edit" @click="handleEditDepartment">Редактировать</el-button>
+        <el-button type="danger" :icon="Delete" @click="confirmDeleteDepartment">Удалить</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 🔹 Модальное окно: Отдел (создание/редактирование) -->
     <el-dialog
       v-model="departmentDialogVisible"
       :title="editingDepartment ? 'Редактирование отдела' : 'Новый отдел'"
@@ -130,9 +162,12 @@ const filteredDepartments = computed(() => {
   )
 })
 
-// === Модальное окно ===
+// === Модальные окна ===
 const departmentDialogVisible = ref(false)
+const viewDepartmentVisible = ref(false)
+
 const editingDepartment = ref(null)
+const viewingDepartment = ref(null)
 
 // === Форма отдела ===
 const departmentForm = ref({
@@ -141,9 +176,51 @@ const departmentForm = ref({
   availableProfileIds: [],
 })
 
+// === Хелперы ===
+const getProfileById = (id) => {
+  return props.allProfiles.find((p) => p.id === id)
+}
+
+const getProfilesByIds = (ids) => {
+  if (!ids?.length) return []
+  return ids.map((id) => getProfileById(id)).filter(Boolean)
+}
+
 // === Отделы: действия ===
 const viewDepartment = (department) => {
-  ElMessage.info(`Отдел: ${department.name}`)
+  viewingDepartment.value = {
+    ...department,
+    profiles: getProfilesByIds(department.availableProfileIds),
+  }
+  viewDepartmentVisible.value = true
+}
+
+const handleEditDepartment = () => {
+  openDepartmentDialog(viewingDepartment.value)
+  viewDepartmentVisible.value = false
+}
+
+const confirmDeleteDepartment = async () => {
+  if (!viewingDepartment.value) return
+  try {
+    await ElMessageBox.confirm(
+      `Удалить отдел "${viewingDepartment.value.name}"?`,
+      'Подтверждение',
+      {
+        type: 'warning',
+        confirmButtonText: 'Удалить',
+        cancelButtonText: 'Отмена',
+      },
+    )
+    emit(
+      'update:departments',
+      props.departments.filter((d) => d.id !== viewingDepartment.value.id),
+    )
+    ElMessage.success('Отдел удалён')
+    viewDepartmentVisible.value = false
+  } catch {
+    // отменено
+  }
 }
 
 const editDepartment = (department) => {
@@ -275,6 +352,40 @@ const deleteDepartment = async (department) => {
 .option-desc {
   color: var(--gray);
   font-size: 12px;
+}
+
+/* === Модальные окна просмотра === */
+.view-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+}
+
+.view-row {
+  margin-bottom: var(--spacing-md);
+}
+
+.view-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  margin-bottom: var(--spacing-xs);
+  font-size: 14px;
+}
+
+.view-value {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.profiles-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.profile-tag {
+  margin: 2px 0;
 }
 
 /* Адаптивность */

@@ -22,20 +22,20 @@
 
     <!-- Таблица встреч -->
     <el-table :data="filteredMeetings" stripe border class="data-table">
-      <el-table-column prop="skillName" label="Навык" min-width="200" />
-      <el-table-column prop="stageType" label="Тип этапа" width="150">
+      <el-table-column prop="skillName" label="Навык" min-width="180" />
+      <el-table-column prop="stageType" label="Тип этапа" width="140">
         <template #default="{ row }">
           <el-tag size="small" :type="getStageTypeTag(row.stageType)">
             {{ getStageTypeLabel(row.stageType) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="date" label="Дата и время" width="160" sortable />
-      <el-table-column prop="location" label="Место" width="150" />
-      <el-table-column prop="duration" label="Длительность" width="100" align="center">
+      <el-table-column prop="date" label="Дата и время" width="170" sortable />
+      <el-table-column prop="location" label="Место" min-width="140" />
+      <el-table-column prop="duration" label="Длительность" width="150" align="center">
         <template #default="{ row }"> {{ row.duration }} мин. </template>
       </el-table-column>
-      <el-table-column prop="participants" label="Участники" min-width="200">
+      <el-table-column prop="participants" label="Участники" min-width="180">
         <template #default="{ row }">
           <div class="participants-display">
             <el-tag size="small" type="warning">Аттестуемый: {{ row.attestedName }}</el-tag>

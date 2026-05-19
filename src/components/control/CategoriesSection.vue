@@ -21,30 +21,48 @@
     </div>
 
     <!-- Таблица категорий -->
-    <el-table :data="filteredCategories" stripe border class="data-table" @row-click="viewCategory">
-      <el-table-column prop="name" label="Название категории" min-width="300" />
-      <el-table-column prop="skillsCount" label="Навыков" width="120" align="center">
-        <template #default="{ row }">
-          {{ countCategorySkills(row.id) }}
-        </template>
-      </el-table-column>
-      <el-table-column label="Действия" width="120" align="center" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" size="small" @click.stop="editCategory(row)">
-            <el-icon><Edit /></el-icon>
-          </el-button>
-          <el-button link type="danger" size="small" @click.stop="deleteCategory(row)">
-            <el-icon><Delete /></el-icon>
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-wrapper">
+      <el-table
+        :data="filteredCategories"
+        stripe
+        border
+        class="data-table"
+        @row-click="viewCategory"
+      >
+        <el-table-column prop="name" label="Название категории" min-width="300" />
+        <el-table-column prop="skillsCount" label="Навыков" width="120" align="center">
+          <template #default="{ row }">
+            {{ countCategorySkills(row.id) }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- 🔹 Модальное окно: ПРОСМОТР КАТЕГОРИИ -->
+    <el-dialog
+      v-model="viewCategoryVisible"
+      title="Просмотр категории"
+      :width="400"
+      class="admin-dialog"
+      destroy-on-close
+    >
+      <div v-if="viewingCategory" class="view-content">
+        <div class="view-row">
+          <div class="view-label">Название категории</div>
+          <div class="view-value">{{ viewingCategory.name }}</div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button :icon="Edit" @click="handleEditCategory">Редактировать</el-button>
+        <el-button type="danger" :icon="Delete" @click="confirmDeleteCategory">Удалить</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 🔹 Модальное окно: Категория -->
     <el-dialog
       v-model="categoryDialogVisible"
       :title="editingCategory ? 'Редактирование категории' : 'Новая категория'"
-      :width="500"
+      :width="400"
       class="admin-dialog"
       destroy-on-close
     >
@@ -89,9 +107,12 @@ const filteredCategories = computed(() => {
   return props.categories.filter((c) => c.name?.toLowerCase().includes(q))
 })
 
-// === Модальное окно ===
+// === Модальные окна ===
 const categoryDialogVisible = ref(false)
+const viewCategoryVisible = ref(false)
+
 const editingCategory = ref(null)
+const viewingCategory = ref(null)
 
 // === Форма категории ===
 const categoryForm = ref({
@@ -107,8 +128,36 @@ const countCategorySkills = (categoryId) => {
 
 // === Категории: действия ===
 const viewCategory = (category) => {
-  // Просмотр можно реализовать при необходимости
-  ElMessage.info(`Категория: ${category.name}`)
+  viewingCategory.value = category
+  viewCategoryVisible.value = true
+}
+
+const handleEditCategory = () => {
+  openCategoryDialog(viewingCategory.value)
+  viewCategoryVisible.value = false
+}
+
+const confirmDeleteCategory = async () => {
+  if (!viewingCategory.value) return
+  try {
+    await ElMessageBox.confirm(
+      `Удалить категорию "${viewingCategory.value.name}"?`,
+      'Подтверждение',
+      {
+        type: 'warning',
+        confirmButtonText: 'Удалить',
+        cancelButtonText: 'Отмена',
+      },
+    )
+    emit(
+      'update:categories',
+      props.categories.filter((c) => c.id !== viewingCategory.value.id),
+    )
+    ElMessage.success('Категория удалена')
+    viewCategoryVisible.value = false
+  } catch {
+    // отменено
+  }
 }
 
 const editCategory = (category) => {
@@ -202,9 +251,17 @@ const deleteCategory = async (category) => {
   max-width: 400px;
 }
 
-.data-table {
+/* Обёртка таблицы для центрирования */
+.table-wrapper {
+  display: flex;
+  justify-content: center;
   width: 100%;
   margin-bottom: var(--spacing-md);
+}
+
+.data-table {
+  width: auto;
+  max-width: 600px;
   cursor: pointer;
 }
 
@@ -214,6 +271,28 @@ const deleteCategory = async (category) => {
 
 .data-table :deep(.el-table__row:hover) {
   background-color: var(--background);
+}
+
+/* === Модальные окна просмотра === */
+.view-content {
+  padding: var(--spacing-sm) 0;
+}
+
+.view-row {
+  margin-bottom: var(--spacing-md);
+}
+
+.view-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  margin-bottom: var(--spacing-xs);
+  font-size: 14px;
+}
+
+.view-value {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
 }
 
 /* Адаптивность */

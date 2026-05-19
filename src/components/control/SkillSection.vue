@@ -36,43 +36,40 @@
     <el-dialog
       v-model="viewSkillVisible"
       title="Просмотр навыка"
-      :width="900"
+      :width="700"
       class="admin-dialog"
       destroy-on-close
     >
       <div v-if="viewingSkill" class="view-content">
-        <div class="skill-view-section">
-          <div class="view-label">Название</div>
-          <div class="view-value">{{ viewingSkill.name }}</div>
-        </div>
-
-        <div class="skill-view-section">
+        <div class="view-row">
           <div class="view-label">Категория</div>
           <div class="view-value">{{ viewingSkill.categoryName || 'Не указана' }}</div>
         </div>
 
-        <div class="skill-view-section">
+        <div class="view-row">
+          <div class="view-label">Название</div>
+          <div class="view-value">{{ viewingSkill.name }}</div>
+        </div>
+
+        <div class="view-row">
           <div class="view-label">Описание</div>
           <div class="view-value">{{ viewingSkill.description || '—' }}</div>
         </div>
 
-        <div class="skill-view-section">
+        <div class="view-row">
           <div class="view-label">Материалы для подготовки</div>
           <div class="view-value">{{ viewingSkill.materials || 'Нет материалов' }}</div>
         </div>
 
-        <div class="skill-view-section">
+        <div class="view-row">
           <div class="view-label">Этапы</div>
-          <!-- Этапы - табы -->
+          <!-- Этапы - табы (только те, у которых есть вопросы) -->
           <div class="stages-tabs">
             <div
-              v-for="stageType in stageTypes"
+              v-for="stageType in stageTypesWithContent"
               :key="stageType.key"
               class="stage-tab"
-              :class="{
-                active: selectedViewStageType === stageType.key,
-                'has-content': hasStageContent(viewingSkill.stages, stageType.key),
-              }"
+              :class="{ active: selectedViewStageType === stageType.key }"
               @click="selectViewStageType(stageType.key)"
             >
               {{ stageType.label }}
@@ -82,30 +79,28 @@
           <!-- Содержимое выбранного этапа -->
           <div class="stage-content">
             <div
-              v-for="stage in getStagesByType(viewingSkill.stages, selectedViewStageType)"
-              :key="stage.id"
+              v-for="(stage, idx) in getStagesByType(viewingSkill.stages, selectedViewStageType)"
+              :key="stage.id || idx"
               class="stage-item"
             >
               <div class="stage-title">
                 {{ getStageContentTitle(selectedViewStageType) }}
               </div>
 
-              <!-- Для Аттестации - Вопросы и ответы -->
-              <div
-                v-if="selectedViewStageType === 'certification' && stage.qa?.length"
-                class="stage-qa-list"
-              >
-                <div v-for="(qa, idx) in stage.qa" :key="idx" class="qa-item">
+              <!-- Вопросы/Задания -->
+              <div v-if="stage.questions?.length" class="stage-qa-list">
+                <div v-for="(q, qIdx) in stage.questions" :key="qIdx" class="qa-item">
                   <div
                     class="qa-question"
-                    @click="toggleQAExpand(viewingSkill.id || 'view', stage.id, idx)"
+                    @click="toggleQAExpand(viewingSkill.id || 'view', stage.id || idx, qIdx)"
                   >
-                    <span>{{ idx + 1 }}.</span>
-                    <span class="qa-question-text">{{ qa.question }}</span>
+                    <span>{{ qIdx + 1 }}.</span>
+                    <span class="qa-question-text">{{ q.text }}</span>
                     <el-icon
                       class="collapse-icon"
                       :class="{
-                        expanded: expandedQA[`${viewingSkill.id || 'view'}_${stage.id}_${idx}`],
+                        expanded:
+                          expandedQA[`${viewingSkill.id || 'view'}_${stage.id || idx}_${qIdx}`],
                       }"
                     >
                       <ArrowRight />
@@ -113,57 +108,20 @@
                   </div>
                   <el-collapse-transition>
                     <div
-                      v-show="expandedQA[`${viewingSkill.id || 'view'}_${stage.id}_${idx}`]"
+                      v-show="expandedQA[`${viewingSkill.id || 'view'}_${stage.id || idx}_${qIdx}`]"
                       class="qa-answer"
                     >
-                      <strong>Эталонный ответ:</strong> {{ qa.answer }}
+                      <strong>{{
+                        isPracticeOrPerformance(stage.type)
+                          ? 'Критерий оценивания:'
+                          : 'Эталонный ответ:'
+                      }}</strong>
+                      {{ q.answer }}
                     </div>
                   </el-collapse-transition>
                 </div>
               </div>
-
-              <!-- Для остальных этапов - Задания и критерии -->
-              <div v-else class="stage-tasks-criteria">
-                <div v-if="stage.tasks?.length" class="tasks-list">
-                  <div v-for="(task, idx) in stage.tasks" :key="idx" class="task-item">
-                    <div
-                      class="task-title"
-                      @click="toggleTaskExpand(viewingSkill.id || 'view', stage.id, idx)"
-                    >
-                      <span>{{ idx + 1 }}.</span>
-                      <span class="task-text">{{ task }}</span>
-                      <el-icon
-                        class="collapse-icon"
-                        :class="{
-                          expanded:
-                            expandedTasks[`${viewingSkill.id || 'view'}_${stage.id}_${idx}`],
-                        }"
-                      >
-                        <ArrowRight />
-                      </el-icon>
-                    </div>
-                    <el-collapse-transition>
-                      <div
-                        v-show="expandedTasks[`${viewingSkill.id || 'view'}_${stage.id}_${idx}`]"
-                        class="task-criteria"
-                      >
-                        <strong>Критерий оценивания:</strong>
-                        <p>
-                          {{ stage.criteria?.[idx] || 'Критерий не указан' }}
-                        </p>
-                      </div>
-                    </el-collapse-transition>
-                  </div>
-                </div>
-                <div v-if="stage.criteria?.length && !stage.tasks?.length" class="criteria-list">
-                  <strong>Критерии:</strong>
-                  <ul>
-                    <li v-for="(criterion, idx) in stage.criteria" :key="idx">
-                      {{ criterion }}
-                    </li>
-                  </ul>
-                </div>
-              </div>
+              <el-empty v-else description="Нет вопросов/заданий" :image-size="50" />
             </div>
             <el-empty
               v-if="!getStagesByType(viewingSkill.stages, selectedViewStageType).length"
@@ -174,8 +132,8 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="viewSkillVisible = false">Закрыть</el-button>
-        <el-button type="primary" :icon="Edit" @click="handleEditSkill"> Редактировать </el-button>
+        <el-button :icon="Edit" @click="handleEditSkill">Редактировать</el-button>
+        <el-button type="danger" :icon="Delete" @click="confirmDeleteSkill">Удалить</el-button>
       </template>
     </el-dialog>
 
@@ -183,24 +141,24 @@
     <el-dialog
       v-model="skillDialogVisible"
       :title="editingSkill ? 'Редактирование навыка' : 'Новый навык'"
-      :width="1000"
+      :width="700"
       class="admin-dialog"
       destroy-on-close
     >
       <el-form :model="skillForm" label-position="top" class="skill-form">
-        <el-form-item label="Название навыка *" prop="name">
-          <el-input v-model="skillForm.name" placeholder="Например: Проектирование схем БД" />
-        </el-form-item>
-
         <el-form-item label="Категория" prop="categoryId">
           <el-select
             v-model="skillForm.categoryId"
             placeholder="Выберите категорию"
             clearable
-            style="width: 100%"
+            class="category-select"
           >
             <el-option v-for="cat in categories" :key="cat.id" :label="cat.name" :value="cat.id" />
           </el-select>
+        </el-form-item>
+
+        <el-form-item label="Название навыка *" prop="name">
+          <el-input v-model="skillForm.name" placeholder="Например: Проектирование схем БД" />
         </el-form-item>
 
         <el-form-item label="Описание" prop="description">
@@ -325,7 +283,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, Edit, Search, ArrowRight } from '@element-plus/icons-vue'
 
@@ -360,15 +318,24 @@ const viewingSkill = ref(null)
 
 // === Расширения для просмотра ===
 const expandedQA = ref({})
-const expandedTasks = ref({})
 const selectedViewStageType = ref('practice')
 
-// === Типы этапов ===
+// === Типы этапов (ключи должны совпадать со значениями type в этапах: attestation, practice, performance) ===
 const stageTypes = [
   { key: 'practice', label: 'Практика' },
-  { key: 'certification', label: 'Аттестация' },
+  { key: 'attestation', label: 'Аттестация' },
   { key: 'performance', label: 'Performance Review' },
 ]
+
+// === Вычисляемые: только этапы с контентом для табов ===
+const stageTypesWithContent = computed(() => {
+  if (!viewingSkill.value?.stages) return []
+  return stageTypes.filter((type) =>
+    viewingSkill.value.stages?.some(
+      (stage) => stage.type === type.key && stage.questions?.length > 0,
+    ),
+  )
+})
 
 // === Форма навыка ===
 const skillForm = ref({
@@ -391,16 +358,12 @@ const getCategoryNameById = (id) => {
   return cat?.name || ''
 }
 
-const hasStageContent = (stages, type) => {
-  return stages?.some((stage) => stage.type === type)
-}
-
 const getStagesByType = (stages, type) => {
   return stages?.filter((stage) => stage.type === type) || []
 }
 
 const getStageContentTitle = (type) => {
-  if (type === 'certification') {
+  if (type === 'attestation') {
     return 'Вопросы и ответы'
   }
   return 'Задания и критерии'
@@ -409,11 +372,6 @@ const getStageContentTitle = (type) => {
 const toggleQAExpand = (skillId, stageId, idx) => {
   const key = `${skillId}_${stageId}_${idx}`
   expandedQA.value[key] = !expandedQA.value[key]
-}
-
-const toggleTaskExpand = (skillId, stageId, idx) => {
-  const key = `${skillId}_${stageId}_${idx}`
-  expandedTasks.value[key] = !expandedTasks.value[key]
 }
 
 const selectViewStageType = (type) => {
@@ -441,14 +399,34 @@ const viewSkill = (skill) => {
     categoryName: skill.categoryId ? getCategoryNameById(skill.categoryId) : skill.categoryName,
   }
   expandedQA.value = {}
-  expandedTasks.value = {}
-  selectedViewStageType.value = 'practice'
+  // Выбираем первый доступный тип этапа с контентом, или practice по умолчанию
+  const firstAvailable = stageTypesWithContent.value[0]?.key || 'practice'
+  selectedViewStageType.value = firstAvailable
   viewSkillVisible.value = true
 }
 
 const handleEditSkill = () => {
   openSkillDialog(viewingSkill.value)
   viewSkillVisible.value = false
+}
+
+const confirmDeleteSkill = async () => {
+  if (!viewingSkill.value) return
+  try {
+    await ElMessageBox.confirm(`Удалить навык "${viewingSkill.value.name}"?`, 'Подтверждение', {
+      type: 'warning',
+      confirmButtonText: 'Удалить',
+      cancelButtonText: 'Отмена',
+    })
+    emit(
+      'update:skills',
+      props.skills.filter((s) => s.id !== viewingSkill.value.id),
+    )
+    ElMessage.success('Навык удалён')
+    viewSkillVisible.value = false
+  } catch {
+    // отменено
+  }
 }
 
 const openSkillDialog = (skill = null) => {
@@ -618,6 +596,11 @@ const deleteSkill = async (skill) => {
   color: var(--text);
 }
 
+.category-select {
+  width: auto;
+  min-width: 200px;
+}
+
 /* Этапы */
 .stages-list {
   display: flex;
@@ -685,21 +668,21 @@ const deleteSkill = async (skill) => {
   padding-right: var(--spacing-sm);
 }
 
-.skill-view-section {
-  margin-bottom: var(--spacing-lg);
+.view-row {
+  margin-bottom: var(--spacing-sm);
 }
 
 .view-label {
   font-weight: var(--font-weight-semibold);
   color: var(--text);
-  margin-bottom: var(--spacing-xs);
-  font-size: 14px;
+  margin-bottom: 2px;
+  font-size: 13px;
 }
 
 .view-value {
   font-size: 14px;
   color: var(--text);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* Этапы - табы */
@@ -723,12 +706,6 @@ const deleteSkill = async (skill) => {
   color: var(--primary);
   border-bottom-color: var(--primary);
 }
-.stage-tab.has-content:not(.active) {
-  color: #666;
-}
-.stage-tab.has-content:not(.active):hover {
-  color: #333;
-}
 
 /* Содержимое этапа */
 .stage-content {
@@ -747,7 +724,7 @@ const deleteSkill = async (skill) => {
   font-size: 14px;
 }
 
-/* Вопросы и ответы (для Аттестации) */
+/* Вопросы и ответы */
 .stage-qa-list {
   margin-top: var(--spacing-xs);
 }
@@ -778,53 +755,6 @@ const deleteSkill = async (skill) => {
   font-size: 13px;
   color: var(--text);
   border-top: 1px solid #e8e8e8;
-}
-
-/* Задания и критерии (для Практики и Performance Review) */
-.stage-tasks-criteria {
-  margin-top: var(--spacing-xs);
-}
-.tasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-.task-item {
-  border: 1px solid #e8e8e8;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.task-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: #f5f5f5;
-  cursor: pointer;
-  font-size: 13px;
-}
-.task-title:hover {
-  background: #ebebeb;
-}
-.task-text {
-  flex: 1;
-}
-.task-criteria {
-  padding: var(--spacing-sm);
-  background: #fff;
-  font-size: 13px;
-  color: var(--text);
-  border-top: 1px solid #e8e8e8;
-}
-.task-criteria p {
-  margin: var(--spacing-xs) 0 0 0;
-}
-.criteria-list {
-  margin-top: var(--spacing-xs);
-}
-.criteria-list ul {
-  margin: var(--spacing-xs) 0;
-  padding-left: var(--spacing-md);
 }
 
 /* Кнопки */

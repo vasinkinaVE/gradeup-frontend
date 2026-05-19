@@ -35,19 +35,57 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" label="Описание" min-width="250" show-overflow-tooltip />
-      <el-table-column label="Действия" width="120" align="center" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" size="small" @click.stop="editDirection(row)">
-            <el-icon><Edit /></el-icon>
-          </el-button>
-          <el-button link type="danger" size="small" @click.stop="deleteDirection(row)">
-            <el-icon><Delete /></el-icon>
-          </el-button>
-        </template>
-      </el-table-column>
+      <el-table-column prop="supervisorName" label="Руководитель" min-width="200" />
     </el-table>
 
-    <!-- 🔹 Модальное окно: Направление -->
+    <!-- 🔹 Модальное окно: ПРОСМОТР НАПРАВЛЕНИЯ -->
+    <el-dialog
+      v-model="viewDirectionVisible"
+      title="Просмотр направления"
+      :width="600"
+      class="admin-dialog"
+      destroy-on-close
+    >
+      <div v-if="viewingDirection" class="view-content">
+        <div class="view-row">
+          <div class="view-label">Название направления</div>
+          <div class="view-value">{{ viewingDirection.name }}</div>
+        </div>
+
+        <div class="view-row">
+          <div class="view-label">Описание</div>
+          <div class="view-value">{{ viewingDirection.description || '—' }}</div>
+        </div>
+
+        <div class="view-row">
+          <div class="view-label">Руководитель</div>
+          <div class="view-value">{{ viewingDirection.supervisorName || 'Не назначен' }}</div>
+        </div>
+
+        <div class="view-row">
+          <div class="view-label">Входящие отделы</div>
+          <div class="view-value">
+            <div v-if="viewingDirection.departments?.length" class="departments-list">
+              <el-tag
+                v-for="dept in viewingDirection.departments"
+                :key="dept.id"
+                size="small"
+                class="dept-tag"
+              >
+                {{ dept.name }}
+              </el-tag>
+            </div>
+            <span v-else>Отделы не добавлены</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button :icon="Edit" @click="handleEditDirection">Редактировать</el-button>
+        <el-button type="danger" :icon="Delete" @click="confirmDeleteDirection">Удалить</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 🔹 Модальное окно: Направление (создание/редактирование) -->
     <el-dialog
       v-model="directionDialogVisible"
       :title="editingDirection ? 'Редактирование направления' : 'Новое направление'"
@@ -67,6 +105,24 @@
             :rows="2"
             placeholder="Краткое описание направления"
           />
+        </el-form-item>
+
+        <el-form-item label="Руководитель направления" prop="supervisorId">
+          <el-select
+            v-model="directionForm.supervisorId"
+            placeholder="Выберите руководителя"
+            filterable
+            clearable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="emp in allEmployees"
+              :key="emp.id"
+              :label="emp.fullName"
+              :value="emp.id"
+            />
+          </el-select>
+          <div class="form-hint">Выберите сотрудника, который будет руководить направлением</div>
         </el-form-item>
 
         <el-form-item label="Входящие отделы" prop="departmentIds">
@@ -113,6 +169,10 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  allEmployees: {
+    type: Array,
+    required: true,
+  },
 })
 
 const emit = defineEmits(['update:directions'])
@@ -128,20 +188,70 @@ const filteredDirections = computed(() => {
   )
 })
 
-// === Модальное окно ===
+// === Модальные окна ===
 const directionDialogVisible = ref(false)
+const viewDirectionVisible = ref(false)
+
 const editingDirection = ref(null)
+const viewingDirection = ref(null)
 
 // === Форма направления ===
 const directionForm = ref({
   name: '',
   description: '',
+  supervisorId: null,
+  supervisorName: '',
   departmentIds: [],
 })
 
+// === Хелперы ===
+const getEmployeeNameById = (id) => {
+  if (!id) return ''
+  const emp = props.allEmployees.find((e) => e.id === id)
+  return emp?.fullName || ''
+}
+
+const getDepartmentsByIds = (ids) => {
+  if (!ids?.length) return []
+  return ids.map((id) => props.allDepartments.find((d) => d.id === id)).filter(Boolean)
+}
+
 // === Направления: действия ===
 const viewDirection = (direction) => {
-  ElMessage.info(`Направление: ${direction.name}`)
+  viewingDirection.value = {
+    ...direction,
+    supervisorName: getEmployeeNameById(direction.supervisorId),
+    departments: getDepartmentsByIds(direction.departmentIds),
+  }
+  viewDirectionVisible.value = true
+}
+
+const handleEditDirection = () => {
+  openDirectionDialog(viewingDirection.value)
+  viewDirectionVisible.value = false
+}
+
+const confirmDeleteDirection = async () => {
+  if (!viewingDirection.value) return
+  try {
+    await ElMessageBox.confirm(
+      `Удалить направление "${viewingDirection.value.name}"?`,
+      'Подтверждение',
+      {
+        type: 'warning',
+        confirmButtonText: 'Удалить',
+        cancelButtonText: 'Отмена',
+      },
+    )
+    emit(
+      'update:directions',
+      props.directions.filter((d) => d.id !== viewingDirection.value.id),
+    )
+    ElMessage.success('Направление удалено')
+    viewDirectionVisible.value = false
+  } catch {
+    // отменено
+  }
 }
 
 const editDirection = (direction) => {
@@ -154,6 +264,8 @@ const openDirectionDialog = (direction = null) => {
     directionForm.value = {
       name: direction.name || '',
       description: direction.description || '',
+      supervisorId: direction.supervisorId || null,
+      supervisorName: getEmployeeNameById(direction.supervisorId),
       departmentIds: direction.departmentIds ? [...direction.departmentIds] : [],
     }
   } else {
@@ -161,6 +273,8 @@ const openDirectionDialog = (direction = null) => {
     directionForm.value = {
       name: '',
       description: '',
+      supervisorId: null,
+      supervisorName: '',
       departmentIds: [],
     }
   }
@@ -173,12 +287,18 @@ const saveDirection = () => {
     return
   }
 
+  const supervisorName = getEmployeeNameById(directionForm.value.supervisorId)
+
   if (editingDirection.value) {
     // Редактирование
     const idx = props.directions.findIndex((d) => d.id === editingDirection.value.id)
     if (idx !== -1) {
       const updated = [...props.directions]
-      updated[idx] = { ...updated[idx], ...directionForm.value }
+      updated[idx] = {
+        ...updated[idx],
+        ...directionForm.value,
+        supervisorName: supervisorName,
+      }
       emit('update:directions', updated)
     }
     ElMessage.success('Направление обновлено')
@@ -187,6 +307,7 @@ const saveDirection = () => {
     const newDirection = {
       id: Date.now(),
       ...directionForm.value,
+      supervisorName: supervisorName,
     }
     emit('update:directions', [newDirection, ...props.directions])
     ElMessage.success('Направление создано')
@@ -271,6 +392,40 @@ const deleteDirection = async (direction) => {
 .option-desc {
   color: var(--gray);
   font-size: 12px;
+}
+
+/* === Модальные окна просмотра === */
+.view-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+}
+
+.view-row {
+  margin-bottom: var(--spacing-md);
+}
+
+.view-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  margin-bottom: var(--spacing-xs);
+  font-size: 14px;
+}
+
+.view-value {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.departments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.dept-tag {
+  margin: 2px 0;
 }
 
 /* Адаптивность */
