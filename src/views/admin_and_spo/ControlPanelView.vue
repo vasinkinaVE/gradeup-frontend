@@ -21,12 +21,13 @@
     </div>
 
     <!-- Секции -->
-    <!-- 🔧 Добавлен @update:categories для синхронизации -->
     <SkillSection
       v-if="activeTab === 'skills'"
       v-model:skills="skills"
       :categories="categories"
-      @update:categories="categories = $event"
+      :loading="loading"
+      @update:categories="fetchCategories"
+      @update:skills="fetchSkills"
     />
 
     <DepartmentsSection
@@ -58,7 +59,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   FolderOpened,
   Document,
@@ -75,6 +77,9 @@ import DirectionsSection from '@/components/control/DirectionsSection.vue'
 import ProfilesSection from '@/components/control/ProfilesSection.vue'
 import MeetingSection from '@/components/control/MeetingSection.vue'
 
+// === API конфигурация ===
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
 // === Вкладки ===
 const tabs = [
   { id: 'skills', label: 'Навыки', icon: FolderOpened },
@@ -85,35 +90,137 @@ const tabs = [
 ]
 
 const activeTab = ref('skills')
+const loading = ref(false)
 
-// === Данные: Категории ===
-// ⚠️ Важно: если у вас есть начальные данные, инициализируйте их здесь:
-const categories = ref([
-  { id: 1, name: 'Базы данных' },
-  { id: 2, name: 'Frontend' },
-  { id: 3, name: 'Backend' },
-  { id: 4, name: 'DevOps' },
-  { id: 5, name: 'Тестирование' },
-])
-
-// === Данные: Отделы ===
-const departments = ref([])
-
-// === Данные: Направления ===
-const directions = ref([])
-
-// === Данные: НАВЫКИ ===
-// ⚠️ Аналогично: если нужны начальные навыки, добавьте их сюда
+// === Данные ===
+const categories = ref([])
 const skills = ref([])
-
-// === Данные: Профили ===
+const departments = ref([])
+const directions = ref([])
 const profiles = ref([])
-
-// === Данные: Встречи ===
 const meetings = ref([])
-
-// === Данные: Сотрудники ===
 const employees = ref([])
+
+// === Вспомогательная функция: имена категорий по ID ===
+const getCategoryNamesByIds = (ids, categoriesList) => {
+  if (!ids || !Array.isArray(ids) || ids.length === 0) return ''
+  if (!categoriesList || !Array.isArray(categoriesList)) return ''
+
+  const names = ids
+    .map((id) => {
+      const cat = categoriesList.find((c) => String(c.id) === String(id))
+      return cat?.name
+    })
+    .filter(Boolean)
+  return names.join(', ')
+}
+
+// === API методы: Категории ===
+const fetchCategories = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/category/`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+    categories.value = data.map((c) => ({
+      id: c.id,
+      name: c.category_name,
+    }))
+    // 🔧 После загрузки категорий обновляем names у навыков
+    if (skills.value.length > 0) {
+      skills.value = skills.value.map((skill) => ({
+        ...skill,
+        categoryNames: getCategoryNamesByIds(
+          skill.categoryIds || skill.categories,
+          categories.value,
+        ),
+      }))
+    }
+  } catch (err) {
+    console.error('Error fetching categories:', err)
+    ElMessage.error('Не удалось загрузить категории')
+  }
+}
+
+// 🔧 Исправлено: используем /skills/stages/stages для получения stages
+const fetchSkills = async () => {
+  try {
+    // 🔧 Используем эндпоинт, который возвращает stages (даже без вопросов)
+    const res = await fetch(`${API_BASE}/skills/stages/stages`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+
+    const newSkills = []
+
+    for (const s of data) {
+      try {
+        // Нормализация этапов (для подсчёта количества)
+        const normalizedStages = []
+        if (s.stages && Array.isArray(s.stages)) {
+          for (const st of s.stages) {
+            const stageType = (st.confirmation_type || '').toLowerCase().trim()
+            let type = 'practice'
+            if (['аттестация', 'attestation'].includes(stageType)) type = 'attestation'
+            else if (['performance review', 'performance'].includes(stageType)) type = 'performance'
+
+            normalizedStages.push({
+              id: st?.id || null,
+              type,
+              confirmation_type: st.confirmation_type,
+              last_version: st.last_version,
+              questions: [], // 🔧 Вопросы подгрузятся при просмотре
+            })
+          }
+        }
+
+        // 🔧 Нормализация категорий
+        let catIds = []
+        if (s.categories && Array.isArray(s.categories)) {
+          catIds = s.categories
+        } else if (s.category_ids && Array.isArray(s.category_ids)) {
+          catIds = s.category_ids
+        } else if (typeof s.categories === 'number') {
+          catIds = [s.categories]
+        }
+
+        // 🔧 Заполняем categoryNames сразу
+        const categoryNames = getCategoryNamesByIds(catIds, categories.value)
+
+        const skillObj = {
+          id: s.id,
+          name: s.title || s.name || '',
+          title: s.title || '',
+          description: s.description || '',
+          materials: s.literature || s.materials || '',
+          literature: s.literature || '',
+          categoryIds: catIds,
+          categories: catIds,
+          categoryNames, // 🔧 Теперь заполнено!
+          stages: normalizedStages,
+          stagesCount: normalizedStages.length, // 🔧 Для совместимости
+        }
+
+        newSkills.push(skillObj)
+      } catch (stageErr) {
+        console.error('Error normalizing skill:', s, stageErr)
+      }
+    }
+
+    skills.value = newSkills
+  } catch (err) {
+    console.error('Error fetching skills:', err)
+    ElMessage.error('Не удалось загрузить навыки')
+    skills.value = []
+  }
+}
+
+// === Загрузка данных при монтировании ===
+onMounted(async () => {
+  loading.value = true
+  // 🔧 Сначала загружаем категории, потом навыки (чтобы подставить имена)
+  await fetchCategories()
+  await fetchSkills()
+  loading.value = false
+})
 </script>
 
 <style scoped>
@@ -171,13 +278,11 @@ const employees = ref([])
   font-size: 16px;
 }
 
-/* Адаптивность */
 @media (max-width: 768px) {
   .panel-tabs {
     flex-direction: column;
     width: 100%;
   }
-
   .tab-btn {
     justify-content: flex-start;
     width: 100%;
