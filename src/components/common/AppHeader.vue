@@ -125,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, markRaw } from 'vue' // ✅ Добавили markRaw
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -196,7 +196,7 @@ const handleLogout = async () => {
       cancelButtonText: 'Отмена',
       type: 'warning',
       confirmButtonClass: 'el-button--danger',
-      icon: WarningFilled, // ✅ Явно указываем иконку
+      icon: markRaw(WarningFilled), // ✅ Оборачиваем в markRaw
     })
 
     await authStore.logout()

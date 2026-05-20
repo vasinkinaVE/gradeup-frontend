@@ -282,14 +282,35 @@
               <!-- Навыки уровня -->
               <div class="level-skills">
                 <h5 class="subsection-title">Навыки</h5>
+
+                <!-- 🔧 ФИЛЬТР ПО КАТЕГОРИЯМ ДЛЯ НАВЫКОВ -->
+                <div class="skills-filter-row">
+                  <el-select
+                    v-model="skillCategoryFilter"
+                    placeholder="Фильтр по категориям"
+                    multiple
+                    collapse-tags
+                    collapse-tags-tooltip
+                    :max-collapse-tags="2"
+                    clearable
+                    class="category-filter-select"
+                  >
+                    <el-option
+                      v-for="cat in categories"
+                      :key="cat.id"
+                      :label="cat.name"
+                      :value="cat.id"
+                    />
+                  </el-select>
+                  <span class="filter-hint">Фильтрует все списки навыков</span>
+                </div>
+
                 <div v-for="(skillId, sIdx) in level.skills" :key="sIdx" class="skill-select-item">
                   <el-select
                     v-model="level.skills[sIdx]"
                     placeholder="Выберите навык"
                     filterable
-                    remote
-                    :remote-method="(query) => filterSkillsByQuery(query, lIdx, sIdx)"
-                    :filter-method="filterSkills"
+                    clearable
                     class="skill-select"
                     popper-class="skill-select-popper"
                   >
@@ -398,6 +419,25 @@ const profileForm = ref({
   levels: [],
 })
 
+// === 🔧 ФИЛЬТР ПО КАТЕГОРИЯМ ДЛЯ НАВЫКОВ ===
+const skillCategoryFilter = ref([])
+
+// === 🔧 Вычисляемый список навыков с учётом фильтра по категориям ===
+const filteredAllSkills = computed(() => {
+  // Если фильтр пуст - возвращаем ВСЕ навыки
+  if (!skillCategoryFilter.value || skillCategoryFilter.value.length === 0) {
+    return props.allSkills || []
+  }
+
+  // Если фильтр активен - показываем только навыки из выбранных категорий
+  return (props.allSkills || []).filter((skill) => {
+    if (!skill.categoryId) {
+      return false // Навыки без категории скрываем при активном фильтре
+    }
+    return skillCategoryFilter.value.includes(skill.categoryId)
+  })
+})
+
 // === Поиск по навыкам (для каждого селекта отдельно) ===
 const skillSearchQueries = ref({})
 
@@ -420,27 +460,40 @@ const filterSkills = (value) => {
 }
 
 // === Хелперы для группировки навыков (для формы) ===
+// 🔧 Используем filteredAllSkills вместо props.allSkills
 const getUncategorizedSkillsList = () => {
-  return props.allSkills.filter((s) => !s.categoryId)
+  // Показываем навыки без категории только если фильтр пуст
+  if (skillCategoryFilter.value && skillCategoryFilter.value.length > 0) {
+    return []
+  }
+  return (filteredAllSkills.value || []).filter((s) => !s.categoryId)
 }
 
 const getSkillsByCategoryList = () => {
   const result = []
   const grouped = {}
 
-  props.allSkills.forEach((skill) => {
+  // 🔧 Используем filteredAllSkills
+  if (!filteredAllSkills.value || filteredAllSkills.value.length === 0) {
+    return []
+  }
+
+  // Группируем навыки по categoryId
+  filteredAllSkills.value.forEach((skill) => {
     if (skill.categoryId) {
-      if (!grouped[skill.categoryId]) {
-        grouped[skill.categoryId] = []
+      const catId = String(skill.categoryId)
+      if (!grouped[catId]) {
+        grouped[catId] = []
       }
-      grouped[skill.categoryId].push(skill)
+      grouped[catId].push(skill)
     }
   })
 
+  // Для каждой группы находим название категории
   Object.entries(grouped).forEach(([categoryId, skills]) => {
-    const category = props.categories.find(
-      (c) => c.id === Number(categoryId) || c.id === categoryId,
-    )
+    // Ищем категорию по id (сравниваем как строки)
+    const category = props.categories?.find((c) => String(c.id) === String(categoryId))
+
     result.push({
       categoryId: categoryId,
       categoryName: category?.name || `Категория #${categoryId}`,
@@ -638,6 +691,7 @@ const openProfileDialog = (profile = null) => {
     }
   }
   skillSearchQueries.value = {}
+  skillCategoryFilter.value = [] // 🔧 Сбрасываем фильтр при открытии
   profileDialogVisible.value = true
 }
 
@@ -792,6 +846,28 @@ const deleteProfile = async (profile) => {
 .level-skills {
   padding-left: var(--spacing-md);
   border-left: 2px solid var(--background);
+}
+
+/* 🔧 Стили для фильтра категорий */
+.skills-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background: var(--background);
+  border-radius: var(--radius-sm);
+}
+
+.category-filter-select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.filter-hint {
+  font-size: 12px;
+  color: var(--gray);
+  white-space: nowrap;
 }
 
 .skill-select-item {
@@ -1039,6 +1115,15 @@ const deleteProfile = async (profile) => {
 
   .profile-form {
     max-height: 60vh;
+  }
+
+  .skills-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-hint {
+    text-align: center;
   }
 }
 

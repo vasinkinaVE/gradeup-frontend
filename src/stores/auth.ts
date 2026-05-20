@@ -26,15 +26,8 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const data = await authApi.login(email, password)
-
-      // Сохраняем токены
-      if (data.access_token) {
-        localStorage.setItem('access_token', data.access_token)
-      }
-      if (data.refresh_token) {
-        localStorage.setItem('refresh_token', data.refresh_token)
-      }
+      // Токены автоматически сохранятся в httpOnly cookies на сервере
+      await authApi.login(email, password)
 
       // Получаем информацию о пользователе
       await fetchCurrentUser()
@@ -62,14 +55,12 @@ export const useAuthStore = defineStore('auth', () => {
   // Logout
   const logout = async () => {
     try {
-      // Пытаемся уведомить сервер (не критично, если упадёт)
+      // Сервер удалит cookies
       await authApi.logout()
     } catch (err) {
       console.error('Server logout error:', err)
     } finally {
-      // Всегда очищаем локальные данные
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+      // Очищаем локальное состояние
       user.value = null
       // Редирект на страницу входа
       router.push('/login')
@@ -78,14 +69,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Инициализация при загрузке приложения
   const initAuth = async () => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      try {
-        await fetchCurrentUser()
-      } catch (err) {
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-      }
+    // Пробуем получить пользователя (cookies придут автоматически)
+    try {
+      await fetchCurrentUser()
+    } catch (err) {
+      // Токены истекли или неверны - пользователь не авторизован
+      user.value = null
     }
   }
 

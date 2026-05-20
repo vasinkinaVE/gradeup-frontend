@@ -3,10 +3,16 @@
   <section class="tab-content">
     <div class="section-header">
       <h2>Управление навыками</h2>
-      <el-button type="primary" @click="openSkillDialog()">
-        <el-icon><Plus /></el-icon>
-        Создать навык
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="openCategoriesDialog">
+          <el-icon><Collection /></el-icon>
+          Категории
+        </el-button>
+        <el-button type="primary" @click="openSkillDialog()">
+          <el-icon><Plus /></el-icon>
+          Создать навык
+        </el-button>
+      </div>
     </div>
 
     <!-- Поиск -->
@@ -23,7 +29,7 @@
     <!-- Таблица навыков -->
     <el-table :data="filteredSkills" stripe border class="data-table" @row-click="viewSkill">
       <el-table-column prop="name" label="Название навыка" min-width="250" />
-      <el-table-column prop="categoryName" label="Категория" width="200" />
+      <el-table-column prop="categoryNames" label="Категории" width="200" show-overflow-tooltip />
       <el-table-column prop="description" label="Описание" min-width="300" show-overflow-tooltip />
       <el-table-column prop="stagesCount" label="Этапов" width="100" align="center">
         <template #default="{ row }">
@@ -31,6 +37,60 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 🔹 Модальное окно: КАТЕГОРИИ -->
+    <el-dialog
+      v-model="categoriesDialogVisible"
+      title="Управление категориями"
+      :width="500"
+      class="admin-dialog"
+      destroy-on-close
+    >
+      <div class="categories-list">
+        <el-empty v-if="!categories.length" description="Нет категорий" :image-size="60" />
+
+        <div v-for="cat in categories" :key="cat.id" class="category-item">
+          <span class="category-name">{{ cat.name }}</span>
+          <el-button
+            type="danger"
+            size="small"
+            :icon="Delete"
+            circle
+            @click="confirmDeleteCategory(cat)"
+            :disabled="isCategoryInUse(cat.id)"
+          />
+          <el-tooltip
+            v-if="isCategoryInUse(cat.id)"
+            content="Категория используется в навыках"
+            placement="top"
+          >
+            <el-icon class="info-icon"><Warning /></el-icon>
+          </el-tooltip>
+        </div>
+      </div>
+
+      <div class="category-form">
+        <el-input
+          v-model="newCategoryName"
+          placeholder="Название новой категории"
+          @keyup.enter="addCategory"
+          clearable
+        >
+          <template #append>
+            <el-button
+              type="primary"
+              :icon="Plus"
+              @click="addCategory"
+              :disabled="!newCategoryName.trim()"
+            />
+          </template>
+        </el-input>
+      </div>
+
+      <template #footer>
+        <el-button @click="categoriesDialogVisible = false">Закрыть</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 🔹 Модальное окно: ПРОСМОТР НАВЫКА -->
     <el-dialog
@@ -42,8 +102,8 @@
     >
       <div v-if="viewingSkill" class="view-content">
         <div class="view-row">
-          <div class="view-label">Категория</div>
-          <div class="view-value">{{ viewingSkill.categoryName || 'Не указана' }}</div>
+          <div class="view-label">Категории</div>
+          <div class="view-value">{{ viewingSkill.categoryNames || 'Не указаны' }}</div>
         </div>
 
         <div class="view-row">
@@ -63,7 +123,6 @@
 
         <div class="view-row">
           <div class="view-label">Этапы</div>
-          <!-- Этапы - табы (только те, у которых есть вопросы) -->
           <div class="stages-tabs">
             <div
               v-for="stageType in stageTypesWithContent"
@@ -76,7 +135,6 @@
             </div>
           </div>
 
-          <!-- Содержимое выбранного этапа -->
           <div class="stage-content">
             <div
               v-for="(stage, idx) in getStagesByType(viewingSkill.stages, selectedViewStageType)"
@@ -87,7 +145,6 @@
                 {{ getStageContentTitle(selectedViewStageType) }}
               </div>
 
-              <!-- Вопросы/Задания -->
               <div v-if="stage.questions?.length" class="stage-qa-list">
                 <div v-for="(q, qIdx) in stage.questions" :key="qIdx" class="qa-item">
                   <div
@@ -146,11 +203,15 @@
       destroy-on-close
     >
       <el-form :model="skillForm" label-position="top" class="skill-form">
-        <el-form-item label="Категория" prop="categoryId">
+        <el-form-item label="Категории" prop="categoryIds">
           <el-select
-            v-model="skillForm.categoryId"
-            placeholder="Выберите категорию"
+            v-model="skillForm.categoryIds"
+            placeholder="Выберите категории"
             clearable
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            :max-collapse-tags="3"
             class="category-select"
           >
             <el-option v-for="cat in categories" :key="cat.id" :label="cat.name" :value="cat.id" />
@@ -285,7 +346,15 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit, Search, ArrowRight } from '@element-plus/icons-vue'
+import {
+  Plus,
+  Delete,
+  Edit,
+  Search,
+  ArrowRight,
+  Collection,
+  Warning,
+} from '@element-plus/icons-vue'
 
 const props = defineProps({
   skills: {
@@ -298,7 +367,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:skills'])
+const emit = defineEmits(['update:skills', 'update:categories'])
 
 // === Поиск ===
 const skillSearch = ref('')
@@ -312,15 +381,19 @@ const filteredSkills = computed(() => {
 // === Модальные окна ===
 const skillDialogVisible = ref(false)
 const viewSkillVisible = ref(false)
+const categoriesDialogVisible = ref(false)
 
 const editingSkill = ref(null)
 const viewingSkill = ref(null)
+
+// === Категории: состояние ===
+const newCategoryName = ref('')
 
 // === Расширения для просмотра ===
 const expandedQA = ref({})
 const selectedViewStageType = ref('practice')
 
-// === Типы этапов (ключи должны совпадать со значениями type в этапах: attestation, practice, performance) ===
+// === Типы этапов ===
 const stageTypes = [
   { key: 'practice', label: 'Практика' },
   { key: 'attestation', label: 'Аттестация' },
@@ -340,8 +413,8 @@ const stageTypesWithContent = computed(() => {
 // === Форма навыка ===
 const skillForm = ref({
   name: '',
-  categoryId: null,
-  categoryName: '',
+  categoryIds: [],
+  categoryNames: '',
   description: '',
   materials: '',
   stages: [],
@@ -352,10 +425,16 @@ const isPracticeOrPerformance = (type) => {
   return type === 'practice' || type === 'performance'
 }
 
-const getCategoryNameById = (id) => {
-  if (!id) return ''
-  const cat = props.categories.find((c) => c.id === id)
-  return cat?.name || ''
+// 🔧 Хелпер для получения строки названий категорий по массиву id
+const getCategoryNamesByIds = (ids) => {
+  if (!ids || !Array.isArray(ids) || ids.length === 0) return ''
+  const names = ids
+    .map((id) => {
+      const cat = props.categories.find((c) => c.id === id)
+      return cat?.name
+    })
+    .filter(Boolean)
+  return names.join(', ')
 }
 
 const getStagesByType = (stages, type) => {
@@ -392,14 +471,72 @@ const getAvailableStageTypes = (currentIndex) => {
   return allTypes.filter((t) => !usedTypes.includes(t.value))
 }
 
+// === Проверка: используется ли категория в навыках ===
+const isCategoryInUse = (categoryId) => {
+  return props.skills.some((skill) => {
+    const ids = skill.categoryIds || (skill.categoryId ? [skill.categoryId] : [])
+    return ids.includes(categoryId)
+  })
+}
+
+// === КАТЕГОРИИ: действия ===
+const openCategoriesDialog = () => {
+  newCategoryName.value = ''
+  categoriesDialogVisible.value = true
+}
+
+const addCategory = () => {
+  const name = newCategoryName.value.trim()
+  if (!name) {
+    ElMessage.warning('Введите название категории')
+    return
+  }
+
+  if (props.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+    ElMessage.warning('Такая категория уже существует')
+    return
+  }
+
+  const newCategory = {
+    id: Date.now(),
+    name: name,
+  }
+
+  emit('update:categories', [...props.categories, newCategory])
+  newCategoryName.value = ''
+  ElMessage.success('Категория добавлена')
+}
+
+const confirmDeleteCategory = async (category) => {
+  if (isCategoryInUse(category.id)) {
+    ElMessage.warning('Нельзя удалить категорию, которая используется в навыках')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(`Удалить категорию "${category.name}"?`, 'Подтверждение', {
+      type: 'warning',
+      confirmButtonText: 'Удалить',
+      cancelButtonText: 'Отмена',
+    })
+    emit(
+      'update:categories',
+      props.categories.filter((c) => c.id !== category.id),
+    )
+    ElMessage.success('Категория удалена')
+  } catch {
+    // отменено
+  }
+}
+
 // === НАВЫКИ: действия ===
 const viewSkill = (skill) => {
+  const ids = skill.categoryIds || (skill.categoryId ? [skill.categoryId] : [])
   viewingSkill.value = {
     ...skill,
-    categoryName: skill.categoryId ? getCategoryNameById(skill.categoryId) : skill.categoryName,
+    categoryNames: ids.length ? getCategoryNamesByIds(ids) : skill.categoryName || 'Не указаны',
   }
   expandedQA.value = {}
-  // Выбираем первый доступный тип этапа с контентом, или practice по умолчанию
   const firstAvailable = stageTypesWithContent.value[0]?.key || 'practice'
   selectedViewStageType.value = firstAvailable
   viewSkillVisible.value = true
@@ -432,10 +569,11 @@ const confirmDeleteSkill = async () => {
 const openSkillDialog = (skill = null) => {
   if (skill) {
     editingSkill.value = skill
+    const ids = skill.categoryIds || (skill.categoryId ? [skill.categoryId] : [])
     skillForm.value = {
       name: skill.name || '',
-      categoryId: skill.categoryId || null,
-      categoryName: skill.categoryName || '',
+      categoryIds: ids,
+      categoryNames: skill.categoryNames || getCategoryNamesByIds(ids),
       description: skill.description || '',
       materials: skill.materials || '',
       stages: skill.stages ? JSON.parse(JSON.stringify(skill.stages)) : [],
@@ -444,8 +582,8 @@ const openSkillDialog = (skill = null) => {
     editingSkill.value = null
     skillForm.value = {
       name: '',
-      categoryId: null,
-      categoryName: '',
+      categoryIds: [],
+      categoryNames: '',
       description: '',
       materials: '',
       stages: [],
@@ -488,9 +626,7 @@ const saveSkill = () => {
     return
   }
 
-  const categoryName = skillForm.value.categoryId
-    ? getCategoryNameById(skillForm.value.categoryId)
-    : ''
+  const categoryNames = getCategoryNamesByIds(skillForm.value.categoryIds)
 
   if (editingSkill.value) {
     const idx = props.skills.findIndex((s) => s.id === editingSkill.value.id)
@@ -499,7 +635,8 @@ const saveSkill = () => {
       updated[idx] = {
         ...updated[idx],
         ...skillForm.value,
-        categoryName: categoryName,
+        categoryIds: skillForm.value.categoryIds,
+        categoryNames: categoryNames,
       }
       emit('update:skills', updated)
     }
@@ -508,7 +645,8 @@ const saveSkill = () => {
     const newSkill = {
       id: Date.now(),
       ...skillForm.value,
-      categoryName: categoryName,
+      categoryIds: skillForm.value.categoryIds,
+      categoryNames: categoryNames,
     }
     emit('update:skills', [newSkill, ...props.skills])
     ElMessage.success('Навык создан')
@@ -539,6 +677,7 @@ const deleteSkill = async (skill) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
 .section-header h2 {
@@ -546,6 +685,12 @@ const deleteSkill = async (skill) => {
   font-size: 20px;
   font-weight: var(--font-weight-semibold);
   color: var(--text);
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
 }
 
 .filters-row {
@@ -767,8 +912,61 @@ const deleteSkill = async (skill) => {
   transform: rotate(90deg);
 }
 
+/* === Стили для модального окна категорий === */
+.categories-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: var(--spacing-md);
+  padding-right: var(--spacing-xs);
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--background);
+  border-radius: var(--radius-sm);
+  border: 1px solid #e0e0e0;
+}
+
+.category-name {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.category-item .el-button {
+  margin-left: var(--spacing-xs);
+}
+
+.info-icon {
+  color: var(--warning);
+  font-size: 16px;
+  margin-left: var(--spacing-xs);
+  cursor: help;
+}
+
+.category-form {
+  border-top: 1px solid #e0e0e0;
+  padding-top: var(--spacing-md);
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .filters-row {
     flex-direction: column;
   }
@@ -789,5 +987,10 @@ const deleteSkill = async (skill) => {
 
 :deep(.admin-dialog .el-form-item__label) {
   font-weight: var(--font-weight-medium);
+}
+
+/* Стили для множественного выбора категорий */
+:deep(.category-select .el-tag) {
+  margin-right: 4px;
 }
 </style>

@@ -21,9 +21,13 @@
     </div>
 
     <!-- Секции -->
-    <SkillSection v-if="activeTab === 'skills'" v-model:skills="skills" :categories="categories" />
-
-    <CategoriesSection v-if="activeTab === 'categories'" v-model:categories="categories" />
+    <!-- 🔧 Добавлен @update:categories для синхронизации -->
+    <SkillSection
+      v-if="activeTab === 'skills'"
+      v-model:skills="skills"
+      :categories="categories"
+      @update:categories="categories = $event"
+    />
 
     <DepartmentsSection
       v-if="activeTab === 'departments'"
@@ -41,6 +45,7 @@
       v-if="activeTab === 'profiles'"
       v-model:profiles="profiles"
       :all-skills="skills"
+      :categories="categories"
     />
 
     <MeetingSection
@@ -65,7 +70,6 @@ import {
 
 // Импорт секций
 import SkillSection from '@/components/control/SkillSection.vue'
-import CategoriesSection from '@/components/control/CategoriesSection.vue'
 import DepartmentsSection from '@/components/control/DepartmentsSection.vue'
 import DirectionsSection from '@/components/control/DirectionsSection.vue'
 import ProfilesSection from '@/components/control/ProfilesSection.vue'
@@ -74,7 +78,6 @@ import MeetingSection from '@/components/control/MeetingSection.vue'
 // === Вкладки ===
 const tabs = [
   { id: 'skills', label: 'Навыки', icon: FolderOpened },
-  { id: 'categories', label: 'Категории', icon: Collection },
   { id: 'departments', label: 'Отделы', icon: OfficeBuilding },
   { id: 'directions', label: 'Направления', icon: Guide },
   { id: 'profiles', label: 'Профили', icon: Document },
@@ -84,6 +87,7 @@ const tabs = [
 const activeTab = ref('skills')
 
 // === Данные: Категории ===
+// ⚠️ Важно: если у вас есть начальные данные, инициализируйте их здесь:
 const categories = ref([
   { id: 1, name: 'Базы данных' },
   { id: 2, name: 'Frontend' },
@@ -99,6 +103,7 @@ const departments = ref([])
 const directions = ref([])
 
 // === Данные: НАВЫКИ ===
+// ⚠️ Аналогично: если нужны начальные навыки, добавьте их сюда
 const skills = ref([])
 
 // === Данные: Профили ===
