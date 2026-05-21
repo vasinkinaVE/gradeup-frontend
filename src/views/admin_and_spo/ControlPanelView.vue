@@ -55,6 +55,14 @@
       :skills="skills"
       :employees="employees"
     />
+
+    <!-- 🔥 Новая секция: Журнал событий -->
+    <LogsSection
+      v-if="activeTab === 'logs'"
+      v-model:logs="logs"
+      :loading="logsLoading"
+      @refresh="fetchLogs"
+    />
   </div>
 </template>
 
@@ -68,6 +76,7 @@ import {
   OfficeBuilding,
   Guide,
   Collection,
+  Timer, // ✅ Иконка для журнала событий
 } from '@element-plus/icons-vue'
 
 import SkillSection from '@/components/control/SkillSection.vue'
@@ -75,6 +84,7 @@ import DepartmentsSection from '@/components/control/DepartmentsSection.vue'
 import DirectionsSection from '@/components/control/DirectionsSection.vue'
 import ProfilesSection from '@/components/control/ProfilesSection.vue'
 import MeetingSection from '@/components/control/MeetingSection.vue'
+import LogsSection from '@/components/control/LogsSection.vue' // ✅ Импорт новой секции
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
@@ -84,6 +94,7 @@ const tabs = [
   { id: 'directions', label: 'Направления', icon: Guide },
   { id: 'profiles', label: 'Профили', icon: Document },
   { id: 'meetings', label: 'Встречи', icon: Calendar },
+  { id: 'logs', label: 'Журнал событий', icon: Timer }, // ✅ Новая вкладка
 ]
 
 const activeTab = ref('skills')
@@ -96,6 +107,10 @@ const directions = ref([])
 const profiles = ref([])
 const meetings = ref([])
 const employees = ref([])
+
+// 🔥 Данные для журнала событий
+const logs = ref([])
+const logsLoading = ref(false)
 
 const extractCategoryIds = (categoriesData) => {
   if (!categoriesData) return []
@@ -125,7 +140,6 @@ const fetchCategories = async () => {
   }
 }
 
-// 🔧 ИСПРАВЛЕНО: используем /skills/ который возвращает категории и этапы
 const fetchSkills = async () => {
   try {
     loading.value = true
@@ -137,17 +151,14 @@ const fetchSkills = async () => {
 
     for (const s of data) {
       try {
-        // 🔥 Извлекаем категории из ответа
         const rawCategories = Array.isArray(s.categories) ? s.categories : []
         const catIds = extractCategoryIds(rawCategories)
 
-        // 🔥 Извлекаем имена категорий напрямую из объектов
         const categoryNames = rawCategories
           .map((c) => c?.category_name || c?.name)
           .filter((name) => name?.trim())
           .join(', ')
 
-        // 🔥 Считаем этапы из ответа
         const stages = Array.isArray(s.stages) ? s.stages : []
         const stagesCount = stages.length
 
@@ -161,8 +172,8 @@ const fetchSkills = async () => {
           categories: rawCategories,
           categoryIds: catIds,
           categoryNames: categoryNames || 'Не указаны',
-          stages: stages, // ✅ Сохраняем этапы для отображения количества
-          stagesCount: stagesCount, // ✅ Количество этапов
+          stages: stages,
+          stagesCount: stagesCount,
         }
         newSkills.push(skillObj)
       } catch (err) {
@@ -177,11 +188,42 @@ const fetchSkills = async () => {
   }
 }
 
+// 🔥 Загрузка журнала событий
+const fetchLogs = async () => {
+  try {
+    logsLoading.value = true
+    const res = await fetch(`${API_BASE}/logs/`) // ✅ Эндпоинт для логов
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+
+    logs.value = data.map((log) => ({
+      id: log.id,
+      timestamp: log.timestamp || log.created_at || '',
+      event_type: log.event_type || log.type || '',
+      actor: log.actor || log.user || log.who || '', // Кто совершил действие
+      target: log.target || log.to_whom || log.recipient || '', // Кому/чему адресовано
+      message: log.message || log.description || '',
+      severity: log.severity || log.level || 'info', // Опционально: для цветовой индикации
+    }))
+  } catch (err) {
+    console.error('Error fetching logs:', err)
+    ElMessage.error('Не удалось загрузить журнал событий')
+    logs.value = []
+  } finally {
+    logsLoading.value = false
+  }
+}
+
 onMounted(async () => {
   loading.value = true
   await fetchCategories()
   await fetchSkills()
   loading.value = false
+
+  // Загружаем логи при инициализации (опционально)
+  if (activeTab.value === 'logs') {
+    await fetchLogs()
+  }
 })
 </script>
 
