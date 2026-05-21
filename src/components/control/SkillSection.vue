@@ -36,7 +36,14 @@
       v-loading="skillsLoading"
     >
       <el-table-column prop="name" label="Название навыка" min-width="250" />
-      <el-table-column prop="categoryNames" label="Категории" width="200" show-overflow-tooltip />
+
+      <!-- 🔧 Динамическое вычисление имён категорий -->
+      <el-table-column label="Категории" width="200" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ getSkillCategoryNames(row) }}
+        </template>
+      </el-table-column>
+
       <el-table-column prop="description" label="Описание" min-width="300" show-overflow-tooltip />
       <el-table-column label="Этапов" width="100" align="center">
         <template #default="{ row }">
@@ -130,69 +137,101 @@
 
         <div class="view-row">
           <div class="view-label">Этапы</div>
-          <div class="stages-tabs">
-            <div
-              v-for="stageType in stageTypesWithContent"
-              :key="stageType.key"
-              class="stage-tab"
-              :class="{ active: selectedViewStageType === stageType.key }"
-              @click="selectViewStageType(stageType.key)"
-            >
-              {{ stageType.label }}
-            </div>
+
+          <!-- 🔧 1. Если этапов нет вообще -->
+          <div
+            v-if="!viewingSkill.stages || viewingSkill.stages.length === 0"
+            class="empty-message"
+          >
+            Этапы не добавлены
           </div>
 
-          <div class="stage-content">
-            <div
-              v-for="(stage, idx) in getStagesByType(viewingSkill.stages, selectedViewStageType)"
-              :key="stage.id || idx"
-              class="stage-item"
-            >
-              <div class="stage-title">
-                {{ getStageContentTitle(selectedViewStageType) }}
+          <!-- 🔧 2. Если этапы есть -->
+          <template v-else>
+            <div class="stages-tabs">
+              <div
+                v-for="stageType in stageTypesWithContent"
+                :key="stageType.key"
+                class="stage-tab"
+                :class="{ active: selectedViewStageType === stageType.key }"
+                @click="selectViewStageType(stageType.key)"
+              >
+                {{ stageType.label }}
+              </div>
+            </div>
+
+            <div class="stage-content">
+              <!-- Если нет этапов выбранного типа (например, выбрана вкладка "Практика", а её нет) -->
+              <div
+                v-if="!getStagesByType(viewingSkill.stages, selectedViewStageType)?.length"
+                class="empty-message"
+              >
+                Нет данных для этого этапа
               </div>
 
-              <div v-if="stage.questions && stage.questions.length > 0" class="stage-qa-list">
-                <div v-for="(q, qIdx) in stage.questions" :key="qIdx" class="qa-item">
-                  <div
-                    class="qa-question"
-                    @click="toggleQAExpand(viewingSkill.id || 'view', stage.id || idx, qIdx)"
-                  >
-                    <span>{{ qIdx + 1 }}.</span>
-                    <span class="qa-question-text">{{ q.text || 'Без текста' }}</span>
-                    <el-icon
-                      class="collapse-icon"
-                      :class="{
-                        expanded:
-                          expandedQA[`${viewingSkill.id || 'view'}_${stage.id || idx}_${qIdx}`],
-                      }"
-                    >
-                      <ArrowRight />
-                    </el-icon>
+              <!-- Отображение списка этапов -->
+              <template v-else>
+                <div
+                  v-for="(stage, idx) in getStagesByType(
+                    viewingSkill.stages,
+                    selectedViewStageType,
+                  )"
+                  :key="stage.id || idx"
+                  class="stage-item"
+                >
+                  <!-- Заголовок типа этапа (например "Вопросы и ответы") -->
+                  <div class="stage-title">
+                    {{ getStageContentTitle(selectedViewStageType) }}
                   </div>
-                  <el-collapse-transition>
-                    <div
-                      v-show="expandedQA[`${viewingSkill.id || 'view'}_${stage.id || idx}_${qIdx}`]"
-                      class="qa-answer"
-                    >
-                      <strong>{{
-                        isPracticeOrPerformance(stage.type)
-                          ? 'Критерий оценивания:'
-                          : 'Эталонный ответ:'
-                      }}</strong>
-                      {{ q.answer || '—' }}
+
+                  <!-- 🔧 3. Если этап есть, но вопросов/заданий нет -->
+                  <div
+                    v-if="!stage.questions || stage.questions.length === 0"
+                    class="empty-message"
+                  >
+                    Вопросы/задания не добавлены
+                  </div>
+
+                  <!-- 🔧 4. Если вопросы/задания есть -->
+                  <div v-else class="stage-qa-list">
+                    <div v-for="(q, qIdx) in stage.questions" :key="qIdx" class="qa-item">
+                      <div
+                        class="qa-question"
+                        @click="toggleQAExpand(viewingSkill.id || 'view', stage.id || idx, qIdx)"
+                      >
+                        <span>{{ qIdx + 1 }}.</span>
+                        <span class="qa-question-text">{{ q.text || 'Без текста' }}</span>
+                        <el-icon
+                          class="collapse-icon"
+                          :class="{
+                            expanded:
+                              expandedQA[`${viewingSkill.id || 'view'}_${stage.id || idx}_${qIdx}`],
+                          }"
+                        >
+                          <ArrowRight />
+                        </el-icon>
+                      </div>
+                      <el-collapse-transition>
+                        <div
+                          v-show="
+                            expandedQA[`${viewingSkill.id || 'view'}_${stage.id || idx}_${qIdx}`]
+                          "
+                          class="qa-answer"
+                        >
+                          <strong>{{
+                            isPracticeOrPerformance(stage.type)
+                              ? 'Критерий оценивания:'
+                              : 'Эталонный ответ:'
+                          }}</strong>
+                          {{ q.answer || '—' }}
+                        </div>
+                      </el-collapse-transition>
                     </div>
-                  </el-collapse-transition>
+                  </div>
                 </div>
-              </div>
-              <el-empty v-else description="Нет вопросов/заданий" :image-size="50" />
+              </template>
             </div>
-            <el-empty
-              v-if="!getStagesByType(viewingSkill.stages, selectedViewStageType)?.length"
-              description="Нет данных для этого этапа"
-              :image-size="50"
-            />
-          </div>
+          </template>
         </div>
       </div>
       <template #footer>
@@ -379,7 +418,9 @@ const categoriesLoading = ref(false)
 const viewSkillLoading = ref(false)
 const skillSearch = ref('')
 
+// 🔧 Добавлена зависимость от categories для реактивности
 const filteredSkills = computed(() => {
+  const _ = props.categories
   if (!skillSearch.value) return props.skills || []
   const q = skillSearch.value.toLowerCase()
   return (props.skills || []).filter((s) => s.name?.toLowerCase().includes(q))
@@ -417,12 +458,12 @@ const skillForm = ref({
   stages: [],
 })
 
-// 🔧 Улучшенный маппинг типов
 const mapTypeToFrontend = (backendType) => {
   if (!backendType) return 'practice'
-  const t = String(backendType).toLowerCase().trim()
-  if (t === 'аттестация' || t === 'attestation') return 'attestation'
-  if (t === 'performance review' || t === 'performance') return 'performance'
+  const t = String(backendType).trim()
+  if (t === 'Аттестация') return 'attestation'
+  if (t === 'Performance review') return 'performance'
+  if (t === 'Практическое задание') return 'practice'
   return 'practice'
 }
 
@@ -434,18 +475,51 @@ const mapTypeToBackend = (frontendType) => {
 
 const isPracticeOrPerformance = (type) => type === 'practice' || type === 'performance'
 
-// 🔧 Функция для получения имён категорий по ID (с кэшированием)
+// 🔧 Вспомогательная: имена категорий по ID
 const getCategoryNamesByIds = (ids, categoriesList) => {
   if (!ids || !Array.isArray(ids) || ids.length === 0) return ''
   if (!categoriesList || !Array.isArray(categoriesList)) return ''
-
   const names = ids
     .map((id) => {
-      const cat = categoriesList.find((c) => String(c.id) === String(id))
-      return cat?.name
+      const cat = categoriesList.find((c) => String(c?.id) === String(id))
+      return cat?.name || cat?.category_name
     })
     .filter(Boolean)
   return names.join(', ')
+}
+
+//  УПРОЩЕНО: категории теперь приходят с бэкенда в правильном формате
+const getSkillCategoryNames = (skill) => {
+  // 1. Если имя уже вычислено в родителе
+  if (skill?.categoryNames?.trim()) {
+    return skill.categoryNames
+  }
+
+  // 2. Фоллбэк: извлекаем из skill.categories (массив объектов с category_name)
+  if (Array.isArray(skill.categories) && skill.categories.length > 0) {
+    const names = skill.categories
+      .map((c) => c?.category_name || c?.name)
+      .filter((name) => name?.trim())
+    if (names.length > 0) return names.join(', ')
+  }
+
+  // 3. Последний фоллбэк: поиск по ID в props.categories
+  let ids = []
+  if (Array.isArray(skill.categoryIds)) ids.push(...skill.categoryIds)
+  if (Array.isArray(skill.category_ids)) ids.push(...skill.category_ids)
+  if (skill.categoryId != null) ids.push(skill.categoryId)
+
+  if (ids.length === 0) return 'Не указаны'
+  if (!props.categories?.length) return '—'
+
+  const names = ids
+    .map((id) => {
+      const cat = props.categories.find((c) => String(c?.id) === String(id))
+      return cat?.name || cat?.category_name
+    })
+    .filter(Boolean)
+
+  return names.length > 0 ? names.join(', ') : 'Не указаны'
 }
 
 const getStagesByType = (stages, type) => {
@@ -479,9 +553,22 @@ const getAvailableStageTypes = (currentIndex) => {
 
 const isCategoryInUse = (categoryId) => {
   return (props.skills || []).some((skill) => {
-    const ids = skill.categoryIds || skill.categories || []
+    const ids = skill.categoryIds || extractCategoryIds(skill.categories)
     return ids.some((id) => String(id) === String(categoryId))
   })
+}
+
+const extractCategoryIds = (categoriesData) => {
+  if (!categoriesData) return []
+  if (!Array.isArray(categoriesData)) return []
+  return categoriesData
+    .map((c) => {
+      if (typeof c === 'object' && c !== null && 'id' in c) {
+        return c.id
+      }
+      return c
+    })
+    .filter((id) => id != null)
 }
 
 // === Категории: API ===
@@ -495,7 +582,10 @@ const addCategory = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ category_name: name }),
     })
-    if (!res.ok) throw new Error('Error')
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail?.[0]?.msg || `HTTP ${res.status}`)
+    }
     await emit('update:categories')
     newCategoryName.value = ''
     ElMessage.success('Категория добавлена')
@@ -513,7 +603,10 @@ const confirmDeleteCategory = async (cat) => {
     await ElMessageBox.confirm('Удалить категорию?', 'Подтверждение', { type: 'warning' })
     categoriesLoading.value = true
     const res = await fetch(`${API_BASE}/category/${cat.id}`, { method: 'DELETE' })
-    if (!res.ok) throw new Error('Failed to delete')
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || `HTTP ${res.status}`)
+    }
     await emit('update:categories')
     ElMessage.success('Категория удалена')
   } catch (err) {
@@ -534,10 +627,8 @@ const openCategoriesDialog = () => {
 // === Навыки: API ===
 const saveSkill = async () => {
   if (!skillForm.value.name?.trim()) return ElMessage.warning('Введите название навыка')
-
   try {
     skillsLoading.value = true
-
     const payload = {
       skill: {
         title: skillForm.value.name.trim(),
@@ -552,7 +643,6 @@ const saveSkill = async () => {
           question: q?.text || '',
           answer: q?.answer || '',
         }))
-
         return {
           ...(st?.id ? { id: st.id } : {}),
           confirmation_type: mapTypeToBackend(st.type),
@@ -560,7 +650,6 @@ const saveSkill = async () => {
         }
       }),
     }
-
     let res
     if (editingSkill.value?.id) {
       res = await fetch(`${API_BASE}/skills/${editingSkill.value.id}`, {
@@ -575,14 +664,13 @@ const saveSkill = async () => {
         body: JSON.stringify(payload),
       })
     }
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail?.[0]?.msg || `HTTP ${res.status}`)
+      throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
     }
-
     ElMessage.success(editingSkill.value ? 'Навык обновлён' : 'Навык создан')
     await emit('update:skills')
+    await emit('update:categories')
     skillDialogVisible.value = false
   } catch (err) {
     console.error('Error saving skill:', err)
@@ -592,32 +680,28 @@ const saveSkill = async () => {
   }
 }
 
-// 🔧 Исправлено удаление: с обработкой ошибок и обновлением списка
 const confirmDeleteSkill = async () => {
   if (!viewingSkill.value?.id) {
     ElMessage.warning('Не выбран навык для удаления')
     return
   }
-
   try {
     await ElMessageBox.confirm(`Удалить навык "${viewingSkill.value.name}"?`, 'Подтверждение', {
       type: 'warning',
       confirmButtonText: 'Удалить',
       cancelButtonText: 'Отмена',
     })
-
     skillsLoading.value = true
     const res = await fetch(`${API_BASE}/skills/${viewingSkill.value.id}`, {
       method: 'DELETE',
     })
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail || `HTTP ${res.status}`)
     }
-
     ElMessage.success('Навык удалён')
     await emit('update:skills')
+    await emit('update:categories')
     viewSkillVisible.value = false
     viewingSkill.value = null
   } catch (err) {
@@ -630,29 +714,18 @@ const confirmDeleteSkill = async () => {
   }
 }
 
-// 🔧 Улучшенная нормализация с заполнением categoryNames
 const normalizeSkillData = (skill, categoriesList = []) => {
   if (!skill) return null
-
-  // Категории
   let ids = []
   if (Array.isArray(skill.categoryIds)) ids = skill.categoryIds
-  else if (Array.isArray(skill.categories)) ids = skill.categories
+  else if (Array.isArray(skill.categories)) ids = extractCategoryIds(skill.categories)
   else if (Array.isArray(skill.category_ids)) ids = skill.category_ids
   else if (skill.categoryId) ids = [skill.categoryId]
-
-  // 🔧 Заполняем categoryNames
   const categoryNames = getCategoryNamesByIds(ids, categoriesList)
-
-  // Этапы
   const normalizedStages = []
   if (skill.stages && Array.isArray(skill.stages)) {
     for (const st of skill.stages) {
-      const stageType = (st.confirmation_type || '').toLowerCase().trim()
-      let type = 'practice'
-      if (['аттестация', 'attestation'].includes(stageType)) type = 'attestation'
-      else if (['performance review', 'performance'].includes(stageType)) type = 'performance'
-
+      const type = mapTypeToFrontend(st.confirmation_type)
       const questions = []
       if (st.questions && Array.isArray(st.questions)) {
         for (const q of st.questions) {
@@ -664,7 +737,6 @@ const normalizeSkillData = (skill, categoriesList = []) => {
           })
         }
       }
-
       normalizedStages.push({
         id: st?.id || null,
         type,
@@ -674,38 +746,34 @@ const normalizeSkillData = (skill, categoriesList = []) => {
       })
     }
   }
-
   return {
     ...skill,
     categoryIds: ids,
-    categoryNames, // 🔧 Теперь всегда заполнено
+    categoryNames: categoryNames || skill.categoryNames || '',
     name: skill.name || skill.title || '',
     materials: skill.materials || skill.literature || '',
     stages: normalizedStages,
-    stagesCount: normalizedStages.length, // 🔧 Для совместимости
+    stagesCount: normalizedStages.length,
   }
 }
 
-// 🔧 Загрузка полных данных при просмотре
 const viewSkill = async (skill) => {
   try {
     viewSkillLoading.value = true
-
-    // Загружаем полные данные с вопросами
     const res = await fetch(`${API_BASE}/skills/${skill.id}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-
     const fullData = await res.json()
-    viewingSkill.value = normalizeSkillData(fullData, props.categories)
-
+    viewingSkill.value = normalizeSkillData(
+      fullData,
+      props.categories?.length ? props.categories : [],
+    )
     expandedQA.value = {}
     selectedViewStageType.value = stageTypesWithContent.value[0]?.key || 'practice'
     viewSkillVisible.value = true
   } catch (err) {
     console.error('Error loading skill details:', err)
     ElMessage.error('Не удалось загрузить детали навыка')
-    // Fallback
-    viewingSkill.value = normalizeSkillData(skill, props.categories)
+    viewingSkill.value = normalizeSkillData(skill, props.categories?.length ? props.categories : [])
     viewSkillVisible.value = true
   } finally {
     viewSkillLoading.value = false
@@ -722,8 +790,7 @@ const handleEditSkill = () => {
 const openSkillDialog = (skill = null) => {
   if (skill) {
     editingSkill.value = skill
-    const normalized = normalizeSkillData(skill, props.categories)
-
+    const normalized = normalizeSkillData(skill, props.categories?.length ? props.categories : [])
     skillForm.value = {
       name: normalized.name || '',
       categoryIds: normalized.categoryIds || [],
@@ -778,19 +845,17 @@ const removeQuestion = (sIdx, qIdx) => {
   }
 }
 
-// 🔧 Обновляем categoryNames при изменении списка категорий
+// 🔧 Watch для принудительного обновления при изменении категорий
 watch(
   () => props.categories,
   () => {
-    // Пересчитываем categoryNames для всех навыков в таблице
-    // (это сработает, когда родитель обновит skills через emit)
+    emit('update:skills')
   },
   { deep: true },
 )
 </script>
 
 <style scoped>
-/* Стили без изменений - те же что были */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -1030,6 +1095,15 @@ watch(
   border-top: 1px solid #e0e0e0;
   padding-top: var(--spacing-md);
 }
+
+/* 🔧 Стили для текстовых заглушек (вместо картинок) */
+.empty-message {
+  color: #909399; /* Серый цвет */
+  font-size: 13px;
+  padding: 8px 0;
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
   .section-header {
     flex-direction: column;

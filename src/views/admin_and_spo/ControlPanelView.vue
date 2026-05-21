@@ -70,17 +70,14 @@ import {
   Collection,
 } from '@element-plus/icons-vue'
 
-// Импорт секций
 import SkillSection from '@/components/control/SkillSection.vue'
 import DepartmentsSection from '@/components/control/DepartmentsSection.vue'
 import DirectionsSection from '@/components/control/DirectionsSection.vue'
 import ProfilesSection from '@/components/control/ProfilesSection.vue'
 import MeetingSection from '@/components/control/MeetingSection.vue'
 
-// === API конфигурация ===
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-// === Вкладки ===
 const tabs = [
   { id: 'skills', label: 'Навыки', icon: FolderOpened },
   { id: 'departments', label: 'Отделы', icon: OfficeBuilding },
@@ -92,7 +89,6 @@ const tabs = [
 const activeTab = ref('skills')
 const loading = ref(false)
 
-// === Данные ===
 const categories = ref([])
 const skills = ref([])
 const departments = ref([])
@@ -101,21 +97,19 @@ const profiles = ref([])
 const meetings = ref([])
 const employees = ref([])
 
-// === Вспомогательная функция: имена категорий по ID ===
-const getCategoryNamesByIds = (ids, categoriesList) => {
-  if (!ids || !Array.isArray(ids) || ids.length === 0) return ''
-  if (!categoriesList || !Array.isArray(categoriesList)) return ''
-
-  const names = ids
-    .map((id) => {
-      const cat = categoriesList.find((c) => String(c.id) === String(id))
-      return cat?.name
+const extractCategoryIds = (categoriesData) => {
+  if (!categoriesData) return []
+  if (!Array.isArray(categoriesData)) return []
+  return categoriesData
+    .map((c) => {
+      if (typeof c === 'object' && c !== null && 'id' in c) {
+        return c.id
+      }
+      return c
     })
-    .filter(Boolean)
-  return names.join(', ')
+    .filter((id) => id != null)
 }
 
-// === API методы: Категории ===
 const fetchCategories = async () => {
   try {
     const res = await fetch(`${API_BASE}/category/`)
@@ -125,27 +119,17 @@ const fetchCategories = async () => {
       id: c.id,
       name: c.category_name,
     }))
-    // 🔧 После загрузки категорий обновляем names у навыков
-    if (skills.value.length > 0) {
-      skills.value = skills.value.map((skill) => ({
-        ...skill,
-        categoryNames: getCategoryNamesByIds(
-          skill.categoryIds || skill.categories,
-          categories.value,
-        ),
-      }))
-    }
   } catch (err) {
     console.error('Error fetching categories:', err)
     ElMessage.error('Не удалось загрузить категории')
   }
 }
 
-// 🔧 Исправлено: используем /skills/stages/stages для получения stages
+// 🔧 ИСПРАВЛЕНО: используем /skills/ который возвращает категории и этапы
 const fetchSkills = async () => {
   try {
-    // 🔧 Используем эндпоинт, который возвращает stages (даже без вопросов)
-    const res = await fetch(`${API_BASE}/skills/stages/stages`)
+    loading.value = true
+    const res = await fetch(`${API_BASE}/skills/`)
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
 
@@ -153,58 +137,38 @@ const fetchSkills = async () => {
 
     for (const s of data) {
       try {
-        // Нормализация этапов (для подсчёта количества)
-        const normalizedStages = []
-        if (s.stages && Array.isArray(s.stages)) {
-          for (const st of s.stages) {
-            const stageType = (st.confirmation_type || '').toLowerCase().trim()
-            let type = 'practice'
-            if (['аттестация', 'attestation'].includes(stageType)) type = 'attestation'
-            else if (['performance review', 'performance'].includes(stageType)) type = 'performance'
+        // 🔥 Извлекаем категории из ответа
+        const rawCategories = Array.isArray(s.categories) ? s.categories : []
+        const catIds = extractCategoryIds(rawCategories)
 
-            normalizedStages.push({
-              id: st?.id || null,
-              type,
-              confirmation_type: st.confirmation_type,
-              last_version: st.last_version,
-              questions: [], // 🔧 Вопросы подгрузятся при просмотре
-            })
-          }
-        }
+        // 🔥 Извлекаем имена категорий напрямую из объектов
+        const categoryNames = rawCategories
+          .map((c) => c?.category_name || c?.name)
+          .filter((name) => name?.trim())
+          .join(', ')
 
-        // 🔧 Нормализация категорий
-        let catIds = []
-        if (s.categories && Array.isArray(s.categories)) {
-          catIds = s.categories
-        } else if (s.category_ids && Array.isArray(s.category_ids)) {
-          catIds = s.category_ids
-        } else if (typeof s.categories === 'number') {
-          catIds = [s.categories]
-        }
-
-        // 🔧 Заполняем categoryNames сразу
-        const categoryNames = getCategoryNamesByIds(catIds, categories.value)
+        // 🔥 Считаем этапы из ответа
+        const stages = Array.isArray(s.stages) ? s.stages : []
+        const stagesCount = stages.length
 
         const skillObj = {
           id: s.id,
           name: s.title || s.name || '',
           title: s.title || '',
           description: s.description || '',
-          materials: s.literature || s.materials || '',
+          materials: s.literature || '',
           literature: s.literature || '',
+          categories: rawCategories,
           categoryIds: catIds,
-          categories: catIds,
-          categoryNames, // 🔧 Теперь заполнено!
-          stages: normalizedStages,
-          stagesCount: normalizedStages.length, // 🔧 Для совместимости
+          categoryNames: categoryNames || 'Не указаны',
+          stages: stages, // ✅ Сохраняем этапы для отображения количества
+          stagesCount: stagesCount, // ✅ Количество этапов
         }
-
         newSkills.push(skillObj)
-      } catch (stageErr) {
-        console.error('Error normalizing skill:', s, stageErr)
+      } catch (err) {
+        console.error('Error normalizing skill:', s, err)
       }
     }
-
     skills.value = newSkills
   } catch (err) {
     console.error('Error fetching skills:', err)
@@ -213,10 +177,8 @@ const fetchSkills = async () => {
   }
 }
 
-// === Загрузка данных при монтировании ===
 onMounted(async () => {
   loading.value = true
-  // 🔧 Сначала загружаем категории, потом навыки (чтобы подставить имена)
   await fetchCategories()
   await fetchSkills()
   loading.value = false
@@ -230,14 +192,12 @@ onMounted(async () => {
   padding: var(--spacing-md);
   color: var(--text);
 }
-
 .panel-header h1 {
   margin: 0;
   font-size: 28px;
   font-weight: var(--font-weight-bold);
   color: var(--text);
 }
-
 .panel-tabs {
   display: flex;
   gap: var(--spacing-xs);
@@ -248,7 +208,6 @@ onMounted(async () => {
   width: fit-content;
   flex-wrap: wrap;
 }
-
 .tab-btn {
   display: flex;
   align-items: center;
@@ -263,21 +222,17 @@ onMounted(async () => {
   color: var(--gray);
   transition: all 0.2s;
 }
-
 .tab-btn:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.1);
 }
-
 .tab-btn.active {
   background: var(--primary);
   color: #fff;
 }
-
 .tab-btn .el-icon {
   font-size: 16px;
 }
-
 @media (max-width: 768px) {
   .panel-tabs {
     flex-direction: column;
