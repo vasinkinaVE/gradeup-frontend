@@ -127,12 +127,14 @@
 
         <div class="view-row">
           <div class="view-label">Описание</div>
-          <div class="view-value">{{ viewingSkill.description || '—' }}</div>
+          <div class="view-value view-value-multiline">{{ viewingSkill.description || '—' }}</div>
         </div>
 
         <div class="view-row">
           <div class="view-label">Материалы для подготовки</div>
-          <div class="view-value">{{ viewingSkill.materials || 'Нет материалов' }}</div>
+          <div class="view-value view-value-multiline">
+            {{ viewingSkill.materials || 'Нет материалов' }}
+          </div>
         </div>
 
         <div class="view-row">
@@ -985,6 +987,11 @@ watch(
   font-size: 14px;
   color: var(--text);
   line-height: 1.5;
+}
+/* 🔧 Новый класс для сохранения переносов строк в многострочных полях */
+.view-value-multiline {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .stages-tabs {
   display: flex;

@@ -3,7 +3,7 @@
   <section class="tab-content">
     <div class="section-header">
       <h2>Управление отделами</h2>
-      <el-button type="primary" @click="openDepartmentDialog()">
+      <el-button type="primary" @click="openDepartmentDialog()" :loading="loading">
         <el-icon><Plus /></el-icon>
         Создать отдел
       </el-button>
@@ -27,11 +27,13 @@
       border
       class="data-table"
       @row-click="viewDepartment"
+      v-loading="loading"
+      :empty-text="loading ? 'Загрузка...' : 'Нет отделов'"
     >
       <el-table-column prop="name" label="Название отдела" min-width="250" />
-      <el-table-column prop="profilesCount" label="Профилей" width="100" align="center">
+      <el-table-column label="Профилей" width="100" align="center">
         <template #default="{ row }">
-          {{ row.availableProfileIds?.length || 0 }}
+          {{ row.profiles?.length || row.availableProfileIds?.length || 0 }}
         </template>
       </el-table-column>
       <el-table-column prop="description" label="Описание" min-width="250" show-overflow-tooltip />
@@ -45,7 +47,7 @@
       class="admin-dialog"
       destroy-on-close
     >
-      <div v-if="viewingDepartment" class="view-content">
+      <div v-if="viewingDepartment" class="view-content" v-loading="viewLoading">
         <div class="view-row">
           <div class="view-label">Название отдела</div>
           <div class="view-value">{{ viewingDepartment.name }}</div>
@@ -56,17 +58,26 @@
           <div class="view-value">{{ viewingDepartment.description || '—' }}</div>
         </div>
 
+        <div class="view-row" v-if="viewingDepartment.supervisor">
+          <div class="view-label">Руководитель</div>
+          <div class="view-value">
+            {{ viewingDepartment.supervisor.last_name }}
+            {{ viewingDepartment.supervisor.first_name }}
+            {{ viewingDepartment.supervisor.patronymic || '' }}
+          </div>
+        </div>
+
         <div class="view-row">
           <div class="view-label">Доступные профили</div>
           <div class="view-value">
-            <div v-if="viewingDepartment.profiles?.length" class="profiles-list">
+            <div v-if="getDepartmentProfiles(viewingDepartment).length" class="profiles-list">
               <el-tag
-                v-for="profile in viewingDepartment.profiles"
+                v-for="profile in getDepartmentProfiles(viewingDepartment)"
                 :key="profile.id"
                 size="small"
                 class="profile-tag"
               >
-                {{ profile.position }}
+                {{ profile.title || profile.position }}
               </el-tag>
             </div>
             <span v-else>Профили не добавлены</span>
@@ -74,8 +85,12 @@
         </div>
       </div>
       <template #footer>
-        <el-button :icon="Edit" @click="handleEditDepartment">Редактировать</el-button>
-        <el-button type="danger" :icon="Delete" @click="confirmDeleteDepartment">Удалить</el-button>
+        <el-button :icon="Edit" @click="handleEditDepartment" :loading="loading"
+          >Редактировать</el-button
+        >
+        <el-button type="danger" :icon="Delete" @click="confirmDeleteDepartment" :loading="loading"
+          >Удалить</el-button
+        >
       </template>
     </el-dialog>
 
@@ -87,7 +102,7 @@
       class="admin-dialog"
       destroy-on-close
     >
-      <el-form :model="departmentForm" label-position="top">
+      <el-form :model="departmentForm" label-position="top" v-loading="loading">
         <el-form-item label="Название отдела *" prop="name">
           <el-input v-model="departmentForm.name" placeholder="Например: Отдел разработки" />
         </el-form-item>
@@ -101,33 +116,55 @@
           />
         </el-form-item>
 
-        <el-form-item label="Доступные профили" prop="availableProfileIds">
+        <!-- 🔹 Руководитель (опционально) -->
+        <el-form-item label="Руководитель" prop="supervisor_id">
           <el-select
-            v-model="departmentForm.availableProfileIds"
+            v-model="departmentForm.supervisor_id"
+            placeholder="Выберите руководителя"
+            clearable
+            filterable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="emp in availableSupervisors"
+              :key="emp.id"
+              :label="`${emp.last_name} ${emp.first_name} ${emp.patronymic || ''}`.trim()"
+              :value="emp.id"
+            />
+          </el-select>
+          <div class="form-hint">Необязательно: можно назначить позже</div>
+        </el-form-item>
+
+        <el-form-item label="Доступные профили" prop="profiles">
+          <el-select
+            v-model="departmentForm.profiles"
             placeholder="Выберите профили"
             multiple
             filterable
+            collapse-tags
+            collapse-tags-tooltip
+            :max-collapse-tags="3"
             style="width: 100%"
           >
             <el-option
               v-for="profile in allProfiles"
               :key="profile.id"
-              :label="profile.position"
+              :label="profile.title || profile.position"
               :value="profile.id"
             >
-              <span>{{ profile.position }}</span>
+              <span>{{ profile.title || profile.position }}</span>
               <span v-if="profile.description" class="option-desc">
                 — {{ profile.description }}</span
               >
             </el-option>
           </el-select>
-          <div class="form-hint">Выберите профили, которые могут быть назначены в этом отделе</div>
+          <div class="form-hint">Профили, которые могут быть назначены в этом отделе</div>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="departmentDialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="saveDepartment">Сохранить</el-button>
+        <el-button @click="departmentDialogVisible = false" :disabled="loading">Отмена</el-button>
+        <el-button type="primary" @click="saveDepartment" :loading="loading">Сохранить</el-button>
       </template>
     </el-dialog>
   </section>
@@ -147,17 +184,28 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  // Опционально: список сотрудников для выбора руководителя
+  employees: {
+    type: Array,
+    default: () => [],
+  },
 })
 
-const emit = defineEmits(['update:departments'])
+const emit = defineEmits(['update:departments', 'refresh'])
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 // === Поиск ===
 const departmentSearch = ref('')
 
 const filteredDepartments = computed(() => {
-  if (!departmentSearch.value) return props.departments
+  if (!departmentSearch.value) return props.departments || []
   const q = departmentSearch.value.toLowerCase()
-  return props.departments.filter(
+  return (props.departments || []).filter(
     (d) => d.name?.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q),
   )
 })
@@ -165,6 +213,7 @@ const filteredDepartments = computed(() => {
 // === Модальные окна ===
 const departmentDialogVisible = ref(false)
 const viewDepartmentVisible = ref(false)
+const viewLoading = ref(false)
 
 const editingDepartment = ref(null)
 const viewingDepartment = ref(null)
@@ -173,35 +222,230 @@ const viewingDepartment = ref(null)
 const departmentForm = ref({
   name: '',
   description: '',
-  availableProfileIds: [],
+  supervisor_id: null,
+  profiles: [], // массив ID профилей
 })
 
-// === Хелперы ===
-const getProfileById = (id) => {
-  return props.allProfiles.find((p) => p.id === id)
+// === Доступные руководители (фильтруем сотрудников) ===
+const availableSupervisors = computed(() => {
+  return (props.employees || []).filter((emp) => emp.id && emp.first_name)
+})
+
+// === Хелперы: нормализация данных ===
+
+/**
+ * Преобразует ответ бэкенда в формат для фронтенда
+ */
+const normalizeDepartmentFromBackend = (backendDept) => {
+  if (!backendDept) return null
+
+  let data = backendDept
+  if (typeof backendDept === 'string') {
+    try {
+      data = JSON.parse(backendDept)
+    } catch {
+      return null
+    }
+  }
+
+  return {
+    id: data.id,
+    name: data.department_name || data.name || '',
+    description: data.description || '',
+    supervisor_id: data.supervisor_id || data.supervisor?.id || null,
+    supervisor: data.supervisor || null,
+    // Backend возвращает profiles как массив объектов {id, title} или просто [id]
+    profiles: Array.isArray(data.profiles)
+      ? data.profiles.map((p) => (typeof p === 'object' ? p.id : p))
+      : [],
+    // Для обратной совместимости
+    availableProfileIds: Array.isArray(data.profiles)
+      ? data.profiles.map((p) => (typeof p === 'object' ? p.id : p))
+      : [],
+  }
 }
 
-const getProfilesByIds = (ids) => {
-  if (!ids?.length) return []
-  return ids.map((id) => getProfileById(id)).filter(Boolean)
+/**
+ * Подготавливает данные формы для отправки на бэкенд
+ */
+const prepareDepartmentForBackend = (frontendDept) => {
+  return {
+    department_name: frontendDept.name || frontendDept.department_name || '',
+    description: frontendDept.description || '',
+    supervisor_id: frontendDept.supervisor_id || null,
+    profiles: frontendDept.profiles || frontendDept.availableProfileIds || [],
+  }
+}
+
+/**
+ * Получает полные объекты профилей по их ID
+ */
+const getDepartmentProfiles = (department) => {
+  const profileIds = department.profiles || department.availableProfileIds || []
+  return profileIds
+    .map((id) => props.allProfiles?.find((p) => p.id === id || String(p.id) === String(id)))
+    .filter(Boolean)
+}
+
+// === Серверные методы: Departments ===
+
+/**
+ * Получить все отделы
+ */
+const fetchDepartments = async () => {
+  try {
+    emit('refresh')
+    const res = await fetch(`${API_BASE}/admin/departments/`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+
+    const normalized = Array.isArray(data) ? data.map(normalizeDepartmentFromBackend) : []
+
+    emit('update:departments', normalized)
+    return normalized
+  } catch (err) {
+    console.error('Error fetching departments:', err)
+    ElMessage.error('Не удалось загрузить отделы')
+    emit('update:departments', [])
+    return []
+  }
+}
+
+/**
+ * Получить отдел по ID
+ */
+const fetchDepartmentById = async (departmentId) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/departments/${departmentId}`, {
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+    return normalizeDepartmentFromBackend(data)
+  } catch (err) {
+    console.error('Error fetching department:', err)
+    ElMessage.error('Не удалось загрузить отдел')
+    return null
+  }
+}
+
+/**
+ * Создать новый отдел
+ */
+const createDepartment = async (departmentData) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/departments/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(departmentData),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+
+      // 🔧 Обработка 409 Conflict - отдел с таким именем уже существует
+      if (res.status === 409) {
+        throw new Error('Отдел с таким названием уже существует')
+      }
+
+      throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
+    }
+
+    return await res.json()
+  } catch (error) {
+    console.error('Error creating department:', error)
+    throw error
+  }
+}
+
+/**
+ * Обновить отдел
+ */
+const updateDepartment = async (departmentId, departmentData) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/departments/${departmentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(departmentData),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+
+      // 🔧 Обработка 409 Conflict - отдел с таким именем уже существует
+      if (res.status === 409) {
+        throw new Error('Отдел с таким названием уже существует')
+      }
+
+      throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
+    }
+
+    return await res.json()
+  } catch (error) {
+    console.error('Error updating department:', error)
+    throw error
+  }
+}
+
+/**
+ * Удалить отдел
+ */
+const deleteDepartment = async (departmentId) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/departments/${departmentId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || `HTTP ${res.status}`)
+    }
+
+    return await res.json()
+  } catch (error) {
+    console.error('Error deleting department:', error)
+    throw error
+  }
 }
 
 // === Отделы: действия ===
-const viewDepartment = (department) => {
-  viewingDepartment.value = {
-    ...department,
-    profiles: getProfilesByIds(department.availableProfileIds),
+
+/**
+ * Просмотр отдела с загрузкой полных данных
+ */
+const viewDepartment = async (department) => {
+  try {
+    viewLoading.value = true
+    // Загружаем полные данные с сервера (с руководителем и профилями)
+    const fullDept = await fetchDepartmentById(department.id)
+    if (fullDept) {
+      viewingDepartment.value = fullDept
+    } else {
+      viewingDepartment.value = normalizeDepartmentFromBackend(department)
+    }
+    viewDepartmentVisible.value = true
+  } catch (err) {
+    console.error('Error viewing department:', err)
+    ElMessage.error('Не удалось загрузить отдел')
+    viewingDepartment.value = normalizeDepartmentFromBackend(department)
+    viewDepartmentVisible.value = true
+  } finally {
+    viewLoading.value = false
   }
-  viewDepartmentVisible.value = true
 }
 
 const handleEditDepartment = () => {
-  openDepartmentDialog(viewingDepartment.value)
+  if (viewingDepartment.value) {
+    openDepartmentDialog(viewingDepartment.value)
+  }
   viewDepartmentVisible.value = false
 }
 
 const confirmDeleteDepartment = async () => {
-  if (!viewingDepartment.value) return
+  if (!viewingDepartment.value?.id) return
   try {
     await ElMessageBox.confirm(
       `Удалить отдел "${viewingDepartment.value.name}"?`,
@@ -212,83 +456,85 @@ const confirmDeleteDepartment = async () => {
         cancelButtonText: 'Отмена',
       },
     )
-    emit(
-      'update:departments',
-      props.departments.filter((d) => d.id !== viewingDepartment.value.id),
-    )
+    emit('refresh')
+    await deleteDepartment(viewingDepartment.value.id)
     ElMessage.success('Отдел удалён')
+    // Перезагружаем список
+    await fetchDepartments()
     viewDepartmentVisible.value = false
-  } catch {
-    // отменено
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error('Error deleting department:', err)
+      ElMessage.error(err.message || 'Ошибка при удалении отдела')
+    }
   }
 }
 
-const editDepartment = (department) => {
-  openDepartmentDialog(department)
-}
-
+/**
+ * Открыть диалог создания/редактирования
+ */
 const openDepartmentDialog = (department = null) => {
   if (department) {
     editingDepartment.value = department
+    const normalized = normalizeDepartmentFromBackend(department)
     departmentForm.value = {
-      name: department.name || '',
-      description: department.description || '',
-      availableProfileIds: department.availableProfileIds
-        ? [...department.availableProfileIds]
-        : [],
+      name: normalized.name || '',
+      description: normalized.description || '',
+      supervisor_id: normalized.supervisor_id || null,
+      profiles: normalized.profiles || normalized.availableProfileIds || [],
     }
   } else {
     editingDepartment.value = null
     departmentForm.value = {
       name: '',
       description: '',
-      availableProfileIds: [],
+      supervisor_id: null,
+      profiles: [],
     }
   }
   departmentDialogVisible.value = true
 }
 
-const saveDepartment = () => {
+/**
+ * Сохранить отдел (создание или обновление)
+ */
+const saveDepartment = async () => {
   if (!departmentForm.value.name?.trim()) {
-    ElMessage.warning('Введите название отдела')
-    return
+    return ElMessage.warning('Введите название отдела')
   }
 
-  if (editingDepartment.value) {
-    // Редактирование
-    const idx = props.departments.findIndex((d) => d.id === editingDepartment.value.id)
-    if (idx !== -1) {
-      const updated = [...props.departments]
-      updated[idx] = { ...updated[idx], ...departmentForm.value }
-      emit('update:departments', updated)
-    }
-    ElMessage.success('Отдел обновлён')
-  } else {
-    // Создание
-    const newDepartment = {
-      id: Date.now(),
-      ...departmentForm.value,
-    }
-    emit('update:departments', [newDepartment, ...props.departments])
-    ElMessage.success('Отдел создан')
-  }
-  departmentDialogVisible.value = false
-}
-
-const deleteDepartment = async (department) => {
   try {
-    await ElMessageBox.confirm(`Удалить отдел "${department.name}"?`, 'Подтверждение', {
-      type: 'warning',
-    })
-    emit(
-      'update:departments',
-      props.departments.filter((d) => d.id !== department.id),
-    )
-    ElMessage.success('Отдел удалён')
-  } catch {
-    /* отменено */
+    emit('refresh')
+    const payload = prepareDepartmentForBackend(departmentForm.value)
+
+    if (editingDepartment.value?.id) {
+      // Обновление
+      await updateDepartment(editingDepartment.value.id, payload)
+      ElMessage.success('Отдел обновлён')
+    } else {
+      // Создание
+      await createDepartment(payload)
+      ElMessage.success('Отдел создан')
+    }
+
+    // Перезагружаем список
+    await fetchDepartments()
+    departmentDialogVisible.value = false
+  } catch (err) {
+    console.error('Error saving department:', err)
+    ElMessage.error(err.message || 'Ошибка сохранения отдела')
   }
 }
+
+// === Публичные методы для родителя ===
+const reload = async () => {
+  await fetchDepartments()
+}
+
+defineExpose({
+  reload,
+  fetchDepartments,
+})
 </script>
 
 <style scoped>
