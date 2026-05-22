@@ -31,6 +31,15 @@
       :empty-text="loading ? 'Загрузка...' : 'Нет отделов'"
     >
       <el-table-column prop="name" label="Название отдела" min-width="250" />
+      <el-table-column label="Руководитель" min-width="200">
+        <template #default="{ row }">
+          {{
+            row.supervisor
+              ? `${row.supervisor.last_name} ${row.supervisor.first_name} ${row.supervisor.patronymic || ''}`.trim()
+              : '—'
+          }}
+        </template>
+      </el-table-column>
       <el-table-column label="Профилей" width="100" align="center">
         <template #default="{ row }">
           {{ row.profiles?.length || row.availableProfileIds?.length || 0 }}
@@ -58,12 +67,14 @@
           <div class="view-value">{{ viewingDepartment.description || '—' }}</div>
         </div>
 
-        <div class="view-row" v-if="viewingDepartment.supervisor">
+        <div class="view-row">
           <div class="view-label">Руководитель</div>
           <div class="view-value">
-            {{ viewingDepartment.supervisor.last_name }}
-            {{ viewingDepartment.supervisor.first_name }}
-            {{ viewingDepartment.supervisor.patronymic || '' }}
+            {{
+              viewingDepartment.supervisor
+                ? `${viewingDepartment.supervisor.last_name} ${viewingDepartment.supervisor.first_name} ${viewingDepartment.supervisor.patronymic || ''}`.trim()
+                : '—'
+            }}
           </div>
         </div>
 
@@ -344,12 +355,6 @@ const createDepartment = async (departmentData) => {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-
-      // 🔧 Обработка 409 Conflict - отдел с таким именем уже существует
-      if (res.status === 409) {
-        throw new Error('Отдел с таким названием уже существует')
-      }
-
       throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
     }
 
@@ -373,12 +378,6 @@ const updateDepartment = async (departmentId, departmentData) => {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-
-      // 🔧 Обработка 409 Conflict - отдел с таким именем уже существует
-      if (res.status === 409) {
-        throw new Error('Отдел с таким названием уже существует')
-      }
-
       throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
     }
 
