@@ -180,10 +180,12 @@ const normalizeStageType = (type) => {
 }
 
 // === Навыки ===
+// 🔧 ИЗМЕНЕНО: используем /skills/stages вместо /skills/
 const fetchSkills = async () => {
   try {
     skillsLoading.value = true
-    const res = await fetch(`${API_BASE}/skills/`)
+    // 🔧 Запрос к новому эндпоинту для получения списка навыков с этапами
+    const res = await fetch(`${API_BASE}/skills/stages`)
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
 
