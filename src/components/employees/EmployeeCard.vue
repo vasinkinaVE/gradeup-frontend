@@ -8,11 +8,9 @@
     @close="handleClose"
   >
     <div v-if="employee" class="employee-detail" v-loading="detailLoading">
-      <!-- Основная информация -->
       <div class="detail-section">
         <h3 class="section-title">Основная информация</h3>
         <div class="info-grid">
-          <!-- ФИО -->
           <div class="info-item">
             <span class="info-label">ФИО:</span>
             <span v-if="!isEditMode || isSupervisor" class="info-value">{{
@@ -24,27 +22,21 @@
               <el-input v-model="editForm.patronymic" placeholder="Отчество" class="edit-input" />
             </div>
           </div>
-          <!-- Должность -->
           <div class="info-item">
             <span class="info-label">Должность:</span>
-            <span v-if="!isEditMode || isSupervisor" class="info-value">{{
-              employee.position
-            }}</span>
+            <span v-if="!isEditMode" class="info-value">{{ employee.position }}</span>
             <el-input
               v-else
               v-model="editForm.position"
               placeholder="Должность"
               class="edit-input-full"
-              disabled
             />
           </div>
-          <!-- Email -->
           <div class="info-item">
             <span class="info-label">Email:</span>
             <span v-if="!isEditMode || isSupervisor" class="info-value">{{ employee.email }}</span>
             <el-input v-else v-model="editForm.email" placeholder="Email" class="edit-input-full" />
           </div>
-          <!-- Отдел -->
           <div class="info-item" v-if="!isSupervisor">
             <span class="info-label">Отдел:</span>
             <span v-if="!isEditMode" class="info-value">{{
@@ -65,7 +57,6 @@
               />
             </el-select>
           </div>
-          <!-- Роль -->
           <div class="info-item" v-if="!isSupervisor">
             <span class="info-label">Роль:</span>
             <span v-if="!isEditMode" class="info-value">{{
@@ -88,7 +79,6 @@
             <span v-else class="info-value">{{ getRoleNameById(editForm.roleId) }}</span>
           </div>
         </div>
-        <!-- Кнопки управления -->
         <div class="detail-actions" v-if="isAdmin">
           <el-button v-if="!isEditMode" type="primary" @click="enableEditMode"
             >Редактировать</el-button
@@ -98,7 +88,6 @@
             <el-button type="primary" @click="saveChanges">Сохранить</el-button>
           </template>
         </div>
-        <!-- Кнопка повышения -->
         <div
           v-if="(isSupervisor || isAdmin) && nextLevel && isPromotionAvailable"
           class="promotion-actions"
@@ -107,10 +96,32 @@
         </div>
       </div>
 
-      <!-- Профиль -->
       <div class="detail-section profile-section">
         <h3 class="section-title">Профиль</h3>
-        <ProfileCard v-if="selectedProfileData" :profile="selectedProfileData" />
+        <!-- ✅ Передаем userFullProfile с приоритетом над шаблонным профилем -->
+        <ProfileCard
+          v-if="employee.profileId && (userFullProfile || selectedProfileData)"
+          :profile="userFullProfile || selectedProfileData"
+          :user-id="employee.userId"
+          :is-current-user="employee.userId === authUserId"
+          :fetch-skill-detail="fetchSkillDetail"
+          :fetch-skill-questions="fetchSkillQuestions"
+        />
+
+        <!-- ✅ Кнопка отвязки профиля -->
+        <div v-if="employee.profileId && (isAdmin || isSupervisor)" class="unlink-profile-section">
+          <el-button
+            type="danger"
+            link
+            size="small"
+            @click="unlinkProfile"
+            :disabled="assignLoading"
+          >
+            <el-icon style="margin-right: 4px"><Remove /></el-icon>
+            Отвязать профиль
+          </el-button>
+          <span class="unlink-hint">Профиль будет удалён, прогресс сброшен</span>
+        </div>
 
         <div v-else class="profile-unassigned">
           <span class="unassigned-text">Профиль не назначен</span>
@@ -133,25 +144,20 @@
                   <el-icon
                     class="collapse-icon"
                     :class="{ expanded: expandedProfiles.includes(profile.id) }"
-                  >
-                    <ArrowRight />
-                  </el-icon>
+                    ><ArrowRight
+                  /></el-icon>
                 </div>
-
                 <el-collapse-transition>
                   <div
                     v-show="expandedProfiles.includes(profile.id)"
                     class="profile-collapse-content"
                   >
                     <div class="profile-description">
-                      <strong>Описание:</strong>
-                      {{ profile.description || 'Описание не добавлено' }}
+                      <strong>Описание:</strong> {{ profile.description || 'Не добавлено' }}
                     </div>
-
                     <div v-if="!profile.levels?.length" class="empty-placeholder">
                       Уровни не добавлены
                     </div>
-
                     <div v-else>
                       <div
                         v-for="(level, lIdx) in profile.levels || []"
@@ -170,22 +176,18 @@
                             :class="{
                               expanded: expandedLevels[`${profile.id}_${level.id || lIdx}`],
                             }"
-                          >
-                            <ArrowRight />
-                          </el-icon>
+                            ><ArrowRight
+                          /></el-icon>
                         </div>
-
                         <el-collapse-transition>
                           <div
                             v-show="expandedLevels[`${profile.id}_${level.id || lIdx}`]"
                             class="level-collapse-content"
                           >
                             <div class="skills-section-label">Навыки</div>
-
                             <div v-if="!getLevelSkillIds(level).length" class="empty-placeholder">
                               Навыки не добавлены
                             </div>
-
                             <div v-else class="skills-list-container">
                               <div
                                 v-for="skillItem in getLevelSkillIds(level)"
@@ -200,11 +202,9 @@
                                   <el-icon
                                     class="collapse-icon"
                                     :class="{ expanded: expandedSkills.includes(skillItem.id) }"
-                                  >
-                                    <ArrowRight />
-                                  </el-icon>
+                                    ><ArrowRight
+                                  /></el-icon>
                                 </div>
-
                                 <el-collapse-transition>
                                   <div
                                     v-show="expandedSkills.includes(skillItem.id)"
@@ -212,66 +212,53 @@
                                   >
                                     <div class="skill-description">
                                       <strong>Описание:</strong>
-                                      {{
-                                        getFullSkillDescription(skillItem.id) ||
-                                        'Описание не добавлено'
-                                      }}
+                                      {{ getFullSkillDescription(skillItem.id) || 'Не добавлено' }}
                                     </div>
-
                                     <div class="skill-materials">
-                                      <strong>Материалы для подготовки:</strong>
+                                      <strong>Материалы:</strong>
                                       <ul v-if="getFullSkillMaterialsArray(skillItem.id)?.length">
                                         <li
-                                          v-for="(material, idx) in getFullSkillMaterialsArray(
+                                          v-for="(mat, idx) in getFullSkillMaterialsArray(
                                             skillItem.id,
-                                          ) || []"
+                                          )"
                                           :key="idx"
                                         >
-                                          {{ material }}
+                                          {{ mat }}
                                         </li>
                                       </ul>
                                       <span v-else class="empty-placeholder"
                                         >Материалы не добавлены</span
                                       >
                                     </div>
-
                                     <div class="skill-stages-section">
-                                      <div class="skill-stages-header">
-                                        <strong>Этапы:</strong>
-                                      </div>
-
+                                      <div class="skill-stages-header"><strong>Этапы:</strong></div>
                                       <div
                                         v-if="!getFullSkillStages(skillItem.id)?.length"
                                         class="empty-placeholder"
                                       >
                                         Этапы не добавлены
                                       </div>
-
                                       <div v-else class="skill-stages">
                                         <div class="stages-tabs">
                                           <div
-                                            v-for="stageType in getSkillStageTypesWithContent(
+                                            v-for="st in getSkillStageTypesWithContent(
                                               skillItem.id,
                                             )"
-                                            :key="stageType.key"
+                                            :key="st.key"
                                             class="stage-tab"
                                             :class="{
                                               active:
-                                                getSkillSelectedStageType(skillItem.id) ===
-                                                stageType.key,
+                                                getSkillSelectedStageType(skillItem.id) === st.key,
                                               'has-content': hasStageContent(
                                                 getFullSkillStages(skillItem.id),
-                                                stageType.key,
+                                                st.key,
                                               ),
                                             }"
-                                            @click="
-                                              selectSkillStageType(skillItem.id, stageType.key)
-                                            "
+                                            @click="selectSkillStageType(skillItem.id, st.key)"
                                           >
-                                            {{ stageType.label }}
+                                            {{ st.label }}
                                           </div>
                                         </div>
-
                                         <div class="stage-content">
                                           <div
                                             v-for="stage in getSkillStagesByTypeSimple(
@@ -288,7 +275,6 @@
                                                 )
                                               }}
                                             </div>
-
                                             <div
                                               v-if="
                                                 getSkillSelectedStageType(skillItem.id) ===
@@ -311,8 +297,8 @@
                                                     )
                                                   "
                                                 >
-                                                  <span>{{ idx + 1 }}.</span>
-                                                  <span class="qa-question-text">{{
+                                                  <span>{{ idx + 1 }}.</span
+                                                  ><span class="qa-question-text">{{
                                                     qa.text || qa.question || 'Без текста'
                                                   }}</span>
                                                   <el-icon
@@ -323,9 +309,8 @@
                                                           `${skillItem.id}_${stage.id || idx}_${idx}`
                                                         ],
                                                     }"
-                                                  >
-                                                    <ArrowRight />
-                                                  </el-icon>
+                                                    ><ArrowRight
+                                                  /></el-icon>
                                                 </div>
                                                 <el-collapse-transition>
                                                   <div
@@ -342,7 +327,6 @@
                                                 </el-collapse-transition>
                                               </div>
                                             </div>
-
                                             <div v-else class="stage-tasks-criteria">
                                               <div
                                                 v-if="stage.questions?.length"
@@ -363,8 +347,8 @@
                                                       )
                                                     "
                                                   >
-                                                    <span>{{ idx + 1 }}.</span>
-                                                    <span class="task-text">{{
+                                                    <span>{{ idx + 1 }}.</span
+                                                    ><span class="task-text">{{
                                                       task.text || task.question || 'Без текста'
                                                     }}</span>
                                                     <el-icon
@@ -375,9 +359,8 @@
                                                             `${skillItem.id}_${stage.id || idx}_${idx}`
                                                           ],
                                                       }"
-                                                    >
-                                                      <ArrowRight />
-                                                    </el-icon>
+                                                      ><ArrowRight
+                                                    /></el-icon>
                                                   </div>
                                                   <el-collapse-transition>
                                                     <div
@@ -414,14 +397,9 @@
               </div>
             </div>
             <div class="assign-profile-actions" v-if="selectedProfileForAssign">
-              <el-button
-                type="primary"
-                size="small"
-                @click="assignProfile"
-                :loading="assignLoading"
+              <el-button type="primary" size="small" @click="assignProfile" :loading="assignLoading"
+                >Назначить профиль</el-button
               >
-                Назначить профиль
-              </el-button>
             </div>
           </div>
         </div>
@@ -431,9 +409,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight } from '@element-plus/icons-vue'
+import { ArrowRight, Remove } from '@element-plus/icons-vue'
 import ProfileCard from '@/components/common/ProfileCard.vue'
 
 const props = defineProps<{
@@ -445,6 +423,7 @@ const props = defineProps<{
   availableRoles: any[]
   availableProfiles: any[]
   allProfilesData: any[]
+  userFullProfile?: any | null
 }>()
 
 const emit = defineEmits<{
@@ -452,15 +431,16 @@ const emit = defineEmits<{
   (e: 'update', data: any): void
   (e: 'assign-profile', userId: number, profileId: number): void
   (e: 'promote', employee: any, nextLevel: any): void
+  (e: 'unlink-profile', userId: number): void
 }>()
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
+const authUserId = computed(() => props.employee?.userId)
 
 const detailLoading = ref(false)
 const isEditMode = ref(false)
 const editForm = ref<any>({})
-const assignLoading = ref(false) // 🔧 Состояние загрузки для кнопки назначения
-
+const assignLoading = ref(false)
 const selectedProfileForAssign = ref<number | null>(null)
 const expandedProfiles = ref<number[]>([])
 const expandedLevels = ref<Record<string, boolean>>({})
@@ -469,18 +449,14 @@ const expandedQA = ref<Record<string, boolean>>({})
 const expandedTasks = ref<Record<string, boolean>>({})
 const skillSelectedStageTypes = ref<Record<number, string>>({})
 
+const skillsCache = new Map<number, any>()
 const stageTypes = [
   { key: 'practice', label: 'Практическое задание' },
   { key: 'attestation', label: 'Аттестация' },
   { key: 'performance', label: 'Performance review' },
 ]
 
-const fullSkillsCache = ref<Record<number, any>>({})
-
-const visible = computed({
-  get: () => props.visible,
-  set: (value) => emit('update:visible', value),
-})
+const visible = computed({ get: () => props.visible, set: (v) => emit('update:visible', v) })
 
 const selectedProfileData = computed(() => {
   if (!props.employee?.profileId) return null
@@ -491,208 +467,149 @@ const nextLevel = computed(() => {
   if (!props.employee?.profileId) return null
   const profile = props.allProfilesData.find((p) => p.id === props.employee.profileId)
   if (!profile?.levels) return null
-
   const currentLevelName = props.employee.profileLevel
   if (!currentLevelName) return profile.levels[0] || null
-
-  const currentLevelIndex = profile.levels.findIndex(
-    (level: any) => level.name === currentLevelName,
+  const idx = profile.levels.findIndex(
+    (l: any) => l.name === currentLevelName || l.level_name === currentLevelName,
   )
-
-  if (currentLevelIndex === -1 || currentLevelIndex >= profile.levels.length - 1) {
-    return null
-  }
-  return profile.levels[currentLevelIndex + 1]
+  return idx === -1 || idx >= profile.levels.length - 1 ? null : profile.levels[idx + 1]
 })
 
-const isPromotionAvailable = computed(() => {
-  if (!props.employee?.progress || props.employee.progress !== 100) return false
-  return !!nextLevel.value
-})
+const isPromotionAvailable = computed(() => props.employee?.progress >= 100 && !!nextLevel.value)
 
-const mapTypeToFrontendSimple = (backendType: string | null | undefined) => {
-  if (!backendType) return 'practice'
-  const t = String(backendType).trim()
-  if (t === 'Аттестация') return 'attestation'
-  if (t === 'Performance review') return 'performance'
-  if (t === 'Практическое задание') return 'practice'
+const mapTypeToFrontendSimple = (t: string | null | undefined) => {
+  if (!t) return 'practice'
+  const s = String(t).trim().toLowerCase()
+  if (s === 'аттестация' || s === 'certification') return 'attestation'
+  if (s === 'performance review' || s === 'performance_review') return 'performance'
   return 'practice'
 }
 
-const fetchFullSkillData = async (skillId: number) => {
-  if (fullSkillsCache.value[skillId]) return fullSkillsCache.value[skillId]
-
+const fetchSkillDetail = async (userId: number, skillId: number) => {
   try {
-    const res = await fetch(`${API_BASE}/skills/${skillId}`)
+    const res = await fetch(`${API_BASE}/users/${userId}/skills/${skillId}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+const fetchSkillQuestions = async (userId: number, skillId: number) => {
+  try {
+    const res = await fetch(`${API_BASE}/users/${userId}/skills/${skillId}/questions`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+const fetchFullSkillData = async (skillId: number) => {
+  if (skillsCache.has(skillId)) return skillsCache.get(skillId)
+  try {
+    const res = await fetch(`${API_BASE}/skills/${skillId}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     let data = await res.json()
-
-    if (data?.skill && !data?.stages) {
-      data = { ...data, ...data.skill }
-    }
-
+    if (data?.skill && !data?.stages) data = { ...data, ...data.skill }
     if (data?.stages && Array.isArray(data.stages)) {
-      data.stages = data.stages.map((stage: any) => {
-        const rawQuestions = stage.questions || stage.questions_list || []
-        const questions = Array.isArray(rawQuestions)
-          ? rawQuestions.map((q: any) => ({
-              id: q?.id || null,
-              text: q?.question || q?.text || '',
-              answer: q?.answer || '',
-              num: q?.num || 1,
-            }))
-          : []
-
-        return {
-          id: stage?.id || null,
-          type: mapTypeToFrontendSimple(stage.confirmation_type),
-          confirmation_type: stage.confirmation_type,
-          questions,
-        }
-      })
+      data.stages = data.stages.map((st: any) => ({
+        id: st?.id || null,
+        type: mapTypeToFrontendSimple(st.confirmation_type),
+        confirmation_type: st.confirmation_type,
+        questions: (Array.isArray(st.questions) ? st.questions : []).map((q: any) => ({
+          id: q?.id,
+          text: q?.question || q?.text || '',
+          answer: q?.answer || '',
+          num: q?.num || 1,
+        })),
+      }))
     } else {
       data.stages = []
     }
-
-    fullSkillsCache.value[skillId] = data
+    skillsCache.set(skillId, data)
     return data
-  } catch (err) {
-    console.error(`Error fetching skill ${skillId}:`, err)
+  } catch {
     return null
   }
 }
 
 const getLevelSkillIds = (level: any) => {
   if (!level) return []
-
-  let skillIds: any[] = []
-
-  if (level.level_skills && Array.isArray(level.level_skills)) {
-    skillIds = level.level_skills
-  } else if (level.skills && Array.isArray(level.skills)) {
-    skillIds = level.skills
-  }
-
-  return skillIds.map((item: any) => {
-    if (typeof item === 'object' && item !== null && item.id) {
-      return {
-        id: item.id,
-        title: item.title || item.name || getSkillNameById(item.id),
-      }
-    } else {
-      return {
-        id: item,
-        title: getSkillNameById(item),
-      }
-    }
+  const ids = level.level_skills || level.skills || []
+  return ids.map((item: any) => {
+    if (typeof item === 'object' && item?.id)
+      return { id: item.id, title: item.title || item.name || getSkillNameById(item.id) }
+    return { id: item, title: getSkillNameById(item) }
   })
 }
 
 const getSkillNameById = (skillId: number) => {
-  if (fullSkillsCache.value[skillId]?.name) return fullSkillsCache.value[skillId].name
-  if (fullSkillsCache.value[skillId]?.title) return fullSkillsCache.value[skillId].title
-
-  for (const profile of props.availableProfiles) {
-    for (const level of profile.levels || []) {
-      const skills = level.level_skills || level.skills || []
-      const skill = skills.find(
+  const c = skillsCache.get(skillId)
+  if (c?.name || c?.title) return c.name || c.title
+  for (const p of props.availableProfiles)
+    for (const l of p.levels || []) {
+      const sk = (l.level_skills || l.skills || []).find(
         (s: any) => (typeof s === 'object' && s.id === skillId) || s === skillId,
       )
-      if (skill && typeof skill === 'object' && (skill.name || skill.title)) {
-        return skill.name || skill.title
-      }
+      if (sk && typeof sk === 'object' && (sk.name || sk.title)) return sk.name || sk.title
     }
-  }
   return `Навык #${skillId}`
 }
 
-const getSkillData = (skillId: number) => {
-  return fullSkillsCache.value[skillId] || null
+const getFullSkillDescription = (id: number) => skillsCache.get(id)?.description || ''
+const getFullSkillMaterialsArray = (id: number) => {
+  const m = skillsCache.get(id)?.materials || skillsCache.get(id)?.literature
+  return typeof m === 'string' && m.trim()
+    ? m.split('\n').filter(Boolean)
+    : Array.isArray(m)
+      ? m
+      : []
+}
+const getFullSkillStages = (id: number) => skillsCache.get(id)?.stages || []
+const getSkillStageTypesWithContent = (id: number) => {
+  const st = getFullSkillStages(id)
+  if (!st?.length) return stageTypes
+  const av = stageTypes.filter((t) => st.some((s) => s?.type === t.key))
+  return av.length ? av : stageTypes
+}
+const getSkillStagesByTypeSimple = (id: number, type: string) =>
+  (getFullSkillStages(id) || []).filter((s: any) => s?.type === type)
+const getStageContentTitleSimple = (t: string) =>
+  t === 'attestation' ? 'Вопросы и ответы' : 'Задания и критерии'
+const getSkillSelectedStageType = (id: number) => skillSelectedStageTypes.value[id] || 'practice'
+const selectSkillStageType = (id: number, t: string) => {
+  skillSelectedStageTypes.value[id] = t
+}
+const hasStageContent = (stages: any[], t: string) => stages.some((s) => s.type === t)
+
+const toggleProfileExpand = (id: number) => {
+  const idx = expandedProfiles.value.indexOf(id)
+  idx === -1 ? expandedProfiles.value.push(id) : expandedProfiles.value.splice(idx, 1)
 }
 
-const getFullSkillDescription = (skillId: number) => {
-  const skill = getSkillData(skillId)
-  return skill?.description || ''
-}
-
-const getFullSkillMaterials = (skillId: number) => {
-  const skill = getSkillData(skillId)
-  return skill?.materials || skill?.literature || ''
-}
-
-const getFullSkillMaterialsArray = (skillId: number) => {
-  const skill = getSkillData(skillId)
-  const materials = skill?.materials || skill?.literature
-  if (typeof materials === 'string' && materials.trim()) {
-    return materials.split('\n').filter((m: string) => m.trim())
-  }
-  return Array.isArray(materials) ? materials : []
-}
-
-const getFullSkillStages = (skillId: number) => {
-  const skill = getSkillData(skillId)
-  return skill?.stages || []
-}
-
-const getSkillStageTypesWithContent = (skillId: number) => {
-  const stages = getFullSkillStages(skillId)
-  if (!stages?.length) return stageTypes
-  const available = stageTypes.filter((t) => stages.some((s) => s?.type === t.key))
-  return available.length > 0 ? available : stageTypes
-}
-
-const getSkillStagesByTypeSimple = (skillId: number, type: string) => {
-  const stages = getFullSkillStages(skillId)
-  if (!stages || !Array.isArray(stages)) return []
-  return stages.filter((s) => s?.type === type)
-}
-
-const getStageContentTitleSimple = (type: string) =>
-  type === 'attestation' ? 'Вопросы и ответы' : 'Задания и критерии'
-
-const getSkillSelectedStageType = (skillId: number) =>
-  skillSelectedStageTypes.value[skillId] || 'practice'
-
-const selectSkillStageType = (skillId: number, type: string) => {
-  skillSelectedStageTypes.value[skillId] = type
-}
-
-const hasStageContent = (stages: any[], type: string) => {
-  return stages.some((stage) => stage.type === type)
-}
-
-const toggleProfileExpand = (profileId: number) => {
-  const idx = expandedProfiles.value.indexOf(profileId)
-  if (idx === -1) {
-    expandedProfiles.value.push(profileId)
-  } else {
-    expandedProfiles.value.splice(idx, 1)
-  }
-}
-
-const toggleLevelExpand = async (profileId: number, levelId: number | string) => {
-  const key = `${profileId}_${levelId}`
-  const isExpanded = expandedLevels.value[key]
-
-  if (!isExpanded) {
+const toggleLevelExpand = async (pId: number, lId: number | string) => {
+  const key = `${pId}_${lId}`
+  if (!expandedLevels.value[key]) {
     expandedLevels.value[key] = true
-
     const level = props.availableProfiles
-      .find((p) => p.id === profileId)
-      ?.levels?.find((l) => (l.id || -1) === levelId)
-
+      .find((p) => p.id === pId)
+      ?.levels?.find((l) => (l.id || -1) === lId)
     if (level) {
-      const skillItems = getLevelSkillIds(level)
-
-      for (const skillItem of skillItems) {
-        const skillId = skillItem.id
-        if (!fullSkillsCache.value[skillId]) {
-          await fetchFullSkillData(skillId)
-        }
-        if (!skillSelectedStageTypes.value[skillId]) {
-          const allTypes = getSkillStageTypesWithContent(skillId)
-          skillSelectedStageTypes.value[skillId] = allTypes[0]?.key || 'practice'
-        }
+      for (const sk of getLevelSkillIds(level)) {
+        if (!skillsCache.has(sk.id)) await fetchFullSkillData(sk.id)
+        if (!skillSelectedStageTypes.value[sk.id])
+          skillSelectedStageTypes.value[sk.id] =
+            getSkillStageTypesWithContent(sk.id)[0]?.key || 'practice'
       }
     }
   } else {
@@ -700,37 +617,29 @@ const toggleLevelExpand = async (profileId: number, levelId: number | string) =>
   }
 }
 
-const toggleSkillExpand = async (skillId: number) => {
-  const idx = expandedSkills.value.indexOf(skillId)
+const toggleSkillExpand = async (id: number) => {
+  const idx = expandedSkills.value.indexOf(id)
   if (idx === -1) {
-    expandedSkills.value.push(skillId)
-    if (!fullSkillsCache.value[skillId]) {
-      await fetchFullSkillData(skillId)
-    }
-    if (!skillSelectedStageTypes.value[skillId]) {
-      const allTypes = getSkillStageTypesWithContent(skillId)
-      skillSelectedStageTypes.value[skillId] = allTypes[0]?.key || 'practice'
-    }
+    expandedSkills.value.push(id)
+    if (!skillsCache.has(id)) await fetchFullSkillData(id)
+    if (!skillSelectedStageTypes.value[id])
+      skillSelectedStageTypes.value[id] = getSkillStageTypesWithContent(id)[0]?.key || 'practice'
   } else {
     expandedSkills.value.splice(idx, 1)
   }
 }
 
-const toggleQAExpand = (skillId: number, stageId: number | string, idx: number) => {
-  const key = `${skillId}_${stageId}_${idx}`
-  expandedQA.value[key] = !expandedQA.value[key]
+const toggleQAExpand = (sId: number, stId: number | string, idx: number) => {
+  expandedQA.value[`${sId}_${stId}_${idx}`] = !expandedQA.value[`${sId}_${stId}_${idx}`]
+}
+const toggleTaskExpand = (sId: number, stId: number | string, idx: number) => {
+  expandedTasks.value[`${sId}_${stId}_${idx}`] = !expandedTasks.value[`${sId}_${stId}_${idx}`]
 }
 
-const toggleTaskExpand = (skillId: number, stageId: number | string, idx: number) => {
-  const key = `${skillId}_${stageId}_${idx}`
-  expandedTasks.value[key] = !expandedTasks.value[key]
-}
-
-const getRoleNameById = (roleId: number | null) => {
-  if (!roleId) return 'Не назначена'
-  const role = props.availableRoles.find((r) => r.id === roleId)
-  if (!role) return 'Не назначена'
-  return role.displayName || role.name || 'Не назначена'
+const getRoleNameById = (rId: number | null) => {
+  if (!rId) return 'Не назначена'
+  const r = props.availableRoles.find((r) => r.id === rId)
+  return r?.displayName || r?.name || 'Не назначена'
 }
 
 const handleClose = () => {
@@ -741,105 +650,97 @@ const handleClose = () => {
   expandedQA.value = {}
   expandedTasks.value = {}
   skillSelectedStageTypes.value = {}
-  fullSkillsCache.value = {}
   selectedProfileForAssign.value = null
 }
 
 const enableEditMode = () => {
   isEditMode.value = true
-  editForm.value = { ...props.employee }
+  editForm.value = {
+    userId: props.employee?.userId,
+    firstName: props.employee?.firstName || '',
+    lastName: props.employee?.lastName || '',
+    patronymic: props.employee?.patronymic || '',
+    email: props.employee?.email || '',
+    position: props.employee?.position || '',
+    profileId: props.employee?.profileId || null,
+    roleId: props.employee?.roleId || null,
+    departmentId: props.employee?.departmentId || null,
+  }
 }
 
 const cancelEdit = () => {
   isEditMode.value = false
-  editForm.value = { ...props.employee }
+  enableEditMode()
 }
 
 const saveChanges = () => {
+  if (!editForm.value.firstName || !editForm.value.lastName || !editForm.value.email) {
+    return ElMessage.warning('Заполните обязательные поля: Имя, Фамилия, Email')
+  }
   emit('update', editForm.value)
 }
 
-// 🔧 ОБНОВЛЁННАЯ ФУНКЦИЯ НАЗНАЧЕНИЯ ПРОФИЛЯ
 const assignProfile = async () => {
-  if (!props.employee?.userId || !selectedProfileForAssign.value) {
-    ElMessage.warning('Выберите профиль для назначения')
-    return
-  }
-
+  if (!props.employee?.userId || !selectedProfileForAssign.value)
+    return ElMessage.warning('Выберите профиль')
   assignLoading.value = true
   try {
-    const response = await fetch(`${API_BASE}/users/profiles/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        user_id: props.employee.userId,
-        profile_id: selectedProfileForAssign.value,
-      }),
-    })
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}))
-      let errorMsg = `Ошибка сервера: ${response.status}`
-
-      if (Array.isArray(errData.detail)) {
-        errorMsg = errData.detail.map((d: any) => d.msg).join('\n')
-      } else if (errData.detail) {
-        errorMsg =
-          typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail)
-      }
-      throw new Error(errorMsg)
-    }
-
-    ElMessage.success('Профиль успешно назначен')
-
-    const assignedProfileId = selectedProfileForAssign.value
+    emit('assign-profile', props.employee.userId, selectedProfileForAssign.value)
     selectedProfileForAssign.value = null
-
-    // Уведомляем родителя об успешном назначении
-    emit('assign-profile', props.employee.userId, assignedProfileId)
-
-    // Обновляем локальные данные карточки
-    emit('update', { ...props.employee, profileId: assignedProfileId })
-  } catch (error: any) {
-    console.error('Ошибка при назначении профиля:', error)
-    ElMessage.error(error.message || 'Не удалось назначить профиль')
+  } catch (e: any) {
+    ElMessage.error(e.message || 'Ошибка')
   } finally {
     assignLoading.value = false
   }
 }
 
+const unlinkProfile = async () => {
+  if (!props.employee?.userId) {
+    return ElMessage.warning('Не указан ID сотрудника')
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `Вы уверены, что хотите отвязать профиль от сотрудника ${props.employee.fullName}? Прогресс и история этапов будут сброшены.`,
+      'Отвязать профиль',
+      {
+        confirmButtonText: 'Отвязать',
+        cancelButtonText: 'Отмена',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
+    emit('unlink-profile', props.employee.userId)
+  } catch (err) {
+    if (err !== 'cancel') {
+      console.error('Error unlinking profile:', err)
+      ElMessage.error('Ошибка при отвязке профиля')
+    }
+  }
+}
+
 const showPromoteDialog = () => {
   if (!props.employee || !nextLevel.value) return
-
   ElMessageBox.confirm(
-    `Повысить сотрудника ${props.employee.fullName} до уровня "${nextLevel.value.name}"?`,
-    'Подтверждение повышения',
-    {
-      confirmButtonText: 'Повысить',
-      cancelButtonText: 'Отмена',
-      type: 'warning',
-    },
-  ).then(() => {
-    emit('promote', props.employee, nextLevel.value)
-  })
+    `Повысить ${props.employee.fullName} до "${nextLevel.value.name}"?`,
+    'Подтверждение',
+    { confirmButtonText: 'Повысить', cancelButtonText: 'Отмена', type: 'warning' },
+  ).then(() => emit('promote', props.employee, nextLevel.value))
 }
 
 watch(
   () => props.visible,
-  (newVal) => {
-    if (newVal) {
-      editForm.value = { ...props.employee }
+  (v) => {
+    if (v && props.employee) {
+      enableEditMode()
       isEditMode.value = false
     }
   },
+  { immediate: true },
 )
 </script>
 
 <style scoped>
-/* ... все стили из вашего исходного кода остаются без изменений ... */
 .employee-detail {
   display: flex;
   flex-direction: column;
@@ -877,7 +778,6 @@ watch(
   flex: 1;
   font-size: 14px;
 }
-
 .info-edit-row {
   display: flex;
   gap: var(--spacing-xs);
@@ -887,9 +787,7 @@ watch(
   flex: 1;
   min-width: 0;
 }
-.edit-input-full {
-  width: 100%;
-}
+.edit-input-full,
 .edit-select-full {
   width: 100%;
 }
@@ -898,26 +796,18 @@ watch(
   font-size: 14px !important;
   color: #000;
 }
-:deep(.info-item .el-input),
-:deep(.info-item .el-select) {
-  font-size: 14px;
-}
-
-.detail-actions {
+.detail-actions,
+.promotion-actions,
+.assign-profile-actions {
   display: flex;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
   justify-content: flex-end;
 }
-
 .promotion-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--spacing-md);
   padding-top: var(--spacing-md);
   border-top: 1px solid #e0e0e0;
 }
-
 .profile-unassigned {
   padding: var(--spacing-sm);
   color: #666;
@@ -926,7 +816,6 @@ watch(
   font-style: italic;
   color: #999;
 }
-
 .assign-profile-section {
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-sm);
@@ -955,7 +844,6 @@ watch(
   padding: var(--spacing-xs) var(--spacing-sm);
   background: #f9f9f9;
   cursor: pointer;
-  transition: background 0.2s;
 }
 .profile-collapse-header:hover {
   background: #f0f0f0;
@@ -984,41 +872,36 @@ watch(
   padding: var(--spacing-sm);
   background: #fff;
 }
-
-.profile-description {
+.profile-description,
+.empty-placeholder {
   font-size: 13px;
-  color: #666;
   margin-bottom: var(--spacing-sm);
   padding-bottom: var(--spacing-sm);
   border-bottom: 1px dashed #e0e0e0;
   line-height: 1.5;
-  white-space: pre-wrap;
 }
-
 .empty-placeholder {
   color: var(--gray);
-  font-size: 13px;
   font-style: italic;
   padding: var(--spacing-sm) 0;
+  border: none;
 }
-
 .skills-section-label {
   font-weight: var(--font-weight-semibold);
-  color: var(--text);
-  margin: var(--spacing-sm) 0 var(--spacing-xs) 0;
+  margin: var(--spacing-sm) 0 var(--spacing-xs);
   font-size: 14px;
 }
-
 .skills-list-container {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
 }
-
-.level-collapse-item {
+.level-collapse-item,
+.skill-collapse-item {
   margin-bottom: var(--spacing-xs);
 }
-.level-collapse-header {
+.level-collapse-header,
+.skill-collapse-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1028,35 +911,19 @@ watch(
   cursor: pointer;
   font-size: 13px;
 }
-.level-collapse-header:hover {
+.level-collapse-header:hover,
+.skill-collapse-header:hover {
   background: #ebebeb;
 }
 .level-collapse-title {
   font-weight: var(--font-weight-medium);
   color: #000;
 }
-.level-collapse-content {
-  padding: var(--spacing-xs) 0 0 var(--spacing-sm);
-}
-
-.skill-collapse-item {
-  margin-bottom: var(--spacing-xs);
-}
-.skill-collapse-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-xs);
-  background: #fafafa;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 13px;
-}
-.skill-collapse-header:hover {
-  background: #f0f0f0;
-}
 .skill-collapse-title {
   color: #000;
+}
+.level-collapse-content {
+  padding: var(--spacing-xs) 0 0 var(--spacing-sm);
 }
 .skill-collapse-content {
   padding: var(--spacing-xs) 0 0 var(--spacing-md);
@@ -1072,18 +939,14 @@ watch(
   margin: var(--spacing-xs) 0;
   padding-left: var(--spacing-md);
 }
-
 .skill-stages-section {
   margin-top: var(--spacing-sm);
 }
-
 .skill-stages-header {
   font-weight: var(--font-weight-semibold);
-  color: var(--text);
   margin-bottom: var(--spacing-xs);
   font-size: 13px;
 }
-
 .stages-tabs {
   display: flex;
   gap: var(--spacing-xs);
@@ -1098,19 +961,11 @@ watch(
   color: #999;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
-  transition: all 0.2s;
 }
 .stage-tab.active {
   color: var(--primary);
   border-bottom-color: var(--primary);
 }
-.stage-tab.has-content:not(.active) {
-  color: #666;
-}
-.stage-tab.has-content:not(.active):hover {
-  color: #333;
-}
-
 .stage-content {
   margin-top: var(--spacing-sm);
 }
@@ -1127,52 +982,20 @@ watch(
   color: #000;
   font-size: 14px;
 }
-
-.stage-qa-list {
-  margin-top: var(--spacing-xs);
-}
-.qa-item {
-  margin-bottom: var(--spacing-xs);
-  border: 1px solid #e8e8e8;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.qa-question {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: #f5f5f5;
-  cursor: pointer;
-  font-size: 13px;
-}
-.qa-question:hover {
-  background: #ebebeb;
-}
-.qa-question-text {
-  flex: 1;
-}
-.qa-answer {
-  padding: var(--spacing-sm);
-  background: #fff;
-  font-size: 13px;
-  color: #333;
-  border-top: 1px solid #e8e8e8;
-}
-
-.stage-tasks-criteria {
-  margin-top: var(--spacing-xs);
-}
+.stage-qa-list,
 .tasks-list {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
 }
+.qa-item,
 .task-item {
   border: 1px solid #e8e8e8;
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
+.qa-question,
 .task-title {
   display: flex;
   align-items: center;
@@ -1182,12 +1005,15 @@ watch(
   cursor: pointer;
   font-size: 13px;
 }
+.qa-question:hover,
 .task-title:hover {
   background: #ebebeb;
 }
+.qa-question-text,
 .task-text {
   flex: 1;
 }
+.qa-answer,
 .task-criteria {
   padding: var(--spacing-sm);
   background: #fff;
@@ -1198,17 +1024,17 @@ watch(
 .task-criteria p {
   margin: var(--spacing-xs) 0 0 0;
 }
-.criteria-list {
-  margin-top: var(--spacing-xs);
-}
-.criteria-list ul {
-  margin: var(--spacing-xs) 0;
-  padding-left: var(--spacing-md);
-}
-
-.assign-profile-actions {
+.unlink-profile-section {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: var(--spacing-sm);
   margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px dashed #f56c6c;
+}
+.unlink-hint {
+  font-size: 12px;
+  color: var(--gray);
+  font-style: italic;
 }
 </style>

@@ -1,7 +1,6 @@
 <!-- src/views/EmployeesView.vue -->
 <template>
   <div class="employees-view">
-    <!-- Шапка -->
     <header class="view-header">
       <div>
         <h1>Управление сотрудниками</h1>
@@ -17,7 +16,6 @@
       </div>
     </header>
 
-    <!-- Фильтры -->
     <div class="filters-row">
       <el-input
         v-model="search"
@@ -38,7 +36,6 @@
       </el-select>
     </div>
 
-    <!-- Таблица сотрудников -->
     <el-table
       :data="filteredEmployees"
       stripe
@@ -52,7 +49,6 @@
       <el-table-column prop="position" label="Должность" width="180" />
       <el-table-column v-if="!isSupervisor" prop="departmentName" label="Отдел" width="180" />
 
-      <!-- Колонка Профиль -->
       <el-table-column label="Профиль" min-width="240">
         <template #default="{ row }">
           <div class="profile-cell">
@@ -85,7 +81,6 @@
       <el-table-column v-if="!isSupervisor" prop="roleName" label="Роль" width="150" />
     </el-table>
 
-    <!-- 🔹 Модальное окно: Карточка сотрудника -->
     <EmployeeCard
       v-if="detailVisible"
       v-model:visible="detailVisible"
@@ -96,19 +91,19 @@
       :available-roles="filteredRoles"
       :available-profiles="availableProfiles"
       :all-profiles-data="allProfilesData"
+      :user-full-profile="userFullProfile"
       @update="handleEmployeeUpdate"
       @assign-profile="handleAssignProfile"
       @promote="handlePromoteEmployee"
+      @unlink-profile="handleUnlinkProfile"
     />
 
-    <!-- 🔹 Модальное окно: Регистрация сотрудника -->
     <RegistrationDialog
       v-model:visible="registerVisible"
       :departments="departments"
       @registered="handleRegistration"
     />
 
-    <!-- 🔹 Модальное окно: Создание встречи (для руководителя) -->
     <MeetingDialog
       v-if="isSupervisor"
       v-model="meetingDialogVisible"
@@ -119,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search, Calendar } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -127,31 +122,22 @@ import EmployeeCard from '@/components/employees/EmployeeCard.vue'
 import RegistrationDialog from '@/components/employees/RegistrationDialog.vue'
 import MeetingDialog from '@/components/common/MeetingDialog.vue'
 
-// 🔹 Интерфейсы для типизации
 interface Department {
   id: number
   name: string
 }
-
 interface Role {
   id: number
   name: string
   displayName: string
   isSupervisorRole: boolean
 }
-
 interface Profile {
   id: number
   title: string
-  levels: Array<{
-    id: number
-    name: string
-    level_name?: string
-    [key: string]: any
-  }>
+  levels: any[]
   [key: string]: any
 }
-
 interface Employee {
   id: number
   userId: number
@@ -186,7 +172,6 @@ const isSupervisor = computed(() => {
   return role.includes('supervisor') || role.includes('руководитель')
 })
 
-// === Состояние ===
 const loading = ref(false)
 const search = ref('')
 const filterDepartmentId = ref<number | null>(null)
@@ -194,8 +179,8 @@ const detailVisible = ref(false)
 const registerVisible = ref(false)
 const meetingDialogVisible = ref(false)
 const selectedEmployee = ref<Employee | null>(null)
+const userFullProfile = ref<any>(null)
 
-// === Данные ===
 const departments = ref<Department[]>([])
 const availableRoles = ref<Role[]>([
   { id: 1, name: 'Employee (Сотрудник)', displayName: 'Сотрудник', isSupervisorRole: false },
@@ -210,9 +195,9 @@ const allProfilesData = ref<Profile[]>([])
 const filteredRoles = computed(() => {
   return availableRoles.value.filter((role) => {
     if (role.isSupervisorRole) return false
-    const roleName = role.name?.toLowerCase() || ''
-    const displayName = role.displayName?.toLowerCase() || ''
-    return !roleName.includes('supervisor') && !displayName.includes('руководитель')
+    const rName = role.name?.toLowerCase() || ''
+    const dName = role.displayName?.toLowerCase() || ''
+    return !rName.includes('supervisor') && !dName.includes('руководитель')
   })
 })
 
@@ -235,22 +220,39 @@ const filteredEmployees = computed(() => {
 const userDepartmentName = computed(() => {
   if (!isSupervisor.value) return ''
   const deptId = authStore.user?.department_id
-  const dept = departments.value.find((d) => d.id === deptId)
-  return dept?.name || 'Отдел не назначен'
+  return departments.value.find((d) => d.id === deptId)?.name || 'Отдел не назначен'
 })
 
-// === Методы загрузки данных ===
+const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+  const token = authStore.token
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(url, { ...options, headers, credentials: 'include' })
+
+  if (res.status === 401) {
+    authStore.logout()
+    ElMessage.error('Сессия истекла. Пожалуйста, войдите снова.')
+    return null
+  }
+  if (res.status === 403) {
+    ElMessage.error('Недостаточно прав для выполнения этого действия')
+    return null
+  }
+  return res
+}
 
 const fetchDepartments = async () => {
   try {
-    const res = await fetch(`${API_BASE}/admin/departments/`)
+    const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
+    if (!res) throw new Error('Auth error')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     departments.value = Array.isArray(data)
-      ? data.map((d: any) => ({
-          id: d.id,
-          name: d.department_name || d.name || '',
-        }))
+      ? data.map((d: any) => ({ id: d.id, name: d.department_name || d.name || '' }))
       : []
   } catch (err) {
     console.error('Error fetching departments:', err)
@@ -260,7 +262,8 @@ const fetchDepartments = async () => {
 
 const fetchAvailableProfiles = async () => {
   try {
-    const res = await fetch(`${API_BASE}/profiles/levels`)
+    const res = await fetchWithAuth(`${API_BASE}/profiles/levels`)
+    if (!res) throw new Error('Auth error')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     availableProfiles.value = Array.isArray(data) ? data : []
@@ -275,57 +278,33 @@ const fetchAvailableProfiles = async () => {
 const fetchEmployees = async () => {
   try {
     loading.value = true
-    const onlySubordinates = isSupervisor.value ? true : false
-    let url = `${API_BASE}/users/?only_subordinates=${onlySubordinates}`
+    const onlySubordinates = isSupervisor.value
+    let url = `${API_BASE}/users/profiles/?only_subordinates=${onlySubordinates}`
+    if (filterDepartmentId.value) url += `&departments_id=${filterDepartmentId.value}`
 
-    if (filterDepartmentId.value) {
-      url += `&departments_id=${filterDepartmentId.value}`
-    }
-
-    const res = await fetch(url)
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-    }
+    const res = await fetchWithAuth(url)
+    if (!res) throw new Error('Auth error')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
 
     employees.value = Array.isArray(data)
       ? data.map((e: any): Employee => {
-          let roleId: number | null = null
+          let roleId: number | null = e.role_id ?? null
           let roleName = 'Не назначена'
-
-          if (e.roles && Array.isArray(e.roles)) {
-            const firstRole = e.roles[0]
-            if (firstRole) {
-              const found = availableRoles.value.find(
-                (r) =>
-                  r.name.toLowerCase().includes(firstRole.toLowerCase()) ||
-                  r.displayName.toLowerCase().includes(firstRole.toLowerCase()),
-              )
-              if (found) {
-                roleId = found.id
-                roleName = found.displayName
-              } else {
-                roleName = firstRole
-              }
-            }
+          if (roleId) {
+            const role = availableRoles.value.find((r) => r.id === roleId)
+            if (role) roleName = role.displayName
           }
-
-          if (e.role_name) {
-            roleName = e.role_name
-            const found = availableRoles.value.find(
-              (r) =>
-                r.name.toLowerCase().includes(e.role_name.toLowerCase()) ||
-                r.displayName.toLowerCase().includes(e.role_name.toLowerCase()),
-            )
-            if (found) {
-              roleId = found.id
-              roleName = found.displayName
-            }
+          const profileId = e.profile_id ?? null
+          let profileLevel: string | null = null
+          if (profileId) {
+            const p = allProfilesData.value.find((pr) => pr.id === profileId)
+            if (p?.levels?.[0]) profileLevel = p.levels[0].name || p.levels[0].level_name || null
           }
 
           return {
             id: e.id,
-            userId: e.id,
+            userId: e.user_id,
             lastName: e.last_name || '',
             firstName: e.first_name || '',
             patronymic: e.patronymic || '',
@@ -333,14 +312,14 @@ const fetchEmployees = async () => {
             position: e.position || '',
             email: e.email || '',
             isSupervisor: e.is_supervisor ?? false,
-            departmentId: e.department_id,
+            departmentId: e.department_id ?? null,
             departmentName: e.department_name || 'Не назначен',
-            profileId: null,
-            profileName: 'Не назначен',
-            profileLevel: null,
-            progress: 0,
-            totalCnt: 0,
-            completedCnt: 0,
+            profileId,
+            profileName: e.profile_title || 'Не назначен',
+            profileLevel,
+            progress: e.progress !== undefined && e.progress !== null ? Number(e.progress) : 0,
+            totalCnt: e.total_cnt ?? 0,
+            completedCnt: e.completed_cnt ?? 0,
             roleId,
             roleName,
           }
@@ -355,34 +334,55 @@ const fetchEmployees = async () => {
   }
 }
 
-const applyFilters = () => {
-  // filteredEmployees - computed, автоматически обновится
-}
-
-const isPromotionAvailable = (employee: Employee) => {
-  if (!employee?.progress || employee.progress !== 100) return false
-  if (!employee?.profileId) return null
-  const profile = allProfilesData.value.find((p) => p.id === employee.profileId)
-  if (!profile?.levels) return null
-
-  const currentLevelName = employee.profileLevel
-  if (!currentLevelName) return profile.levels[0] || null
-
-  const currentLevelIndex = profile.levels.findIndex(
-    (level: any) => level.name === currentLevelName,
-  )
-
-  if (currentLevelIndex === -1 || currentLevelIndex >= profile.levels.length - 1) {
+const fetchEmployeeProfile = async (userId: number): Promise<any | null> => {
+  try {
+    const res = await fetchWithAuth(`${API_BASE}/users/${userId}/profile/`)
+    if (!res) return null
+    if (!res.ok) return null
+    return await res.json()
+  } catch (err) {
+    console.error(`Error fetching profile for user ${userId}:`, err)
     return null
   }
-  return profile.levels[currentLevelIndex + 1]
 }
 
-// === Обработчики событий ===
+const applyFilters = () => {}
 
-const viewEmployee = (row: Employee) => {
-  selectedEmployee.value = { ...row }
+const isPromotionAvailable = (employee: Employee) => {
+  if (!employee?.progress || employee.progress < 100) return false
+  if (!employee?.profileId) return false
+  const profile = allProfilesData.value.find((p) => p.id === employee.profileId)
+  if (!profile?.levels || profile.levels.length === 0) return false
+  const currentLevelName = employee.profileLevel
+  if (!currentLevelName) return !!profile.levels[0]
+  const idx = profile.levels.findIndex(
+    (l: any) => l.name === currentLevelName || l.level_name === currentLevelName,
+  )
+  return idx !== -1 && idx < profile.levels.length - 1
+}
+
+const viewEmployee = async (row: Employee) => {
+  const freshEmployee = employees.value.find((e) => e.userId === row.userId)
+  selectedEmployee.value = freshEmployee ? { ...freshEmployee } : { ...row }
+  userFullProfile.value = null
   detailVisible.value = true
+
+  if (selectedEmployee.value.profileId && selectedEmployee.value.userId) {
+    const profileData = await fetchEmployeeProfile(selectedEmployee.value.userId)
+    if (profileData && selectedEmployee.value) {
+      selectedEmployee.value = {
+        ...selectedEmployee.value,
+        profileId: profileData.profile_id ?? profileData.id ?? selectedEmployee.value.profileId,
+        profileName: profileData.title ?? selectedEmployee.value.profileName,
+        progress: profileData.progress ?? selectedEmployee.value.progress,
+      }
+      userFullProfile.value = profileData
+    }
+  }
+}
+
+const resetUserFullProfile = () => {
+  userFullProfile.value = null
 }
 
 const handleEmployeeUpdate = async (updatedData: any) => {
@@ -392,42 +392,35 @@ const handleEmployeeUpdate = async (updatedData: any) => {
       last_name: updatedData.lastName,
       patronymic: updatedData.patronymic || '',
       email: updatedData.email,
-      profile_id: updatedData.profileId || null,
+      position: updatedData.position || '',
       role_id: updatedData.roleId || null,
       department_id: updatedData.departmentId || null,
     }
-
-    const res = await fetch(`${API_BASE}/users/${updatedData.userId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/users/${updatedData.userId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-
+    if (!res) throw new Error('Auth error')
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
     }
 
     const responseData = await res.json()
-
     const idx = employees.value.findIndex((e) => e.userId === updatedData.userId)
     if (idx !== -1) {
       let roleName = 'Не назначена'
-      if (responseData.role_name) {
-        const found = availableRoles.value.find(
-          (r) =>
-            r.name.toLowerCase().includes(responseData.role_name.toLowerCase()) ||
-            r.displayName.toLowerCase().includes(responseData.role_name.toLowerCase()),
-        )
-        roleName = found?.displayName || responseData.role_name
+      if (responseData.role_id) {
+        const found = availableRoles.value.find((r) => r.id === responseData.role_id)
+        roleName = found?.displayName || responseData.role_name || 'Не назначена'
       }
-
       employees.value[idx] = {
         ...employees.value[idx],
         firstName: responseData.first_name,
         lastName: responseData.last_name,
         patronymic: responseData.patronymic,
         email: responseData.email,
+        position: responseData.position || '',
         departmentId: responseData.department_id,
         departmentName: responseData.department_name,
         roleId: responseData.role_id,
@@ -436,7 +429,6 @@ const handleEmployeeUpdate = async (updatedData: any) => {
           `${responseData.last_name} ${responseData.first_name} ${responseData.patronymic || ''}`.trim(),
       }
     }
-
     ElMessage.success('Данные обновлены')
     await fetchEmployees()
     detailVisible.value = false
@@ -446,55 +438,24 @@ const handleEmployeeUpdate = async (updatedData: any) => {
   }
 }
 
-// 🔧 ОБНОВЛЁННЫЙ ОБРАБОТЧИК НАЗНАЧЕНИЯ ПРОФИЛЯ
 const handleAssignProfile = async (userId: number, profileId: number) => {
   try {
-    const payload = {
-      user_id: userId,
-      profile_id: profileId,
-    }
-
-    const res = await fetch(`${API_BASE}/users/profiles/`, {
+    const res = await fetchWithAuth(`${API_BASE}/users/profiles/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ user_id: userId, profile_id: profileId }),
     })
-
+    if (!res) throw new Error('Auth error')
     if (!res.ok) {
-      // 🔧 Корректная обработка 422 от FastAPI
       const errData = await res.json().catch(() => ({}))
-      let errorMsg = `Ошибка сервера: ${res.status}`
-
-      if (Array.isArray(errData.detail)) {
-        errorMsg = errData.detail.map((d: any) => d.msg).join('\n')
-      } else if (errData.detail) {
-        errorMsg =
-          typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail)
-      }
-      throw new Error(errorMsg)
+      const msg = Array.isArray(errData.detail)
+        ? errData.detail.map((d: any) => d.msg).join('\n')
+        : typeof errData.detail === 'string'
+          ? errData.detail
+          : `HTTP ${res.status}`
+      throw new Error(msg)
     }
-
-    // 🔧 Точечное обновление сотрудника в списке
-    const profile = availableProfiles.value.find((p) => p.id === profileId)
-    const idx = employees.value.findIndex((e) => e.userId === userId)
-
-    if (idx !== -1 && profile) {
-      employees.value[idx] = {
-        ...employees.value[idx],
-        profileId: profile.id,
-        profileName: profile.title,
-        profileLevel: profile.levels?.[0]?.name || profile.levels?.[0]?.level_name || null,
-        progress: 0,
-      }
-    }
-
+    await fetchEmployees()
     ElMessage.success('Профиль успешно назначен')
-
-    // 🔧 Опционально: раскомментируйте, если нужно закрывать диалог после назначения
-    // detailVisible.value = false
   } catch (err: any) {
     console.error('Error assigning profile:', err)
     ElMessage.error(err.message || 'Не удалось назначить профиль')
@@ -503,81 +464,96 @@ const handleAssignProfile = async (userId: number, profileId: number) => {
 
 const handlePromoteEmployee = async (employee: Employee, nextLevel: any) => {
   try {
-    const res = await fetch(
-      `${API_BASE}/users/${employee.userId}/profiles/${employee.profileId}/grade-up`,
-      { method: 'POST' },
-    )
+    const res = await fetchWithAuth(`${API_BASE}/users/${employee.userId}/profile/grade-up`, {
+      method: 'POST',
+    })
+    if (!res) throw new Error('Auth error')
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail || `HTTP ${res.status}`)
     }
-
-    const idx = employees.value.findIndex((e) => e.userId === employee.userId)
-    if (idx !== -1) {
-      employees.value[idx] = {
-        ...employees.value[idx],
+    await fetchEmployees()
+    if (selectedEmployee.value?.userId === employee.userId) {
+      selectedEmployee.value = {
+        ...selectedEmployee.value,
         profileLevel: nextLevel.name,
         progress: 0,
       }
     }
-
     ElMessage.success(`Сотрудник повышен до уровня "${nextLevel.name}"`)
-    await fetchEmployees()
-    detailVisible.value = false
   } catch (err: any) {
     console.error('Error promoting employee:', err)
     ElMessage.error(err.message || 'Ошибка при повышении')
   }
 }
 
-// 🔧 ИСПРАВЛЕННЫЙ ОБРАБОТЧИК РЕГИСТРАЦИИ
+const handleUnlinkProfile = async (userId: number) => {
+  try {
+    const res = await fetchWithAuth(`${API_BASE}/users/${userId}/profile`, {
+      method: 'DELETE',
+    })
+
+    if (!res) throw new Error('Auth error')
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || `HTTP ${res.status}`)
+    }
+
+    await fetchEmployees()
+
+    if (selectedEmployee.value?.userId === userId) {
+      selectedEmployee.value = {
+        ...selectedEmployee.value,
+        profileId: null,
+        profileName: 'Не назначен',
+        profileLevel: null,
+        progress: 0,
+      }
+      userFullProfile.value = null
+    }
+
+    ElMessage.success('Профиль успешно отвязан')
+  } catch (err: any) {
+    console.error('Error unlinking profile:', err)
+    ElMessage.error(err.message || 'Не удалось отвязать профиль')
+  }
+}
+
 const handleRegistration = async () => {
-  // 🔹 RegistrationDialog сам закрылся и показал уведомление.
-  // 🔹 Наша задача — только обновить список сотрудников.
   try {
     await fetchEmployees()
   } catch (err) {
     console.error('Failed to refresh employees after registration:', err)
-    // Мягкое предупреждение: регистрация прошла, но список не обновился
-    ElMessage.warning({
-      message: 'Сотрудник зарегистрирован, но список не обновился. Попробуйте обновить страницу.',
-      duration: 4000,
-    })
+    ElMessage.warning('Сотрудник зарегистрирован, но список не обновился.')
   }
 }
 
 const openRegisterModal = () => {
   registerVisible.value = true
 }
-
 const openMeetingDialog = () => {
   meetingDialogVisible.value = true
 }
 
-// === Инициализация ===
+watch(
+  () => detailVisible.value,
+  (val) => {
+    if (!val) resetUserFullProfile()
+  },
+)
+
 onMounted(async () => {
   try {
     await fetchDepartments()
-  } catch (e) {
-    console.error('Failed to load departments:', e)
-  }
-
-  try {
     await fetchAvailableProfiles()
-  } catch (e) {
-    console.error('Failed to load profiles:', e)
-  }
-
-  try {
     await fetchEmployees()
   } catch (e) {
-    console.error('Failed to load employees:', e)
+    console.error('Failed to load initial data:', e)
   }
 })
 </script>
 
 <style scoped>
-/* === Основные стили === */
 .employees-view {
   max-width: 1200px;
   margin: 0 auto;
@@ -626,11 +602,9 @@ onMounted(async () => {
   width: 100%;
   margin-bottom: var(--spacing-md);
 }
-
 :deep(.el-table .cell) {
   font-weight: 400 !important;
 }
-
 .profile-cell {
   display: flex;
   flex-direction: column;
@@ -645,7 +619,6 @@ onMounted(async () => {
   font-size: 14px;
   color: #666;
 }
-
 .progress-wrapper {
   display: flex;
   align-items: center;
@@ -669,7 +642,6 @@ onMounted(async () => {
   font-size: 14px !important;
   font-weight: 400;
 }
-
 @media (max-width: 768px) {
   .view-header {
     flex-direction: column;
