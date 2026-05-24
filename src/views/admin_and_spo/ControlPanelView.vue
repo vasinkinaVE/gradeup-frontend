@@ -1,12 +1,10 @@
 <!-- src/views/admin_and_spo/ControlPanelView.vue -->
 <template>
   <div class="control-panel">
-    <!-- Заголовок -->
     <header class="panel-header">
       <h1>Панель управления</h1>
     </header>
 
-    <!-- Вкладки -->
     <div class="panel-tabs">
       <button
         v-for="tab in tabs"
@@ -20,7 +18,6 @@
       </button>
     </div>
 
-    <!-- Секции -->
     <SkillSection
       v-if="activeTab === 'skills'"
       v-model:skills="skills"
@@ -36,7 +33,6 @@
       ref="departmentsSectionRef"
       v-model:departments="departments"
       :all-profiles="profiles"
-      :employees="employees"
       :loading="departmentsLoading"
       @update:departments="handleDepartmentsUpdate"
       @refresh="handleRefresh"
@@ -68,7 +64,6 @@
       :employees="employees"
     />
 
-    <!-- 🔥 Журнал событий -->
     <LogsSection
       v-if="activeTab === 'logs'"
       v-model:logs="logs"
@@ -113,23 +108,20 @@ const activeTab = ref('skills')
 const departmentsSectionRef = ref(null)
 const profilesSectionRef = ref(null)
 
-// Загрузки
 const skillsLoading = ref(false)
 const departmentsLoading = ref(false)
 const profilesLoading = ref(false)
 const logsLoading = ref(false)
 
-// Данные
 const categories = ref([])
 const skills = ref([])
 const departments = ref([])
 const directions = ref([])
 const profiles = ref([])
 const meetings = ref([])
-const employees = ref([])
+const employees = ref([]) // ✅ Оставляем для MeetingSection
 const logs = ref([])
 
-// Фильтры для профилей
 const profileDepartmentFilter = ref([])
 
 const extractCategoryIds = (categoriesData) => {
@@ -145,7 +137,6 @@ const extractCategoryIds = (categoriesData) => {
     .filter((id) => id != null)
 }
 
-// === Категории ===
 const fetchCategories = async () => {
   try {
     const res = await fetch(`${API_BASE}/category/`)
@@ -161,30 +152,19 @@ const fetchCategories = async () => {
   }
 }
 
-// 🔧 Функция нормализации типа этапа (должна быть такой же как в ProfilesSection)
 const normalizeStageType = (type) => {
   if (!type) return 'practice'
   const t = String(type).toLowerCase().trim()
-
-  // Аттестация: поддержка всех вариантов
   if (t === 'аттестация' || t === 'certification') return 'attestation'
-
-  // Performance review: поддержка snake_case и пробелов
   if (t === 'performance review' || t === 'performancereview' || t === 'performance_review')
     return 'performance'
-
-  // Практическое задание: поддержка всех вариантов
   if (t === 'практическое задание' || t === 'practice') return 'practice'
-
   return 'practice'
 }
 
-// === Навыки ===
-// 🔧 ИЗМЕНЕНО: используем /skills/stages вместо /skills/
 const fetchSkills = async () => {
   try {
     skillsLoading.value = true
-    // 🔧 Запрос к новому эндпоинту для получения списка навыков с этапами
     const res = await fetch(`${API_BASE}/skills/stages`)
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
@@ -199,31 +179,24 @@ const fetchSkills = async () => {
           .filter((name) => name?.trim())
           .join(', ')
 
-        // 🔧 Нормализация этапов и вопросов
         const rawStages = Array.isArray(s.stages) ? s.stages : []
         const normalizedStages = rawStages.map((stage, stIdx) => {
-          // Поддержка разных названий поля с вопросами
           const rawQuestions = stage.questions || stage.questions_list || stage.items || []
           const normalizedQuestions = Array.isArray(rawQuestions)
             ? rawQuestions.map((q, qIdx) => ({
                 id: q?.id ?? q?.question_id ?? `q_${stIdx}_${qIdx}`,
-                // 🔧 Универсальное извлечение текста вопроса
                 text: q?.question || q?.text || q?.content || q?.question_text || q?.title || '',
-                // 🔧 Универсальное извлечение ответа
                 answer: q?.answer || q?.response || q?.correct_answer || q?.solution || '',
                 num: q?.num ?? q?.number ?? qIdx + 1,
               }))
             : []
 
-          // 🔧 Нормализуем тип этапа
           const rawType = stage.confirmation_type || stage.type || stage.stage_type
           const normalizedType = normalizeStageType(rawType)
 
           return {
             ...stage,
-            // 🔧 Гарантируем, что вопросы всегда в поле `questions`
             questions: normalizedQuestions,
-            // 🔧 Сохраняем нормализованный тип
             type: normalizedType,
             confirmation_type: normalizedType,
           }
@@ -239,7 +212,6 @@ const fetchSkills = async () => {
           categories: rawCategories,
           categoryIds: catIds,
           categoryNames: categoryNames || 'Не указаны',
-          // 🔧 Используем нормализованные этапы
           stages: normalizedStages,
           stagesCount: normalizedStages.length,
         }
@@ -249,14 +221,6 @@ const fetchSkills = async () => {
       }
     }
     skills.value = newSkills
-    console.log(
-      '✅ Skills loaded and normalized:',
-      skills.value.map((s) => ({
-        id: s.id,
-        name: s.name,
-        stages: s.stages.map((st) => ({ type: st.type, questionsCount: st.questions.length })),
-      })),
-    )
   } catch (err) {
     console.error('❌ Error fetching skills:', err)
     ElMessage.error('Не удалось загрузить навыки')
@@ -266,31 +230,38 @@ const fetchSkills = async () => {
   }
 }
 
-// === Сотрудники (для выбора руководителя) ===
+// ✅ Загружаем ВСЕХ сотрудников (для MeetingSection и других компонентов)
 const fetchEmployees = async () => {
   try {
-    const res = await fetch(`${API_BASE}/employees/`)
+    const res = await fetch(`${API_BASE}/users/`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
+
+    // ✅ Извлекаем ТОЛЬКО нужные поля (без email и position)
     employees.value = data.map((emp) => ({
       id: emp.id,
       first_name: emp.first_name || '',
       last_name: emp.last_name || '',
       patronymic: emp.patronymic || '',
-      position: emp.position || '',
     }))
+
+    console.log('✅ Employees loaded:', employees.value.length)
   } catch (err) {
-    console.error('Error fetching employees:', err)
+    console.error('❌ Error fetching employees:', err)
+    ElMessage.error('Не удалось загрузить список сотрудников')
     employees.value = []
   }
 }
 
-// === Отделы ===
 const fetchDepartments = async () => {
   try {
     departmentsLoading.value = true
-    const res = await fetch(`${API_BASE}/admin/departments/`, {
+    const res = await fetch(`${API_BASE}/admin/departments/profiles`, {
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
@@ -333,12 +304,9 @@ const fetchDepartments = async () => {
   }
 }
 
-// === Профили (через /profiles/levels) ===
 const fetchProfiles = async (deptIds = null) => {
   try {
     profilesLoading.value = true
-
-    // 🔧 ИСПРАВЛЕНО: используем конкатенацию вместо new URL()
     let url = `${API_BASE}/profiles/levels`
     if (deptIds?.length) {
       const params = new URLSearchParams()
@@ -348,6 +316,7 @@ const fetchProfiles = async (deptIds = null) => {
 
     const res = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
 
@@ -383,11 +352,13 @@ const fetchProfiles = async (deptIds = null) => {
   }
 }
 
-// === Журнал событий ===
 const fetchLogs = async () => {
   try {
     logsLoading.value = true
-    const res = await fetch(`${API_BASE}/logs/`)
+    const res = await fetch(`${API_BASE}/logs/`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
 
@@ -409,10 +380,7 @@ const fetchLogs = async () => {
   }
 }
 
-// === Обработчики событий ===
-const handleRefresh = () => {
-  // Глобальный индикатор загрузки
-}
+const handleRefresh = () => {}
 
 const handleDepartmentsUpdate = async (newDepts = null) => {
   if (Array.isArray(newDepts)) {
@@ -448,7 +416,6 @@ const onTabChange = async (tabId) => {
   }
 }
 
-// === Публичные методы ===
 const reloadDepartments = async () => {
   if (departmentsSectionRef.value?.reload) {
     await departmentsSectionRef.value.reload()
@@ -465,7 +432,6 @@ const reloadProfiles = async () => {
   }
 }
 
-// === Инициализация ===
 onMounted(async () => {
   await Promise.all([fetchCategories(), fetchSkills(), fetchEmployees(), fetchDepartments()])
 
@@ -476,7 +442,6 @@ onMounted(async () => {
   }
 })
 
-// === Watch для реактивного обновления ===
 watch(activeTab, async (newTab) => {
   if (newTab === 'departments' && !departments.value.length) {
     await fetchDepartments()
@@ -486,7 +451,6 @@ watch(activeTab, async (newTab) => {
   }
 })
 
-// Экспортируем методы
 defineExpose({
   reloadDepartments,
   reloadProfiles,
@@ -496,6 +460,7 @@ defineExpose({
 </script>
 
 <style scoped>
+/* Стили без изменений */
 .control-panel {
   max-width: 1200px;
   margin: 0 auto;

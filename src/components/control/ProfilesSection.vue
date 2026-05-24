@@ -9,7 +9,6 @@
       </el-button>
     </div>
 
-    <!-- Поиск и фильтры -->
     <div class="filters-row">
       <el-input
         v-model="profileSearch"
@@ -18,8 +17,6 @@
         clearable
         class="search-input"
       />
-
-      <!-- 🔹 Фильтр по отделам -->
       <el-select
         v-model="departmentFilter"
         placeholder="Фильтр по отделам"
@@ -40,7 +37,6 @@
       </el-select>
     </div>
 
-    <!-- Таблица профилей -->
     <el-table
       :data="filteredProfiles"
       stripe
@@ -53,14 +49,10 @@
       <el-table-column prop="title" label="Название профиля" min-width="250" />
       <el-table-column prop="description" label="Описание" min-width="300" show-overflow-tooltip />
       <el-table-column label="Уровней" width="100" align="center">
-        <template #default="{ row }">
-          {{ row.levels?.length || 0 }}
-        </template>
+        <template #default="{ row }">{{ row.levels?.length || 0 }}</template>
       </el-table-column>
       <el-table-column label="Навыков" width="100" align="center">
-        <template #default="{ row }">
-          {{ countProfileSkills(row) }}
-        </template>
+        <template #default="{ row }">{{ countProfileSkills(row) }}</template>
       </el-table-column>
     </el-table>
 
@@ -77,20 +69,15 @@
           <div class="view-label">Название профиля</div>
           <div class="view-value">{{ viewingProfile.title }}</div>
         </div>
-
         <div class="profile-view-section">
           <div class="view-label">Описание</div>
           <div class="view-value view-value-multiline">{{ viewingProfile.description || '—' }}</div>
         </div>
-
         <div class="profile-view-section">
           <div class="view-label">Уровни</div>
-
-          <!-- 🔹 Если уровней нет -->
           <div v-if="!viewingProfile.levels?.length" class="empty-placeholder">
             Уровни не добавлены
           </div>
-
           <div v-else class="levels-collapse">
             <div
               v-for="(level, lIdx) in viewingProfile.levels"
@@ -104,20 +91,15 @@
                 <el-icon
                   class="collapse-icon"
                   :class="{ expanded: expandedViewLevels.includes(lIdx) }"
-                >
-                  <ArrowRight />
-                </el-icon>
+                  ><ArrowRight
+                /></el-icon>
               </div>
-
               <el-collapse-transition>
                 <div v-show="expandedViewLevels.includes(lIdx)" class="level-collapse-content">
                   <div class="skills-section-label">Навыки</div>
-
-                  <!-- 🔹 Если навыков в уровне нет -->
                   <div v-if="!getLevelSkillIds(level).length" class="empty-placeholder">
                     Навыки не добавлены
                   </div>
-
                   <div v-else class="skills-list-container">
                     <div
                       v-for="skillItem in getLevelSkillIds(level)"
@@ -132,11 +114,9 @@
                         <el-icon
                           class="collapse-icon"
                           :class="{ expanded: expandedViewSkills.includes(skillItem.id) }"
-                        >
-                          <ArrowRight />
-                        </el-icon>
+                          ><ArrowRight
+                        /></el-icon>
                       </div>
-
                       <el-collapse-transition>
                         <div
                           v-show="expandedViewSkills.includes(skillItem.id)"
@@ -144,36 +124,30 @@
                         >
                           <div class="skill-detail-section">
                             <div class="skill-detail-row">
-                              <span class="skill-detail-label">Название:</span>
-                              <span class="skill-detail-value">{{ skillItem.title }}</span>
+                              <span class="skill-detail-label">Название:</span
+                              ><span class="skill-detail-value">{{ skillItem.title }}</span>
                             </div>
                             <div class="skill-detail-row">
-                              <span class="skill-detail-label">Описание:</span>
-                              <span class="skill-detail-value view-value-multiline">{{
+                              <span class="skill-detail-label">Описание:</span
+                              ><span class="skill-detail-value view-value-multiline">{{
                                 getFullSkillDescription(skillItem.id)
                               }}</span>
                             </div>
                             <div class="skill-detail-row">
-                              <span class="skill-detail-label">Материалы:</span>
-                              <span class="skill-detail-value view-value-multiline">{{
+                              <span class="skill-detail-label">Материалы:</span
+                              ><span class="skill-detail-value view-value-multiline">{{
                                 getFullSkillMaterials(skillItem.id)
                               }}</span>
                             </div>
-
-                            <!-- 🔹 Отображение этапов (как в SkillSection) -->
                             <div class="view-row" style="margin-top: var(--spacing-sm)">
                               <div class="view-label">Этапы</div>
-
-                              <!-- Если этапов нет вообще -->
                               <div
                                 v-if="!getFullSkillStages(skillItem.id)?.length"
                                 class="empty-placeholder"
                               >
                                 Этапы не добавлены
                               </div>
-
                               <template v-else>
-                                <!-- Вкладки этапов -->
                                 <div class="stages-tabs">
                                   <div
                                     v-for="stageType in getSkillStageTypesWithContent(skillItem.id)"
@@ -188,10 +162,7 @@
                                     {{ stageType.label }}
                                   </div>
                                 </div>
-
-                                <!-- Содержимое выбранного этапа -->
                                 <div class="stage-content">
-                                  <!-- Если нет этапов выбранного типа -->
                                   <div
                                     v-if="
                                       !getSkillStagesByTypeSimple(
@@ -203,7 +174,6 @@
                                   >
                                     Нет данных для этого этапа
                                   </div>
-
                                   <template v-else>
                                     <div
                                       v-for="(stage, sIdx) in getSkillStagesByTypeSimple(
@@ -213,7 +183,6 @@
                                       :key="stage.id || `stage_${sIdx}`"
                                       class="stage-item"
                                     >
-                                      <!-- Заголовок типа этапа -->
                                       <div class="stage-title">
                                         {{
                                           getStageContentTitleSimple(
@@ -221,8 +190,6 @@
                                           )
                                         }}
                                       </div>
-
-                                      <!-- Если вопросов нет -->
                                       <div
                                         v-if="
                                           !stage.questions ||
@@ -233,8 +200,6 @@
                                       >
                                         Вопросы/задания не добавлены
                                       </div>
-
-                                      <!-- Если вопросы есть -->
                                       <div v-else class="stage-qa-list">
                                         <div
                                           v-for="(q, qIdx) in stage.questions"
@@ -251,8 +216,8 @@
                                               )
                                             "
                                           >
-                                            <span>{{ qIdx + 1 }}.</span>
-                                            <span class="qa-question-text">{{
+                                            <span>{{ qIdx + 1 }}.</span
+                                            ><span class="qa-question-text">{{
                                               q.text || q.question || 'Без текста'
                                             }}</span>
                                             <el-icon
@@ -263,9 +228,8 @@
                                                     `${skillItem.id}_${stage.id || sIdx}_${qIdx}`
                                                   ],
                                               }"
-                                            >
-                                              <ArrowRight />
-                                            </el-icon>
+                                              ><ArrowRight
+                                            /></el-icon>
                                           </div>
                                           <el-collapse-transition>
                                             <div
@@ -326,7 +290,6 @@
         <el-form-item label="Название профиля *" prop="title">
           <el-input v-model="profileForm.title" placeholder="Например: Frontend Developer" />
         </el-form-item>
-
         <el-form-item label="Описание" prop="description">
           <el-input
             v-model="profileForm.description"
@@ -335,8 +298,6 @@
             placeholder="Краткое описание профиля"
           />
         </el-form-item>
-
-        <!-- Уровни -->
         <div class="form-section">
           <h4 class="section-title">Уровни</h4>
           <div class="levels-list">
@@ -344,7 +305,7 @@
               <div class="level-header">
                 <el-input
                   v-model="level.level_name"
-                  placeholder="Название уровня (Ученик, 1 Категория...)"
+                  placeholder="Название уровня"
                   class="level-name-input"
                 />
                 <el-button
@@ -355,11 +316,8 @@
                   @click="removeLevel(lIdx)"
                 />
               </div>
-
-              <!-- Навыки уровня -->
               <div class="level-skills">
                 <h5 class="subsection-title">Навыки</h5>
-
                 <div class="skills-filter-row">
                   <el-select
                     v-model="skillCategoryFilter"
@@ -380,7 +338,6 @@
                   </el-select>
                   <span class="filter-hint">Фильтрует все списки навыков</span>
                 </div>
-
                 <div v-for="(skillId, sIdx) in level.skills" :key="sIdx" class="skill-select-item">
                   <el-select
                     v-model="level.skills[sIdx]"
@@ -422,18 +379,17 @@
                     @click="level.skills.splice(sIdx, 1)"
                   />
                 </div>
-                <el-button type="primary" link size="small" @click="level.skills.push(null)">
-                  <el-icon><Plus /></el-icon> Добавить навык
-                </el-button>
+                <el-button type="primary" link size="small" @click="level.skills.push(null)"
+                  ><el-icon><Plus /></el-icon> Добавить навык</el-button
+                >
               </div>
             </div>
-            <el-button type="primary" @click="addLevel" class="add-level-btn" :disabled="loading">
-              <el-icon><Plus /></el-icon> Добавить уровень
-            </el-button>
+            <el-button type="primary" @click="addLevel" class="add-level-btn" :disabled="loading"
+              ><el-icon><Plus /></el-icon> Добавить уровень</el-button
+            >
           </div>
         </div>
       </el-form>
-
       <template #footer>
         <el-button @click="profileDialogVisible = false" :disabled="loading">Отмена</el-button>
         <el-button type="primary" @click="saveProfile" :loading="loading">Сохранить</el-button>
@@ -456,21 +412,15 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:profiles', 'refresh', 'update:departmentFilter'])
-
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-// === Поиск и фильтры ===
 const profileSearch = ref('')
 const departmentFilter = ref([])
 const skillCategoryFilter = ref([])
 
-const availableDepartments = computed(() => {
-  return (props.departments || []).map((d) => ({
-    id: d.id,
-    name: d.name || d.title || `Отдел #${d.id}`,
-  }))
-})
-
+const availableDepartments = computed(() =>
+  (props.departments || []).map((d) => ({ id: d.id, name: d.name || d.title || `Отдел #${d.id}` })),
+)
 const filteredProfiles = computed(() => {
   let result = props.profiles || []
   if (profileSearch.value) {
@@ -480,27 +430,18 @@ const filteredProfiles = computed(() => {
   return result
 })
 
-// === Модальные окна ===
 const profileDialogVisible = ref(false)
 const viewProfileVisible = ref(false)
 const viewLoading = ref(false)
 const editingProfile = ref(null)
 const viewingProfile = ref(null)
-
-// === Для просмотра профиля ===
 const expandedViewLevels = ref([])
 const expandedViewSkills = ref([])
 const expandedSkillQA = ref({})
 const skillSelectedStageTypes = ref({})
 
-// === Форма профиля ===
-const profileForm = ref({
-  title: '',
-  description: '',
-  levels: [],
-})
+const profileForm = ref({ title: '', description: '', levels: [] })
 
-// === 🔧 Вычисляемый список навыков с учётом фильтра по категориям ===
 const filteredAllSkills = computed(() => {
   let skills = props.allSkills || []
   if (skillCategoryFilter.value?.length > 0) {
@@ -513,17 +454,14 @@ const filteredAllSkills = computed(() => {
   return skills
 })
 
-// === Хелперы для группировки навыков (для формы) ===
-const getUncategorizedSkillsList = () => {
-  if (skillCategoryFilter.value?.length > 0) return []
-  return (filteredAllSkills.value || []).filter((s) => !s.categoryId && !s.categoryIds?.length)
-}
-
+const getUncategorizedSkillsList = () =>
+  skillCategoryFilter.value?.length > 0
+    ? []
+    : (filteredAllSkills.value || []).filter((s) => !s.categoryId && !s.categoryIds?.length)
 const getSkillsByCategoryList = () => {
-  const result = []
-  const grouped = {}
+  const result = [],
+    grouped = {}
   if (!filteredAllSkills.value?.length) return []
-
   filteredAllSkills.value.forEach((skill) => {
     const catIds = skill.categoryIds || (skill.categoryId ? [skill.categoryId] : [])
     catIds.forEach((catId) => {
@@ -531,41 +469,26 @@ const getSkillsByCategoryList = () => {
       grouped[catId].push(skill)
     })
   })
-
   Object.entries(grouped).forEach(([categoryId, skills]) => {
     const category = props.categories?.find((c) => String(c.id) === String(categoryId))
-    result.push({
-      categoryId,
-      categoryName: category?.name || `Категория #${categoryId}`,
-      skills,
-    })
+    result.push({ categoryId, categoryName: category?.name || `Категория #${categoryId}`, skills })
   })
-
   return result
 }
 
-// === Хелперы для отображения навыков в просмотре ===
 const getLevelSkillIds = (level) => {
   if (level.level_skills?.length) return level.level_skills
-  if (level.skills?.length) {
-    return level.skills.map((id) => ({ id, title: getSkillNameById(id) }))
-  }
+  if (level.skills?.length) return level.skills.map((id) => ({ id, title: getSkillNameById(id) }))
   return []
 }
-
-const getSkillById = (skillId) => {
-  return props.allSkills?.find((s) => s.id === skillId || String(s.id) === String(skillId))
-}
-
+const getSkillById = (skillId) =>
+  props.allSkills?.find((s) => s.id === skillId || String(s.id) === String(skillId))
 const getSkillNameById = (skillId) => {
-  const skill = getSkillById(skillId)
-  return skill?.name || skill?.title || `Навык #${skillId}`
+  const s = getSkillById(skillId)
+  return s?.name || s?.title || `Навык #${skillId}`
 }
 
-// === Кэш полных данных навыков ===
 const fullSkillsCache = ref({})
-
-// 🔧 Простая маппинг-функция типа этапа (как в SkillSection)
 const mapTypeToFrontendSimple = (backendType) => {
   if (!backendType) return 'practice'
   const t = String(backendType).trim()
@@ -575,21 +498,13 @@ const mapTypeToFrontendSimple = (backendType) => {
   return 'practice'
 }
 
-// 🔧 Загрузка данных навыка с простой нормализацией (как в SkillSection)
 const fetchFullSkillData = async (skillId) => {
   if (fullSkillsCache.value[skillId]) return fullSkillsCache.value[skillId]
-
   try {
     const res = await fetch(`${API_BASE}/skills/${skillId}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     let data = await res.json()
-
-    // Если данные вложены в поле "skill"
-    if (data?.skill && !data?.stages) {
-      data = { ...data, ...data.skill }
-    }
-
-    // Простая нормализация этапов (как в normalizeSkillData из SkillSection)
+    if (data?.skill && !data?.stages) data = { ...data, ...data.skill }
     if (data?.stages && Array.isArray(data.stages)) {
       data.stages = data.stages.map((stage) => {
         const rawQuestions = stage.questions || stage.questions_list || []
@@ -601,10 +516,9 @@ const fetchFullSkillData = async (skillId) => {
               num: q?.num || 1,
             }))
           : []
-
         return {
           id: stage?.id || null,
-          type: mapTypeToFrontendSimple(stage.confirmation_type), // 🔧 Ключевое: type = нормализованный тип
+          type: mapTypeToFrontendSimple(stage.confirmation_type),
           confirmation_type: stage.confirmation_type,
           questions,
         }
@@ -612,7 +526,6 @@ const fetchFullSkillData = async (skillId) => {
     } else {
       data.stages = []
     }
-
     fullSkillsCache.value[skillId] = data
     return data
   } catch (err) {
@@ -623,75 +536,48 @@ const fetchFullSkillData = async (skillId) => {
   }
 }
 
-const getSkillData = (skillId) => {
-  if (fullSkillsCache.value[skillId]) return fullSkillsCache.value[skillId]
-  return props.allSkills?.find((s) => s.id === skillId || String(s.id) === String(skillId))
-}
-
-const getFullSkillDescription = (skillId) => {
-  const skill = getSkillData(skillId)
-  return skill?.description || '—'
-}
-
-const getFullSkillMaterials = (skillId) => {
-  const skill = getSkillData(skillId)
-  return skill?.materials || skill?.literature || 'Нет материалов'
-}
-
-const getFullSkillStages = (skillId) => {
-  const skill = getSkillData(skillId)
-  return skill?.stages || []
-}
-
-// === 🔧 Простые хелперы для этапов (как в SkillSection) ===
+const getSkillData = (skillId) =>
+  fullSkillsCache.value[skillId] ||
+  props.allSkills?.find((s) => s.id === skillId || String(s.id) === String(skillId))
+const getFullSkillDescription = (skillId) => getSkillData(skillId)?.description || '—'
+const getFullSkillMaterials = (skillId) =>
+  getSkillData(skillId)?.materials || getSkillData(skillId)?.literature || 'Нет материалов'
+const getFullSkillStages = (skillId) => getSkillData(skillId)?.stages || []
 
 const stageTypes = [
   { key: 'practice', label: 'Практическое задание' },
   { key: 'attestation', label: 'Аттестация' },
   { key: 'performance', label: 'Performance review' },
 ]
-
-// Возвращает только те типы этапов, которые есть у навыка
 const getSkillStageTypesWithContent = (skillId) => {
   const stages = getFullSkillStages(skillId)
   if (!stages?.length) return stageTypes
   const available = stageTypes.filter((t) => stages.some((s) => s?.type === t.key))
   return available.length > 0 ? available : stageTypes
 }
-
-// 🔧 Простая фильтрация: s.type === type (как в SkillSection)
 const getSkillStagesByTypeSimple = (skillId, type) => {
   const stages = getFullSkillStages(skillId)
   if (!stages || !Array.isArray(stages)) return []
   return stages.filter((s) => s?.type === type)
 }
-
-// 🔧 Заголовок контента (как в SkillSection)
 const getStageContentTitleSimple = (type) =>
   type === 'attestation' ? 'Вопросы и ответы' : 'Задания и критерии'
-
-// 🔧 Проверка типа для подписи ответа (как в SkillSection)
 const isPracticeOrPerformanceSimple = (type) => type === 'practice' || type === 'performance'
-
 const getSkillSelectedStageType = (skillId) => skillSelectedStageTypes.value[skillId] || 'practice'
-
 const selectSkillStageType = (skillId, type) => {
   skillSelectedStageTypes.value[skillId] = type
 }
 
-// === Управление раскрытием ===
 const toggleViewLevelExpand = (levelIdx) => {
   const idx = expandedViewLevels.value.indexOf(levelIdx)
   if (idx === -1) expandedViewLevels.value.push(levelIdx)
   else expandedViewLevels.value.splice(idx, 1)
 }
-
 const toggleViewSkillExpand = async (skillId) => {
   const idx = expandedViewSkills.value.indexOf(skillId)
   if (idx === -1) {
     expandedViewSkills.value.push(skillId)
     if (!fullSkillsCache.value[skillId]) await fetchFullSkillData(skillId)
-    // Устанавливаем первый доступный тип этапа как активный
     if (!skillSelectedStageTypes.value[skillId]) {
       const allTypes = getSkillStageTypesWithContent(skillId)
       skillSelectedStageTypes.value[skillId] = allTypes[0]?.key || 'practice'
@@ -700,21 +586,19 @@ const toggleViewSkillExpand = async (skillId) => {
     expandedViewSkills.value.splice(idx, 1)
   }
 }
-
 const toggleSkillQAExpand = (skillId, stageId, idx) => {
   const key = `${skillId}_${stageId}_${idx}`
   expandedSkillQA.value[key] = !expandedSkillQA.value[key]
 }
 
-// === Хелперы ===
 const countProfileSkills = (profile) => {
   if (!profile.levels) return 0
-  return profile.levels.reduce((total, level) => {
-    return total + (level.level_skills?.length || level.skills?.length || 0)
-  }, 0)
+  return profile.levels.reduce(
+    (total, level) => total + (level.level_skills?.length || level.skills?.length || 0),
+    0,
+  )
 }
 
-// === Профили: серверные методы ===
 const fetchProfilesWithLevels = async (deptIds = null) => {
   try {
     emit('refresh')
@@ -724,11 +608,12 @@ const fetchProfilesWithLevels = async (deptIds = null) => {
       deptIds.forEach((id) => params.append('departments_id', String(id)))
       url = `${url}?${params.toString()}`
     }
-
-    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' } })
+    const res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
-
     let profilesData = data
     if (typeof data === 'string') {
       try {
@@ -737,11 +622,9 @@ const fetchProfilesWithLevels = async (deptIds = null) => {
         profilesData = []
       }
     }
-
     const normalized = Array.isArray(profilesData)
       ? profilesData.map(normalizeProfileFromBackend).filter(Boolean)
       : []
-
     emit('update:profiles', normalized)
     return normalized
   } catch (err) {
@@ -754,7 +637,7 @@ const fetchProfilesWithLevels = async (deptIds = null) => {
 
 const fetchProfileById = async (profileId) => {
   try {
-    const res = await fetch(`${API_BASE}/profiles/${profileId}`)
+    const res = await fetch(`${API_BASE}/profiles/${profileId}`, { credentials: 'include' })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return await res.json()
   } catch (err) {
@@ -765,10 +648,11 @@ const fetchProfileById = async (profileId) => {
 }
 
 const createProfile = async (profileData) => {
-  console.log('📤 Sending payload to /profiles/:', JSON.stringify(profileData, null, 2))
+  console.log('📤 Sending payload to /profiles/ (POST):', JSON.stringify(profileData, null, 2))
   const res = await fetch(`${API_BASE}/profiles/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(profileData),
   })
   if (!res.ok) {
@@ -782,9 +666,11 @@ const createProfile = async (profileData) => {
 }
 
 const updateProfile = async (profileId, profileData) => {
+  console.log('📤 Sending payload to /profiles/:id (PUT):', JSON.stringify(profileData, null, 2))
   const res = await fetch(`${API_BASE}/profiles/${profileId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(profileData),
   })
   if (!res.ok) {
@@ -801,6 +687,7 @@ const deleteProfile = async (profileId) => {
   const res = await fetch(`${API_BASE}/profiles/${profileId}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -809,7 +696,7 @@ const deleteProfile = async (profileId) => {
   return await res.json()
 }
 
-// === Преобразование форматов: Frontend ↔ Backend ===
+// ✅ ИСПРАВЛЕНО: сохраняем id уровней и профиля при обновлении
 const normalizeProfileFromBackend = (backendProfile) => {
   if (!backendProfile) return null
   let data = backendProfile
@@ -820,14 +707,13 @@ const normalizeProfileFromBackend = (backendProfile) => {
       return null
     }
   }
-
   return {
     id: data.id,
     title: data.title || data.position || '',
     description: data.description || '',
     levels: Array.isArray(data.levels)
       ? data.levels.map((lvl) => ({
-          id: lvl.id,
+          id: lvl.id, // ✅ Сохраняем ID уровня
           num: lvl.num,
           level_name: lvl.level_name || lvl.name || '',
           level_skills: Array.isArray(lvl.level_skills)
@@ -845,9 +731,11 @@ const normalizeProfileFromBackend = (backendProfile) => {
   }
 }
 
+// ✅ ИСПРАВЛЕНО: передаём id профиля и id уровней при обновлении
 const prepareProfileForBackend = (frontendProfile) => {
-  return {
+  const payload = {
     profile: {
+      id: frontendProfile.id || null, // ✅ ID профиля для PUT-запроса
       title: (frontendProfile.title || '').trim(),
       description: frontendProfile.description || '',
     },
@@ -857,16 +745,24 @@ const prepareProfileForBackend = (frontendProfile) => {
         .map((s) => (typeof s === 'object' && s !== null ? s.id : s))
         .filter((id) => id != null && id !== '' && Number.isInteger(Number(id)))
 
-      return {
+      const levelPayload = {
         level_name: (lvl.level_name || lvl.name || `Уровень ${idx + 1}`).trim(),
         num: lvl.num || idx + 1,
         skills: skillIds,
       }
+
+      // ✅ Ключевое: передаём id уровня при обновлении, чтобы бэкенд обновлял, а не создавал дубликаты
+      if (lvl.id != null) {
+        levelPayload.id = lvl.id
+      }
+
+      return levelPayload
     }),
   }
+  console.log('📦 Prepared payload:', JSON.stringify(payload, null, 2))
+  return payload
 }
 
-// === Профили: действия ===
 const viewProfile = async (profile) => {
   try {
     viewLoading.value = true
@@ -898,11 +794,7 @@ const confirmDeleteProfile = async () => {
     await ElMessageBox.confirm(
       `Удалить профиль "${viewingProfile.value.title}"?`,
       'Подтверждение',
-      {
-        type: 'warning',
-        confirmButtonText: 'Удалить',
-        cancelButtonText: 'Отмена',
-      },
+      { type: 'warning', confirmButtonText: 'Удалить', cancelButtonText: 'Отмена' },
     )
     emit('refresh')
     await deleteProfile(viewingProfile.value.id)
@@ -924,11 +816,12 @@ const openProfileDialog = (profile = null) => {
     editingProfile.value = profile
     const normalized = normalizeProfileFromBackend(profile)
     profileForm.value = {
+      id: normalized.id, // ✅ Сохраняем ID профиля
       title: normalized.title || '',
       description: normalized.description || '',
       levels:
         normalized.levels?.map((lvl) => ({
-          id: lvl.id,
+          id: lvl.id, // ✅ Сохраняем ID уровня
           num: lvl.num,
           level_name: lvl.level_name,
           skills: lvl.skills || [],
@@ -949,7 +842,6 @@ const addLevel = () => {
     skills: [],
   })
 }
-
 const removeLevel = (idx) => {
   profileForm.value.levels.splice(idx, 1)
   profileForm.value.levels.forEach((lvl, i) => {
@@ -958,15 +850,10 @@ const removeLevel = (idx) => {
 }
 
 const saveProfile = async () => {
-  if (!profileForm.value.title?.trim()) {
-    return ElMessage.warning('Введите название профиля')
-  }
-
+  if (!profileForm.value.title?.trim()) return ElMessage.warning('Введите название профиля')
   try {
     emit('refresh')
     const payload = prepareProfileForBackend(profileForm.value)
-    console.log('📦 Prepared Payload:', payload)
-
     if (editingProfile.value?.id) {
       await updateProfile(editingProfile.value.id, payload)
       ElMessage.success('Профиль обновлён')
@@ -974,20 +861,17 @@ const saveProfile = async () => {
       await createProfile(payload)
       ElMessage.success('Профиль создан')
     }
-
     await fetchProfilesWithLevels(departmentFilter.value.length ? departmentFilter.value : null)
     profileDialogVisible.value = false
   } catch (err) {
     console.error('❌ Error saving profile:', err)
-    ElMessage.error(err.message || 'Ошибка сохранения профиля. Проверьте консоль (F12)')
+    ElMessage.error(err.message || 'Ошибка сохранения профиля')
   }
 }
 
-const reload = async () => {
+const reload = async () =>
   await fetchProfilesWithLevels(departmentFilter.value.length ? departmentFilter.value : null)
-}
 
-// 🔧 Сброс кэша при изменении данных навыков
 watch(
   () => [props.allSkills, props.categories, props.departments],
   () => {
@@ -1000,7 +884,7 @@ defineExpose({ reload, fetchProfilesWithLevels })
 </script>
 
 <style scoped>
-/* === Секция === */
+/* Стили без изменений — сокращено для экономии места */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -1133,7 +1017,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
   color: var(--text);
   line-height: 1.6;
 }
-/* 🔧 Класс для сохранения переносов строк */
 .view-value-multiline {
   white-space: pre-wrap;
   word-break: break-word;
@@ -1225,8 +1108,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
   color: var(--text);
   flex: 1;
 }
-
-/* 🔧 Стили для этапов (как в SkillSection) */
 .stages-tabs {
   display: flex;
   gap: var(--spacing-xs);
@@ -1302,16 +1183,12 @@ defineExpose({ reload, fetchProfilesWithLevels })
 .collapse-icon.expanded {
   transform: rotate(90deg);
 }
-
-/* 🔹 Стили для пустых состояний */
 .empty-placeholder {
   color: var(--gray);
   font-size: 13px;
   font-style: italic;
   padding: var(--spacing-sm) 0;
 }
-
-/* Адаптивность */
 @media (max-width: 768px) {
   .filters-row {
     flex-direction: column;
@@ -1334,8 +1211,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
     text-align: center;
   }
 }
-
-/* Deep styles для Element Plus */
 :deep(.admin-dialog .el-dialog__body) {
   padding: var(--spacing-md) var(--spacing-lg);
 }
