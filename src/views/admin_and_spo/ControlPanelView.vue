@@ -40,8 +40,13 @@
 
     <DirectionsSection
       v-if="activeTab === 'directions'"
+      ref="directionsSectionRef"
       v-model:directions="directions"
       :all-departments="departments"
+      :all-employees="employees"
+      :loading="directionsLoading"
+      @update:directions="handleDirectionsUpdate"
+      @refresh="handleRefresh"
     />
 
     <ProfilesSection
@@ -107,10 +112,12 @@ const tabs = [
 const activeTab = ref('skills')
 const departmentsSectionRef = ref(null)
 const profilesSectionRef = ref(null)
+const directionsSectionRef = ref(null)
 
 const skillsLoading = ref(false)
 const departmentsLoading = ref(false)
 const profilesLoading = ref(false)
+const directionsLoading = ref(false)
 const logsLoading = ref(false)
 
 const categories = ref([])
@@ -119,7 +126,7 @@ const departments = ref([])
 const directions = ref([])
 const profiles = ref([])
 const meetings = ref([])
-const employees = ref([]) // ✅ Оставляем для MeetingSection
+const employees = ref([])
 const logs = ref([])
 
 const profileDepartmentFilter = ref([])
@@ -230,7 +237,7 @@ const fetchSkills = async () => {
   }
 }
 
-// ✅ Загружаем ВСЕХ сотрудников (для MeetingSection и других компонентов)
+// ✅ Загружаем ВСЕХ сотрудников с полем is_supervisor для фильтрации в DirectionsSection
 const fetchEmployees = async () => {
   try {
     const res = await fetch(`${API_BASE}/users/`, {
@@ -240,12 +247,13 @@ const fetchEmployees = async () => {
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
 
-    // ✅ Извлекаем ТОЛЬКО нужные поля (без email и position)
+    // ✅ Сохраняем is_supervisor для фильтрации доступных руководителей
     employees.value = data.map((emp) => ({
       id: emp.id,
       first_name: emp.first_name || '',
       last_name: emp.last_name || '',
       patronymic: emp.patronymic || '',
+      is_supervisor: emp.is_supervisor ?? false, // ✅ Критично для DirectionsSection
     }))
 
     console.log('✅ Employees loaded:', employees.value.length)
@@ -301,6 +309,28 @@ const fetchDepartments = async () => {
     return []
   } finally {
     departmentsLoading.value = false
+  }
+}
+
+// ✅ Загрузка направлений с сервера
+const fetchDirections = async () => {
+  try {
+    directionsLoading.value = true
+    const res = await fetch(`${API_BASE}/admin/divisions/departments`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+    directions.value = data
+    return data
+  } catch (err) {
+    console.error('Error fetching directions:', err)
+    ElMessage.error('Не удалось загрузить направления')
+    directions.value = []
+    return []
+  } finally {
+    directionsLoading.value = false
   }
 }
 
@@ -390,6 +420,14 @@ const handleDepartmentsUpdate = async (newDepts = null) => {
   }
 }
 
+const handleDirectionsUpdate = async (newDirections = null) => {
+  if (Array.isArray(newDirections)) {
+    directions.value = newDirections
+  } else {
+    await fetchDirections()
+  }
+}
+
 const handleProfilesUpdate = async (newProfiles = null) => {
   if (Array.isArray(newProfiles)) {
     profiles.value = newProfiles
@@ -408,6 +446,9 @@ const onTabChange = async (tabId) => {
   if (tabId === 'departments' && !departments.value.length) {
     await fetchDepartments()
   }
+  if (tabId === 'directions' && !directions.value.length) {
+    await fetchDirections()
+  }
   if (tabId === 'profiles' && !profiles.value.length) {
     await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
   }
@@ -424,6 +465,14 @@ const reloadDepartments = async () => {
   }
 }
 
+const reloadDirections = async () => {
+  if (directionsSectionRef.value?.fetchDirections) {
+    await directionsSectionRef.value.fetchDirections()
+  } else {
+    await fetchDirections()
+  }
+}
+
 const reloadProfiles = async () => {
   if (profilesSectionRef.value?.reload) {
     await profilesSectionRef.value.reload()
@@ -433,18 +482,27 @@ const reloadProfiles = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchCategories(), fetchSkills(), fetchEmployees(), fetchDepartments()])
+  await Promise.all([
+    fetchCategories(),
+    fetchSkills(),
+    fetchEmployees(), // ✅ Загружает сотрудников с is_supervisor
+    fetchDepartments(),
+  ])
 
   await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
 
   if (activeTab.value === 'logs') {
     await fetchLogs()
   }
+  // Directions загружаются по требованию при активации вкладки
 })
 
 watch(activeTab, async (newTab) => {
   if (newTab === 'departments' && !departments.value.length) {
     await fetchDepartments()
+  }
+  if (newTab === 'directions' && !directions.value.length) {
+    await fetchDirections()
   }
   if (newTab === 'profiles' && !profiles.value.length) {
     await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
@@ -453,14 +511,16 @@ watch(activeTab, async (newTab) => {
 
 defineExpose({
   reloadDepartments,
+  reloadDirections,
   reloadProfiles,
   fetchDepartments,
+  fetchDirections,
   fetchProfiles,
+  fetchEmployees,
 })
 </script>
 
 <style scoped>
-/* Стили без изменений */
 .control-panel {
   max-width: 1200px;
   margin: 0 auto;

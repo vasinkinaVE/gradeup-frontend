@@ -28,14 +28,18 @@
       class="data-table"
       @row-click="viewDirection"
     >
-      <el-table-column prop="name" label="Название направления" min-width="250" />
+      <el-table-column prop="division_name" label="Название направления" min-width="250" />
       <el-table-column prop="departmentsCount" label="Отделов" width="100" align="center">
         <template #default="{ row }">
-          {{ row.departmentIds?.length || 0 }}
+          {{ row.departments?.length || 0 }}
         </template>
       </el-table-column>
       <el-table-column prop="description" label="Описание" min-width="250" show-overflow-tooltip />
-      <el-table-column prop="supervisorName" label="Руководитель" min-width="200" />
+      <el-table-column label="Руководитель" min-width="200">
+        <template #default="{ row }">
+          {{ formatSupervisorName(row.supervisor) }}
+        </template>
+      </el-table-column>
     </el-table>
 
     <!-- 🔹 Модальное окно: ПРОСМОТР НАПРАВЛЕНИЯ -->
@@ -49,7 +53,7 @@
       <div v-if="viewingDirection" class="view-content">
         <div class="view-row">
           <div class="view-label">Название направления</div>
-          <div class="view-value">{{ viewingDirection.name }}</div>
+          <div class="view-value">{{ viewingDirection.division_name }}</div>
         </div>
 
         <div class="view-row">
@@ -59,7 +63,9 @@
 
         <div class="view-row">
           <div class="view-label">Руководитель</div>
-          <div class="view-value">{{ viewingDirection.supervisorName || 'Не назначен' }}</div>
+          <div class="view-value">
+            {{ formatSupervisorName(viewingDirection.supervisor) || 'Не назначен' }}
+          </div>
         </div>
 
         <div class="view-row">
@@ -72,7 +78,7 @@
                 size="small"
                 class="dept-tag"
               >
-                {{ dept.name }}
+                {{ dept.department_name || dept.name }}
               </el-tag>
             </div>
             <span v-else>Отделы не добавлены</span>
@@ -94,8 +100,8 @@
       destroy-on-close
     >
       <el-form :model="directionForm" label-position="top">
-        <el-form-item label="Название направления *" prop="name">
-          <el-input v-model="directionForm.name" placeholder="Например: Разработка ПО" />
+        <el-form-item label="Название направления *" prop="division_name">
+          <el-input v-model="directionForm.division_name" placeholder="Например: Разработка ПО" />
         </el-form-item>
 
         <el-form-item label="Описание" prop="description">
@@ -107,27 +113,40 @@
           />
         </el-form-item>
 
-        <el-form-item label="Руководитель направления" prop="supervisorId">
+        <!-- Руководитель показываем только при редактировании -->
+        <el-form-item v-if="editingDirection" label="Руководитель направления" prop="supervisor_id">
           <el-select
-            v-model="directionForm.supervisorId"
+            v-model="directionForm.supervisor_id"
             placeholder="Выберите руководителя"
             filterable
             clearable
             style="width: 100%"
           >
             <el-option
-              v-for="emp in allEmployees"
+              v-for="emp in availableSupervisors"
               :key="emp.id"
-              :label="emp.fullName"
+              :label="formatEmployeeName(emp)"
               :value="emp.id"
             />
           </el-select>
           <div class="form-hint">Выберите сотрудника, который будет руководить направлением</div>
+
+          <!-- Кнопка открепления: показываем ТОЛЬКО при редактировании, если руководитель уже назначен -->
+          <el-button
+            v-if="editingDirection && directionForm.supervisor_id"
+            type="danger"
+            size="small"
+            @click="unassignSupervisor"
+            style="margin-top: 8px"
+          >
+            <el-icon><Remove /></el-icon>
+            Открепить руководителя
+          </el-button>
         </el-form-item>
 
-        <el-form-item label="Входящие отделы" prop="departmentIds">
+        <el-form-item label="Входящие отделы" prop="departments">
           <el-select
-            v-model="directionForm.departmentIds"
+            v-model="directionForm.departments"
             placeholder="Выберите отделы"
             multiple
             filterable
@@ -136,10 +155,10 @@
             <el-option
               v-for="dept in allDepartments"
               :key="dept.id"
-              :label="dept.name"
+              :label="dept.name || dept.department_name"
               :value="dept.id"
             >
-              <span>{{ dept.name }}</span>
+              <span>{{ dept.name || dept.department_name }}</span>
               <span v-if="dept.description" class="option-desc"> — {{ dept.description }}</span>
             </el-option>
           </el-select>
@@ -149,16 +168,16 @@
 
       <template #footer>
         <el-button @click="directionDialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="saveDirection">Сохранить</el-button>
+        <el-button type="primary" @click="saveDirection" :loading="saving">Сохранить</el-button>
       </template>
     </el-dialog>
   </section>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit, Search } from '@element-plus/icons-vue'
+import { Plus, Delete, Edit, Search, Remove } from '@element-plus/icons-vue'
 
 const props = defineProps({
   directions: {
@@ -175,7 +194,9 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:directions'])
+const emit = defineEmits(['update:directions', 'refresh'])
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 // === Поиск ===
 const directionSearch = ref('')
@@ -184,8 +205,15 @@ const filteredDirections = computed(() => {
   if (!directionSearch.value) return props.directions
   const q = directionSearch.value.toLowerCase()
   return props.directions.filter(
-    (d) => d.name?.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q),
+    (d) => d.division_name?.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q),
   )
+})
+
+// === Список доступных руководителей (фильтруем из allEmployees) ===
+const availableSupervisors = computed(() => {
+  // Показываем только тех, у кого is_supervisor === false
+  // (те, кто ещё не является руководителем отдела/направления)
+  return (props.allEmployees || []).filter((emp) => emp.is_supervisor === false)
 })
 
 // === Модальные окна ===
@@ -194,36 +222,168 @@ const viewDirectionVisible = ref(false)
 
 const editingDirection = ref(null)
 const viewingDirection = ref(null)
+const saving = ref(false)
 
 // === Форма направления ===
 const directionForm = ref({
-  name: '',
+  division_name: '',
   description: '',
-  supervisorId: null,
-  supervisorName: '',
-  departmentIds: [],
+  supervisor_id: null,
+  departments: [],
 })
 
 // === Хелперы ===
-const getEmployeeNameById = (id) => {
-  if (!id) return ''
-  const emp = props.allEmployees.find((e) => e.id === id)
-  return emp?.fullName || ''
+const formatEmployeeName = (emp) => {
+  if (!emp) return ''
+  const parts = [emp.last_name, emp.first_name, emp.patronymic].filter(Boolean)
+  return parts.join(' ') || emp.fullName || ''
 }
 
-const getDepartmentsByIds = (ids) => {
-  if (!ids?.length) return []
-  return ids.map((id) => props.allDepartments.find((d) => d.id === id)).filter(Boolean)
+const formatSupervisorName = (supervisor) => {
+  if (!supervisor) return ''
+  const parts = [supervisor.last_name, supervisor.first_name, supervisor.patronymic].filter(Boolean)
+  return parts.join(' ') || supervisor.fullName || ''
+}
+
+// === API методы ===
+const fetchDirections = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/divisions/departments`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+    emit('update:directions', data)
+    return data
+  } catch (err) {
+    console.error('Error fetching directions:', err)
+    ElMessage.error('Не удалось загрузить направления')
+    return []
+  }
+}
+
+const fetchDirectionById = async (id) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/divisions/${id}`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    return await res.json()
+  } catch (err) {
+    console.error('Error fetching direction:', err)
+    ElMessage.error('Не удалось загрузить направление')
+    return null
+  }
+}
+
+const fetchAvailableSupervisors = async () => {
+  try {
+    // GET /users/ без параметров - получаем всех пользователей
+    const res = await fetch(`${API_BASE}/users/`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    const data = await res.json()
+
+    // Фильтруем: оставляем только тех, у кого is_supervisor === false
+    // Берём только нужные поля: id, last_name, first_name, patronymic
+    return data
+      .filter((user) => user.is_supervisor === false)
+      .map((user) => ({
+        id: user.id,
+        last_name: user.last_name || '',
+        first_name: user.first_name || '',
+        patronymic: user.patronymic || '',
+      }))
+  } catch (err) {
+    console.error('Error fetching available supervisors:', err)
+    ElMessage.error('Не удалось загрузить список сотрудников')
+    return []
+  }
+}
+
+const createDirection = async (payload) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/divisions/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}))
+      throw new Error(error.detail?.[0]?.msg || `HTTP ${res.status}: ${res.statusText}`)
+    }
+    return await res.json()
+  } catch (err) {
+    console.error('Error creating direction:', err)
+    throw err
+  }
+}
+
+const updateDirection = async (id, payload) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/divisions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}))
+      throw new Error(error.detail?.[0]?.msg || `HTTP ${res.status}: ${res.statusText}`)
+    }
+    return await res.json()
+  } catch (err) {
+    console.error('Error updating direction:', err)
+    throw err
+  }
+}
+
+const deleteDirection = async (id) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/divisions/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    return await res.json()
+  } catch (err) {
+    console.error('Error deleting direction:', err)
+    throw err
+  }
+}
+
+const unassignSupervisorFromDirection = async (id) => {
+  try {
+    const res = await fetch(`${API_BASE}/admin/divisions/${id}/supervisor`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    return await res.json()
+  } catch (err) {
+    console.error('Error unassigning supervisor:', err)
+    throw err
+  }
 }
 
 // === Направления: действия ===
-const viewDirection = (direction) => {
-  viewingDirection.value = {
-    ...direction,
-    supervisorName: getEmployeeNameById(direction.supervisorId),
-    departments: getDepartmentsByIds(direction.departmentIds),
+const viewDirection = async (direction) => {
+  try {
+    const data = await fetchDirectionById(direction.id)
+    if (data) {
+      viewingDirection.value = data
+      viewDirectionVisible.value = true
+    }
+  } catch (err) {
+    // Error already handled in fetchDirectionById
   }
-  viewDirectionVisible.value = true
 }
 
 const handleEditDirection = () => {
@@ -235,7 +395,7 @@ const confirmDeleteDirection = async () => {
   if (!viewingDirection.value) return
   try {
     await ElMessageBox.confirm(
-      `Удалить направление "${viewingDirection.value.name}"?`,
+      `Удалить направление "${viewingDirection.value.division_name}"?`,
       'Подтверждение',
       {
         type: 'warning',
@@ -243,92 +403,112 @@ const confirmDeleteDirection = async () => {
         cancelButtonText: 'Отмена',
       },
     )
-    emit(
-      'update:directions',
-      props.directions.filter((d) => d.id !== viewingDirection.value.id),
-    )
+    await deleteDirection(viewingDirection.value.id)
     ElMessage.success('Направление удалено')
     viewDirectionVisible.value = false
-  } catch {
+    await fetchDirections()
+    emit('refresh')
+  } catch (err) {
+    if (err?.message !== 'cancel' && err !== 'cancel') {
+      ElMessage.error('Ошибка при удалении направления')
+    }
     // отменено
   }
-}
-
-const editDirection = (direction) => {
-  openDirectionDialog(direction)
 }
 
 const openDirectionDialog = (direction = null) => {
   if (direction) {
     editingDirection.value = direction
     directionForm.value = {
-      name: direction.name || '',
+      division_name: direction.division_name || '',
       description: direction.description || '',
-      supervisorId: direction.supervisorId || null,
-      supervisorName: getEmployeeNameById(direction.supervisorId),
-      departmentIds: direction.departmentIds ? [...direction.departmentIds] : [],
+      supervisor_id: direction.supervisor_id || direction.supervisor?.id || null,
+      departments: direction.departments?.map((d) => d.id) || [],
     }
   } else {
     editingDirection.value = null
     directionForm.value = {
-      name: '',
+      division_name: '',
       description: '',
-      supervisorId: null,
-      supervisorName: '',
-      departmentIds: [],
+      supervisor_id: null,
+      departments: [],
     }
   }
   directionDialogVisible.value = true
 }
 
-const saveDirection = () => {
-  if (!directionForm.value.name?.trim()) {
+const unassignSupervisor = async () => {
+  if (!editingDirection.value?.id) return
+  try {
+    await ElMessageBox.confirm('Открепить руководителя от направления?', 'Подтверждение', {
+      type: 'warning',
+      confirmButtonText: 'Открепить',
+      cancelButtonText: 'Отмена',
+    })
+    await unassignSupervisorFromDirection(editingDirection.value.id)
+    directionForm.value.supervisor_id = null
+    ElMessage.success('Руководитель откреплён')
+
+    // Обновляем данные в списке
+    await fetchDirections()
+  } catch (err) {
+    if (err?.message !== 'cancel' && err !== 'cancel') {
+      ElMessage.error('Ошибка при откреплении руководителя')
+    }
+  }
+}
+
+const saveDirection = async () => {
+  if (!directionForm.value.division_name?.trim()) {
     ElMessage.warning('Введите название направления')
     return
   }
 
-  const supervisorName = getEmployeeNameById(directionForm.value.supervisorId)
-
-  if (editingDirection.value) {
-    // Редактирование
-    const idx = props.directions.findIndex((d) => d.id === editingDirection.value.id)
-    if (idx !== -1) {
-      const updated = [...props.directions]
-      updated[idx] = {
-        ...updated[idx],
-        ...directionForm.value,
-        supervisorName: supervisorName,
-      }
-      emit('update:directions', updated)
-    }
-    ElMessage.success('Направление обновлено')
-  } else {
-    // Создание
-    const newDirection = {
-      id: Date.now(),
-      ...directionForm.value,
-      supervisorName: supervisorName,
-    }
-    emit('update:directions', [newDirection, ...props.directions])
-    ElMessage.success('Направление создано')
-  }
-  directionDialogVisible.value = false
-}
-
-const deleteDirection = async (direction) => {
+  saving.value = true
   try {
-    await ElMessageBox.confirm(`Удалить направление "${direction.name}"?`, 'Подтверждение', {
-      type: 'warning',
-    })
-    emit(
-      'update:directions',
-      props.directions.filter((d) => d.id !== direction.id),
-    )
-    ElMessage.success('Направление удалено')
-  } catch {
-    /* отменено */
+    if (editingDirection.value) {
+      // Редактирование - отправляем supervisor_id (может быть null)
+      const payload = {
+        division_name: directionForm.value.division_name,
+        description: directionForm.value.description || '',
+        supervisor_id: directionForm.value.supervisor_id,
+        departments: directionForm.value.departments || [],
+      }
+      await updateDirection(editingDirection.value.id, payload)
+      ElMessage.success('Направление обновлено')
+    } else {
+      // Создание - НЕ отправляем supervisor_id (только при редактировании)
+      const payload = {
+        division_name: directionForm.value.division_name,
+        description: directionForm.value.description || '',
+        departments: directionForm.value.departments || [],
+      }
+      await createDirection(payload)
+      ElMessage.success('Направление создано')
+    }
+    directionDialogVisible.value = false
+    await fetchDirections()
+    emit('refresh')
+  } catch (err) {
+    ElMessage.error(err.message || 'Ошибка при сохранении направления')
+  } finally {
+    saving.value = false
   }
 }
+
+onMounted(async () => {
+  // Загружаем направления при монтировании, если массив пуст
+  if (!props.directions?.length) {
+    await fetchDirections()
+  }
+  // Загружаем список доступных руководителей
+  // (можно кэшировать в родительском компоненте, если нужно)
+})
+
+defineExpose({
+  fetchDirections,
+  fetchAvailableSupervisors,
+})
 </script>
 
 <style scoped>
