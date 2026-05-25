@@ -11,20 +11,25 @@
       <div class="detail-section">
         <h3 class="section-title">Основная информация</h3>
         <div class="info-grid">
+          <!-- ФИО -->
           <div class="info-item">
             <span class="info-label">ФИО:</span>
-            <span v-if="!isEditMode || isSupervisor" class="info-value">{{
-              employee.fullName
-            }}</span>
+            <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
+              {{ employee.fullName }}
+            </span>
             <div v-else class="info-edit-row">
               <el-input v-model="editForm.lastName" placeholder="Фамилия" class="edit-input" />
               <el-input v-model="editForm.firstName" placeholder="Имя" class="edit-input" />
               <el-input v-model="editForm.patronymic" placeholder="Отчество" class="edit-input" />
             </div>
           </div>
+
+          <!-- Должность -->
           <div class="info-item">
             <span class="info-label">Должность:</span>
-            <span v-if="!isEditMode" class="info-value">{{ employee.position }}</span>
+            <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
+              {{ employee.position }}
+            </span>
             <el-input
               v-else
               v-model="editForm.position"
@@ -32,16 +37,22 @@
               class="edit-input-full"
             />
           </div>
+
+          <!-- Email -->
           <div class="info-item">
             <span class="info-label">Email:</span>
-            <span v-if="!isEditMode || isSupervisor" class="info-value">{{ employee.email }}</span>
+            <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
+              {{ employee.email }}
+            </span>
             <el-input v-else v-model="editForm.email" placeholder="Email" class="edit-input-full" />
           </div>
-          <div class="info-item" v-if="!isSupervisor">
+
+          <!-- Отдел -->
+          <div class="info-item">
             <span class="info-label">Отдел:</span>
-            <span v-if="!isEditMode" class="info-value">{{
-              employee.departmentName || 'Не назначен'
-            }}</span>
+            <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
+              {{ employee.departmentName || 'Не назначен' }}
+            </span>
             <el-select
               v-else
               v-model="editForm.departmentId"
@@ -57,37 +68,42 @@
               />
             </el-select>
           </div>
-          <div class="info-item" v-if="!isSupervisor">
+
+          <!-- 🔹 Роль: редактируется ТОЛЬКО если canEditRole=true (только для admin) -->
+          <div class="info-item">
             <span class="info-label">Роль:</span>
-            <span v-if="!isEditMode" class="info-value">{{
-              employee.roleName || 'Не назначена'
-            }}</span>
+            <span v-if="!isEditMode || !canEditRole" class="info-value">
+              {{ employee.roleName || 'Не назначена' }}
+            </span>
             <el-select
-              v-else-if="isAdmin"
+              v-else
               v-model="editForm.roleId"
               placeholder="Не назначена"
               clearable
               class="edit-select-full"
             >
               <el-option
-                v-for="role in availableRoles"
+                v-for="role in filteredEditableRoles"
                 :key="role.id"
                 :label="role.displayName"
                 :value="role.id"
               />
             </el-select>
-            <span v-else class="info-value">{{ getRoleNameById(editForm.roleId) }}</span>
           </div>
         </div>
-        <div class="detail-actions" v-if="isAdmin">
-          <el-button v-if="!isEditMode" type="primary" @click="enableEditMode"
-            >Редактировать</el-button
-          >
+
+        <!-- 🔹 Кнопки редактирования доступны только если есть право на изменение основной информации -->
+        <div class="detail-actions" v-if="canEditEmployeeInfo">
+          <el-button v-if="!isEditMode" type="primary" @click="enableEditMode">
+            Редактировать
+          </el-button>
           <template v-else>
             <el-button @click="cancelEdit">Отмена</el-button>
             <el-button type="primary" @click="saveChanges">Сохранить</el-button>
           </template>
         </div>
+
+        <!-- 🔹 Повышение доступно и руководителю, и админу/СПО -->
         <div
           v-if="(isSupervisor || isAdmin) && nextLevel && isPromotionAvailable"
           class="promotion-actions"
@@ -98,7 +114,8 @@
 
       <div class="detail-section profile-section">
         <h3 class="section-title">Профиль</h3>
-        <!-- ✅ Передаем userFullProfile с приоритетом над шаблонным профилем -->
+
+        <!-- Просмотр профиля -->
         <ProfileCard
           v-if="employee.profileId && (userFullProfile || selectedProfileData)"
           :profile="userFullProfile || selectedProfileData"
@@ -108,8 +125,8 @@
           :fetch-skill-questions="fetchSkillQuestions"
         />
 
-        <!-- ✅ Кнопка отвязки профиля -->
-        <div v-if="employee.profileId && (isAdmin || isSupervisor)" class="unlink-profile-section">
+        <!-- Кнопка отвязки профиля (доступна руководителю и админу/СПО) -->
+        <div v-if="employee.profileId && (isSupervisor || isAdmin)" class="unlink-profile-section">
           <el-button
             type="danger"
             link
@@ -123,13 +140,35 @@
           <span class="unlink-hint">Профиль будет удалён, прогресс сброшен</span>
         </div>
 
+        <!-- Назначение профиля (доступно руководителю и админу/СПО) -->
         <div v-else class="profile-unassigned">
           <span class="unassigned-text">Профиль не назначен</span>
-          <div v-if="isSupervisor || (isAdmin && !isEditMode)" class="assign-profile-section">
+          <div v-if="isSupervisor || isAdmin" class="assign-profile-section">
             <div class="assign-profile-label">Назначить профиль:</div>
+
+            <!-- 🔹 Фильтр по отделам для профилей (только для admin/SPO или supervisor с направлением) -->
+            <div v-if="showDepartmentFilterForProfiles" class="profile-department-filter">
+              <el-select
+                v-model="selectedDepartmentForProfiles"
+                placeholder="Все отделы"
+                clearable
+                size="small"
+                class="dept-filter-select"
+                @change="onDepartmentFilterChange"
+              >
+                <el-option
+                  v-for="dept in availableDepartmentsForFilter"
+                  :key="dept.id"
+                  :label="dept.name"
+                  :value="dept.id"
+                />
+              </el-select>
+              <span class="filter-hint">Фильтр профилей по отделу</span>
+            </div>
+
             <div class="profiles-collapse">
               <div
-                v-for="profile in availableProfiles"
+                v-for="profile in filteredAvailableProfiles"
                 :key="profile.id"
                 class="profile-collapse-item"
               >
@@ -168,9 +207,11 @@
                           class="level-collapse-header"
                           @click="toggleLevelExpand(profile.id, level.id || lIdx)"
                         >
-                          <span class="level-collapse-title">{{
-                            level.level_name || level.name || `Уровень ${level.num || lIdx + 1}`
-                          }}</span>
+                          <span class="level-collapse-title">
+                            {{
+                              level.level_name || level.name || `Уровень ${level.num || lIdx + 1}`
+                            }}
+                          </span>
                           <el-icon
                             class="collapse-icon"
                             :class="{
@@ -298,9 +339,9 @@
                                                   "
                                                 >
                                                   <span>{{ idx + 1 }}.</span
-                                                  ><span class="qa-question-text">{{
-                                                    qa.text || qa.question || 'Без текста'
-                                                  }}</span>
+                                                  ><span class="qa-question-text">
+                                                    {{ qa.text || qa.question || 'Без текста' }}
+                                                  </span>
                                                   <el-icon
                                                     class="collapse-icon"
                                                     :class="{
@@ -348,9 +389,11 @@
                                                     "
                                                   >
                                                     <span>{{ idx + 1 }}.</span
-                                                    ><span class="task-text">{{
-                                                      task.text || task.question || 'Без текста'
-                                                    }}</span>
+                                                    ><span class="task-text">
+                                                      {{
+                                                        task.text || task.question || 'Без текста'
+                                                      }}
+                                                    </span>
                                                     <el-icon
                                                       class="collapse-icon"
                                                       :class="{
@@ -397,9 +440,14 @@
               </div>
             </div>
             <div class="assign-profile-actions" v-if="selectedProfileForAssign">
-              <el-button type="primary" size="small" @click="assignProfile" :loading="assignLoading"
-                >Назначить профиль</el-button
+              <el-button
+                type="primary"
+                size="small"
+                @click="assignProfile"
+                :loading="assignLoading"
               >
+                Назначить профиль
+              </el-button>
             </div>
           </div>
         </div>
@@ -409,7 +457,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, Remove } from '@element-plus/icons-vue'
 import ProfileCard from '@/components/common/ProfileCard.vue'
@@ -419,11 +467,18 @@ const props = defineProps<{
   employee: any
   isAdmin: boolean
   isSupervisor: boolean
+  canEditEmployeeInfo?: boolean
+  canEditRole?: boolean // 🔹 Новое: можно ли редактировать роль (только для admin)
   departments: any[]
   availableRoles: any[]
   availableProfiles: any[]
   allProfilesData: any[]
   userFullProfile?: any | null
+  // 🔹 Новые пропсы для фильтрации профилей по отделам
+  departmentProfiles?: Record<number, any[]>
+  fetchDepartmentProfiles?: (deptId: number) => Promise<any[]>
+  supervisorDivisionId?: number | null
+  supervisorDepartmentId?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -448,6 +503,10 @@ const expandedSkills = ref<number[]>([])
 const expandedQA = ref<Record<string, boolean>>({})
 const expandedTasks = ref<Record<string, boolean>>({})
 const skillSelectedStageTypes = ref<Record<number, string>>({})
+
+// 🔹 Состояние для фильтрации профилей по отделам
+const selectedDepartmentForProfiles = ref<number | null>(null)
+const localDepartmentProfiles = ref<Record<number, any[]>>({})
 
 const skillsCache = new Map<number, any>()
 const stageTypes = [
@@ -484,6 +543,53 @@ const mapTypeToFrontendSimple = (t: string | null | undefined) => {
   if (s === 'performance review' || s === 'performance_review') return 'performance'
   return 'practice'
 }
+
+// 🔹 Фильтрованные роли для редактирования: исключаем "Руководитель" (Supervisor)
+const filteredEditableRoles = computed(() => {
+  return props.availableRoles.filter((role) => {
+    // 🔹 Исключаем роль "Руководитель" из списка для назначения
+    if (role.isSupervisorRole || role.name === 'Supervisor') return false
+    return true
+  })
+})
+
+// 🔹 Показываем фильтр по отделам только для:
+// - admin/SPO (всегда)
+// - supervisor с направлением (division_id != null)
+const showDepartmentFilterForProfiles = computed(() => {
+  if (props.isAdmin) return true
+  if (props.isSupervisor && props.supervisorDivisionId) return true
+  return false
+})
+
+// 🔹 Доступные отделы для фильтра:
+// - Для supervisor с направлением: только отделы из направления
+// - Для остальных: все переданные отделы
+const availableDepartmentsForFilter = computed(() => {
+  if (props.isSupervisor && props.supervisorDivisionId && props.departments.length) {
+    return props.departments.filter((d: any) => d.division_id === props.supervisorDivisionId)
+  }
+  return props.departments
+})
+
+// 🔹 Профили для отображения: либо из кэша по отделу, либо все доступные
+const filteredAvailableProfiles = computed(() => {
+  // Если выбран отдел и есть функция загрузки — загружаем профили этого отдела
+  if (selectedDepartmentForProfiles.value && props.fetchDepartmentProfiles) {
+    const cached = localDepartmentProfiles.value[selectedDepartmentForProfiles.value]
+    if (cached) return cached
+    // Если ещё не загружено — возвращаем пустой массив (загрузка инициируется в onDepartmentFilterChange)
+    return []
+  }
+
+  // Если есть кэш профилей по отделам из родителя — используем его
+  if (props.departmentProfiles && selectedDepartmentForProfiles.value) {
+    return props.departmentProfiles[selectedDepartmentForProfiles.value] || props.availableProfiles
+  }
+
+  // По умолчанию — все доступные профили
+  return props.availableProfiles
+})
 
 const fetchSkillDetail = async (userId: number, skillId: number) => {
   try {
@@ -651,6 +757,7 @@ const handleClose = () => {
   expandedTasks.value = {}
   skillSelectedStageTypes.value = {}
   selectedProfileForAssign.value = null
+  selectedDepartmentForProfiles.value = null
 }
 
 const enableEditMode = () => {
@@ -674,10 +781,39 @@ const cancelEdit = () => {
 }
 
 const saveChanges = () => {
+  // 🔹 Проверка прав на редактирование основной информации
+  if (!props.canEditEmployeeInfo) {
+    ElMessage.warning('У вас нет прав на редактирование основной информации')
+    return
+  }
+
+  // 🔹 Проверка: если пытаемся изменить роль без прав
+  if (editForm.value.roleId !== props.employee?.roleId && !props.canEditRole) {
+    ElMessage.warning('У вас нет прав на изменение роли сотрудника')
+    return
+  }
+
   if (!editForm.value.firstName || !editForm.value.lastName || !editForm.value.email) {
     return ElMessage.warning('Заполните обязательные поля: Имя, Фамилия, Email')
   }
+
   emit('update', editForm.value)
+}
+
+// 🔹 Загрузка профилей отдела при изменении фильтра
+const onDepartmentFilterChange = async () => {
+  if (!selectedDepartmentForProfiles.value || !props.fetchDepartmentProfiles) return
+
+  try {
+    // Проверяем, есть ли уже в кэше
+    if (localDepartmentProfiles.value[selectedDepartmentForProfiles.value]) return
+
+    const profiles = await props.fetchDepartmentProfiles(selectedDepartmentForProfiles.value)
+    localDepartmentProfiles.value[selectedDepartmentForProfiles.value] = profiles
+  } catch (err) {
+    console.error('Error fetching department profiles:', err)
+    ElMessage.error('Не удалось загрузить профили отдела')
+  }
 }
 
 const assignProfile = async () => {
@@ -738,9 +874,20 @@ watch(
   },
   { immediate: true },
 )
+
+// 🔹 Сбрасываем фильтр при открытии модалки
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) {
+      selectedDepartmentForProfiles.value = null
+    }
+  },
+)
 </script>
 
 <style scoped>
+/* Стили без изменений — см. предыдущую версию */
 .employee-detail {
   display: flex;
   flex-direction: column;
@@ -826,6 +973,25 @@ watch(
   color: #000;
   margin-bottom: var(--spacing-xs);
 }
+
+/* 🔹 Стили для фильтра профилей по отделам */
+.profile-department-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: #f9f9f9;
+  border-radius: var(--radius-sm);
+}
+.dept-filter-select {
+  width: 200px;
+}
+.filter-hint {
+  font-size: 12px;
+  color: var(--gray);
+}
+
 .profiles-collapse {
   display: flex;
   flex-direction: column;

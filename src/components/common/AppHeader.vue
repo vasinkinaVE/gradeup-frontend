@@ -1,3 +1,4 @@
+<!-- src/components/layout/MainHeader.vue -->
 <template>
   <header class="main-header">
     <div class="header-left">
@@ -19,12 +20,7 @@
           <span class="nav-text">Календарь</span>
         </router-link>
 
-        <!--<router-link v-if="isManager" to="/manager/team" class="nav-link" active-class="active">
-          <el-icon><UserFilled /></el-icon>
-          <span class="nav-text">Моя команда</span>
-        </router-link>-->
-
-        <!-- 🔹 Ссылка: Сотрудники (только для SPO/Admin) -->
+        <!-- 🔹 Ссылка: Сотрудники (только для SPO/Admin/Supervisor) -->
         <router-link
           v-if="isSPOOrAdminOrManager"
           to="/admin/users"
@@ -43,8 +39,6 @@
     </div>
 
     <div class="header-right">
-      <!-- Уведомления убраны по запросу -->
-
       <el-dropdown @command="handleMenuCommand">
         <div class="user-menu">
           <el-avatar :size="32" class="user-avatar">
@@ -86,17 +80,6 @@
           <span>{{ item.label }}</span>
         </router-link>
 
-        <!--<router-link
-          v-if="isManager"
-          to="/manager/team"
-          class="mobile-nav-link"
-          active-class="active"
-          @click="mobileMenuVisible = false"
-        >
-          <el-icon :size="20"><UserFilled /></el-icon>
-          <span>Моя команда</span>
-        </router-link>-->
-
         <!-- 🔹 Ссылка в мобильном меню: Сотрудники -->
         <router-link
           v-if="isSPOOrAdminOrManager"
@@ -125,15 +108,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, markRaw } from 'vue' // ✅ Добавили markRaw
+import { computed, ref, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Bell,
   HomeFilled,
   Calendar,
   ArrowDown,
-  UserFilled,
   Setting,
   User,
   Fold,
@@ -147,32 +128,21 @@ const mobileMenuVisible = ref(false)
 
 const currentUser = computed(() => authStore.user)
 
+// ✅ ИСПРАВЛЕНО: проверка по массиву roles вместо role_name
 const isManager = computed(() => {
-  const role = currentUser.value?.role_name
-  if (!role) return false
-  const r = role.toLowerCase()
-  return ['supervisor', 'руководитель'].includes(r)
+  const roles = currentUser.value?.roles?.map((r) => r.toLowerCase()) || []
+  return roles.some((r) => ['supervisor', 'руководитель', 'manager'].includes(r))
 })
 
 const isSPOOrAdmin = computed(() => {
-  const role = currentUser.value?.role_name
-  if (!role) return false
-  const r = role.toLowerCase()
-  return ['specialist', 'специалист по обучению', 'admin', 'администратор', 'superuser'].includes(r)
+  const roles = currentUser.value?.roles?.map((r) => r.toLowerCase()) || []
+  return roles.some((r) =>
+    ['specialist', 'специалист по обучению', 'admin', 'администратор', 'superuser'].includes(r),
+  )
 })
 
 const isSPOOrAdminOrManager = computed(() => {
-  const role = currentUser.value?.role_name
-  if (!role) return false
-  const r = role.toLowerCase()
-  return [
-    'specialist',
-    'специалист по обучению',
-    'admin',
-    'администратор',
-    'supervisor',
-    'руководитель',
-  ].includes(r)
+  return isManager.value || isSPOOrAdmin.value
 })
 
 const userShortName = computed(() => {
@@ -196,7 +166,7 @@ const handleLogout = async () => {
       cancelButtonText: 'Отмена',
       type: 'warning',
       confirmButtonClass: 'el-button--danger',
-      icon: markRaw(WarningFilled), // ✅ Оборачиваем в markRaw
+      icon: markRaw(WarningFilled),
     })
 
     await authStore.logout()
@@ -223,7 +193,6 @@ const handleMenuCommand = (command: string) => {
   }
 }
 
-// Элементы навигации для мобильного меню (без Профиля)
 const navItems = [
   { path: '/dashboard', label: 'Личный кабинет', icon: HomeFilled },
   { path: '/calendar', label: 'Календарь', icon: Calendar },
@@ -250,7 +219,6 @@ const navItems = [
   gap: var(--spacing-lg);
 }
 
-/* Кнопка гамбургер — скрыта по умолчанию */
 .mobile-menu-btn {
   color: #fff !important;
   font-size: 24px;
@@ -271,7 +239,6 @@ const navItems = [
   white-space: nowrap;
 }
 
-/* Десктопная навигация */
 .desktop-nav {
   display: flex;
   gap: var(--spacing-sm);
@@ -312,8 +279,6 @@ const navItems = [
   gap: var(--spacing-md);
 }
 
-/* notification-badge и notification-btn убраны */
-
 .user-menu {
   display: flex;
   align-items: center;
@@ -350,7 +315,6 @@ const navItems = [
   color: var(--danger);
 }
 
-/* Мобильная навигация */
 .mobile-nav {
   display: flex;
   flex-direction: column;
@@ -381,7 +345,6 @@ const navItems = [
   color: #fff;
 }
 
-/* Drawer стили */
 :deep(.mobile-drawer .el-drawer__header) {
   margin-bottom: 0;
   padding: var(--spacing-md) var(--spacing-lg);
@@ -398,11 +361,6 @@ const navItems = [
   padding: 0;
 }
 
-/* ========================================
-   MEDIA QUERIES — АДАПТИВНОСТЬ
-   ======================================== */
-
-/* Планшеты и мобильные (до 1024px) — показываем гамбургер, скрываем десктопное меню */
 @media (max-width: 1024px) {
   .mobile-menu-btn {
     display: inline-flex;
@@ -434,7 +392,6 @@ const navItems = [
   }
 }
 
-/* Маленькие экраны (до 360px) */
 @media (max-width: 360px) {
   .main-header {
     height: 56px;
@@ -446,16 +403,11 @@ const navItems = [
 }
 </style>
 
-<!-- ✅ Глобальные стили для модального окна выхода (не в scoped) -->
 <style>
-/* === Стили для ElMessageBox (модальное окно подтверждения) === */
-
-/* 🔹 Иконка предупреждения — красная */
 .el-message-box .el-message-box__status.el-icon-warning {
   color: #f44336 !important;
 }
 
-/* 🔹 Крестик закрытия — красный при наведении */
 .el-message-box .el-message-box__headerbtn {
   transition: color 0.2s;
 }
@@ -465,7 +417,6 @@ const navItems = [
   color: #f44336 !important;
 }
 
-/* 🔹 Кнопка "Отмена" — серая при наведении */
 .el-message-box .el-message-box__btns button:first-child {
   transition: all 0.2s;
 }
@@ -476,7 +427,6 @@ const navItems = [
   color: #fff !important;
 }
 
-/* 🔹 Кнопка "Выйти" (confirm) — оставляем красной как есть */
 .el-message-box .el-message-box__btns button:last-child {
   background-color: #f44336;
   border-color: #f44336;

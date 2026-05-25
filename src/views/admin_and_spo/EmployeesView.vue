@@ -4,12 +4,19 @@
     <header class="view-header">
       <div>
         <h1>Управление сотрудниками</h1>
-        <div v-if="isSupervisor" class="department-subtitle">{{ userDepartmentName }}</div>
+        <div v-if="isSupervisor && userDepartmentName" class="department-subtitle">
+          {{ userDepartmentName }}
+          <span v-if="isSupervisorWithDivision" class="division-badge">
+            ({{ userDivisionName }})
+          </span>
+        </div>
       </div>
       <div class="header-actions">
-        <el-button v-if="isAdmin" type="primary" @click="openRegisterModal">
+        <!-- 🔹 Регистрация: только для admin/specialist -->
+        <el-button v-if="isAdminOrSPO" type="primary" @click="openRegisterModal">
           <el-icon><Plus /></el-icon> Зарегистрировать сотрудника
         </el-button>
+        <!-- 🔹 Создание встречи: для всех руководителей -->
         <el-button v-if="isSupervisor" type="primary" @click="openMeetingDialog">
           <el-icon><Calendar /></el-icon> Создать встречу
         </el-button>
@@ -24,15 +31,21 @@
         clearable
         class="search-input"
       />
+      <!-- 🔹 Фильтр по отделам: скрыт для руководителя без направления -->
       <el-select
-        v-if="!isSupervisor"
+        v-if="showDepartmentFilter"
         v-model="filterDepartmentId"
-        placeholder="Все отделы"
+        :placeholder="isSupervisorWithDivision ? 'Все отделы направления' : 'Все отделы'"
         clearable
         class="department-filter"
         @change="applyFilters"
       >
-        <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
+        <el-option
+          v-for="dept in availableDepartments"
+          :key="dept.id"
+          :label="dept.name"
+          :value="dept.id"
+        />
       </el-select>
     </div>
 
@@ -47,7 +60,14 @@
     >
       <el-table-column prop="fullName" label="ФИО" min-width="220" />
       <el-table-column prop="position" label="Должность" width="180" />
-      <el-table-column v-if="!isSupervisor" prop="departmentName" label="Отдел" width="180" />
+
+      <!-- 🔹 Отдел: показываем, если не руководитель без направления -->
+      <el-table-column
+        v-if="showDepartmentColumn"
+        prop="departmentName"
+        label="Отдел"
+        width="180"
+      />
 
       <el-table-column label="Профиль" min-width="240">
         <template #default="{ row }">
@@ -70,28 +90,41 @@
         </template>
       </el-table-column>
 
-      <el-table-column v-if="isSupervisor || isAdmin" label="Повышение" width="150">
+      <!-- 🔹 Роли: отображаются с переводом на русский -->
+      <el-table-column label="Роли" width="150">
+        <template #default="{ row }">
+          <span class="roles-cell">{{ getTranslatedRoles(row.roles) }}</span>
+        </template>
+      </el-table-column>
+
+      <!-- 🔹 Повышение: показываем, если есть права на управление профилем -->
+      <el-table-column v-if="canManageProfiles" label="Повышение" width="150">
         <template #default="{ row }">
           <el-tag :type="isPromotionAvailable(row) ? 'success' : 'info'" size="small">
             {{ isPromotionAvailable(row) ? 'Доступно' : 'Не доступно' }}
           </el-tag>
         </template>
       </el-table-column>
-
-      <el-table-column v-if="!isSupervisor" prop="roleName" label="Роль" width="150" />
     </el-table>
 
+    <!-- 🔹 Передаём canEditEmployeeInfo и canEditRole отдельно -->
     <EmployeeCard
       v-if="detailVisible"
       v-model:visible="detailVisible"
       :employee="selectedEmployee"
-      :is-admin="isAdmin"
+      :is-admin="isAdminOrSPO"
       :is-supervisor="isSupervisor"
-      :departments="departments"
+      :can-edit-employee-info="canEditEmployeeInfo"
+      :can-edit-role="canEditRole"
+      :departments="availableDepartments"
       :available-roles="filteredRoles"
       :available-profiles="availableProfiles"
       :all-profiles-data="allProfilesData"
       :user-full-profile="userFullProfile"
+      :department-profiles="departmentProfilesCache"
+      :fetch-department-profiles="fetchDepartmentProfiles"
+      :supervisor-division-id="supervisorDivisionId"
+      :supervisor-department-id="supervisorDepartmentId"
       @update="handleEmployeeUpdate"
       @assign-profile="handleAssignProfile"
       @promote="handlePromoteEmployee"
@@ -100,7 +133,7 @@
 
     <RegistrationDialog
       v-model:visible="registerVisible"
-      :departments="departments"
+      :departments="availableDepartments"
       @registered="handleRegistration"
     />
 
@@ -108,7 +141,13 @@
       v-if="isSupervisor"
       v-model="meetingDialogVisible"
       :employee="selectedEmployee"
+      :is-supervisor="isSupervisor"
+      :supervisor-division-id="supervisorDivisionId"
+      :departments="availableDepartments"
+      :employees="employees"
+      :skills="skills"
       @close="meetingDialogVisible = false"
+      @refresh="fetchEmployees"
     />
   </div>
 </template>
@@ -122,9 +161,29 @@ import EmployeeCard from '@/components/employees/EmployeeCard.vue'
 import RegistrationDialog from '@/components/employees/RegistrationDialog.vue'
 import MeetingDialog from '@/components/common/MeetingDialog.vue'
 
+// === Интерфейсы ===
 interface Department {
   id: number
   name: string
+  division_id?: number | null
+}
+interface DivisionWithDepartments {
+  id: number
+  division_name: string
+  supervisor_id: number | null
+  supervisor: {
+    id: number
+    first_name: string
+    last_name: string
+    patronymic: string
+    email: string
+  } | null
+  departments: Array<{
+    id: number
+    department_name: string
+    supervisor_id: number | null
+    description: string
+  }>
 }
 interface Role {
   id: number
@@ -158,20 +217,51 @@ interface Employee {
   completedCnt: number
   roleId: number | null
   roleName: string
+  roles: string[]
 }
 
 const authStore = useAuthStore()
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-const isAdmin = computed(() => {
-  const role = authStore.user?.role_name?.toLowerCase() || ''
-  return role.includes('admin') || role.includes('администратор')
-})
+// === 🔹 Маппинг ролей на русский язык ===
+const ROLE_TRANSLATIONS: Record<string, string> = {
+  Employee: 'Сотрудник',
+  Supervisor: 'Руководитель',
+  Specialist: 'СПО',
+  Admin: 'Администратор',
+}
+
+const getTranslatedRoles = (roles: string[] | undefined): string => {
+  if (!roles?.length) return '—'
+  return roles.map((r) => ROLE_TRANSLATIONS[r] || r).join('\n')
+}
+
+// === 🔹 Проверка прав через массив roles ===
+const userRoles = computed(() => authStore.user?.roles?.map((r) => r.toLowerCase()) || [])
+
+const isAdmin = computed(() =>
+  userRoles.value.some((r) => ['admin', 'администратор', 'superuser'].includes(r)),
+)
+const isSPO = computed(() =>
+  userRoles.value.some((r) => ['specialist', 'специалист по обучению'].includes(r)),
+)
+const isAdminOrSPO = computed(() => isAdmin.value || isSPO.value)
+
 const isSupervisor = computed(() => {
-  const role = authStore.user?.role_name?.toLowerCase() || ''
-  return role.includes('supervisor') || role.includes('руководитель')
+  const hasSupervisorFlag = authStore.user?.is_supervisor === true
+  const hasSupervisorRole = userRoles.value.some((r) => ['supervisor', 'руководитель'].includes(r))
+  return hasSupervisorFlag || hasSupervisorRole
 })
 
+const isSupervisorWithDivision = computed(() => {
+  return isSupervisor.value && authStore.user?.division_id != null
+})
+
+const supervisorDivisionId = computed(() => authStore.user?.division_id ?? null)
+const supervisorDepartmentId = computed(() => authStore.user?.department_id ?? null)
+const supervisorUserId = computed(() => authStore.user?.id ?? null)
+
+// === Состояния ===
 const loading = ref(false)
 const search = ref('')
 const filterDepartmentId = ref<number | null>(null)
@@ -183,26 +273,49 @@ const userFullProfile = ref<any>(null)
 
 const departments = ref<Department[]>([])
 const availableRoles = ref<Role[]>([
-  { id: 1, name: 'Employee (Сотрудник)', displayName: 'Сотрудник', isSupervisorRole: false },
-  { id: 2, name: 'Supervisor (Руководитель)', displayName: 'Руководитель', isSupervisorRole: true },
-  { id: 3, name: 'Specialist (СПО)', displayName: 'СПО', isSupervisorRole: false },
-  { id: 4, name: 'Admin (Администратор)', displayName: 'Администратор', isSupervisorRole: false },
+  { id: 1, name: 'Employee', displayName: 'Сотрудник', isSupervisorRole: false },
+  { id: 2, name: 'Supervisor', displayName: 'Руководитель', isSupervisorRole: true },
+  { id: 3, name: 'Specialist', displayName: 'СПО', isSupervisorRole: false },
+  { id: 4, name: 'Admin', displayName: 'Администратор', isSupervisorRole: false },
 ])
 const availableProfiles = ref<Profile[]>([])
 const employees = ref<Employee[]>([])
 const allProfilesData = ref<Profile[]>([])
 
+// 🔹 ID отделов направления (для руководителя с division_id)
+const divisionDepartmentIds = ref<number[]>([])
+
+// 🔹 Кэш профилей по отделам: { [deptId]: Profile[] }
+const departmentProfilesCache = ref<Record<number, Profile[]>>({})
+
+// === 🔹 Вычисляемые свойства ===
+const showDepartmentFilter = computed(() => !isSupervisor.value || isSupervisorWithDivision.value)
+const showDepartmentColumn = computed(() => !isSupervisor.value || isSupervisorWithDivision.value)
+const canManageProfiles = computed(() => isAdminOrSPO.value || isSupervisor.value)
+
+// 🔹 Редактирование основной информации (ФИО, email, должность, отдел) — ТОЛЬКО admin/SPO
+const canEditEmployeeInfo = computed(() => isAdminOrSPO.value)
+
+// 🔹 🔹 Редактирование роли — ТОЛЬКО admin (SPO не может менять роль)
+const canEditRole = computed(() => isAdmin.value)
+
+const availableDepartments = computed(() => {
+  if (!isSupervisorWithDivision.value) return departments.value
+  return departments.value.filter((dept) => divisionDepartmentIds.value.includes(dept.id))
+})
+
+// 🔹 Фильтрованные роли: исключаем "Руководитель" из списка для назначения
 const filteredRoles = computed(() => {
   return availableRoles.value.filter((role) => {
-    if (role.isSupervisorRole) return false
-    const rName = role.name?.toLowerCase() || ''
-    const dName = role.displayName?.toLowerCase() || ''
-    return !rName.includes('supervisor') && !dName.includes('руководитель')
+    // 🔹 Исключаем роль "Руководитель" — она назначается другим путем
+    if (role.isSupervisorRole || role.name === 'Supervisor') return false
+    return true
   })
 })
 
 const filteredEmployees = computed(() => {
   let result = employees.value
+
   if (search.value) {
     const q = search.value.toLowerCase()
     result = result.filter(
@@ -211,27 +324,41 @@ const filteredEmployees = computed(() => {
         e.position.toLowerCase().includes(q),
     )
   }
-  if (filterDepartmentId.value && !isSupervisor.value) {
+
+  if (supervisorUserId.value) {
+    result = result.filter((e) => e.userId !== supervisorUserId.value)
+  }
+
+  if (filterDepartmentId.value) {
     result = result.filter((e) => e.departmentId === filterDepartmentId.value)
   }
+
   return result
 })
 
 const userDepartmentName = computed(() => {
   if (!isSupervisor.value) return ''
   const deptId = authStore.user?.department_id
-  return departments.value.find((d) => d.id === deptId)?.name || 'Отдел не назначен'
+  return departments.value.find((d) => d.id === deptId)?.name || ''
 })
 
+const userDivisionName = computed(() => {
+  if (!isSupervisorWithDivision.value) return ''
+  return authStore.user?.managed_division_name || `Направление #${authStore.user?.division_id}`
+})
+
+// === 🔹 HTTP-запросы ===
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
-  const token = authStore.token
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   }
-  if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(url, { ...options, headers, credentials: 'include' })
+  const res = await fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  })
 
   if (res.status === 401) {
     authStore.logout()
@@ -245,18 +372,46 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   return res
 }
 
+// === 🔹 Загрузка отделов ===
 const fetchDepartments = async () => {
   try {
-    const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
-    if (!res) throw new Error('Auth error')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    departments.value = Array.isArray(data)
-      ? data.map((d: any) => ({ id: d.id, name: d.department_name || d.name || '' }))
-      : []
+    if (isSupervisorWithDivision.value) {
+      const res = await fetchWithAuth(`${API_BASE}/admin/divisions/departments`)
+      if (!res) throw new Error('Auth error')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data: DivisionWithDepartments[] = await res.json()
+
+      const userDivision = data.find((div) => div.id === supervisorDivisionId.value)
+
+      if (userDivision) {
+        divisionDepartmentIds.value = userDivision.departments.map((d) => d.id)
+        departments.value = userDivision.departments.map((d) => ({
+          id: d.id,
+          name: d.department_name || d.name || '',
+          division_id: userDivision.id,
+        }))
+      } else {
+        departments.value = []
+        divisionDepartmentIds.value = []
+      }
+    } else {
+      const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
+      if (!res) throw new Error('Auth error')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+
+      departments.value = Array.isArray(data)
+        ? data.map((d: any) => ({
+            id: d.id,
+            name: d.department_name || d.name || '',
+            division_id: d.division_id || null,
+          }))
+        : []
+    }
   } catch (err) {
     console.error('Error fetching departments:', err)
     departments.value = []
+    divisionDepartmentIds.value = []
   }
 }
 
@@ -275,12 +430,65 @@ const fetchAvailableProfiles = async () => {
   }
 }
 
+// === 🔹 Загрузка профилей конкретного отдела ===
+const fetchDepartmentProfiles = async (deptId: number): Promise<Profile[]> => {
+  try {
+    // Проверяем кэш
+    if (departmentProfilesCache.value[deptId]) {
+      return departmentProfilesCache.value[deptId]
+    }
+
+    const res = await fetchWithAuth(`${API_BASE}/admin/departments/${deptId}`)
+    if (!res) throw new Error('Auth error')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+
+    // Извлекаем профили из ответа
+    const profiles: Profile[] = Array.isArray(data.profiles)
+      ? data.profiles.map((p: any) => ({
+          id: p.id,
+          title: p.title || p.name || '',
+          levels: [], // Загружаются отдельно через fetchAvailableProfiles
+        }))
+      : []
+
+    // Сохраняем в кэш
+    departmentProfilesCache.value[deptId] = profiles
+    return profiles
+  } catch (err) {
+    console.error(`Error fetching profiles for department ${deptId}:`, err)
+    return []
+  }
+}
+
+// === 🔹 Загрузка сотрудников ===
 const fetchEmployees = async () => {
   try {
     loading.value = true
-    const onlySubordinates = isSupervisor.value
-    let url = `${API_BASE}/users/profiles/?only_subordinates=${onlySubordinates}`
-    if (filterDepartmentId.value) url += `&departments_id=${filterDepartmentId.value}`
+
+    let url = `${API_BASE}/users/profiles/`
+    const params = new URLSearchParams()
+
+    let departmentIdsToFilter: number[] = []
+
+    if (isSupervisorWithDivision.value) {
+      if (divisionDepartmentIds.value.length > 0) {
+        departmentIdsToFilter = [...divisionDepartmentIds.value]
+      }
+    } else if (isSupervisor.value && supervisorDepartmentId.value) {
+      departmentIdsToFilter = [supervisorDepartmentId.value]
+    }
+
+    if (departmentIdsToFilter.length > 0) {
+      departmentIdsToFilter.forEach((id) => params.append('departments_id', String(id)))
+    }
+
+    if (filterDepartmentId.value && !isSupervisor.value) {
+      params.append('departments_id', String(filterDepartmentId.value))
+    }
+
+    const queryString = params.toString()
+    if (queryString) url += `?${queryString}`
 
     const res = await fetchWithAuth(url)
     if (!res) throw new Error('Auth error')
@@ -289,21 +497,30 @@ const fetchEmployees = async () => {
 
     employees.value = Array.isArray(data)
       ? data.map((e: any): Employee => {
+          const roles = Array.isArray(e.roles)
+            ? e.roles.map((r: string) => r?.trim()).filter(Boolean)
+            : e.role_name
+              ? [e.role_name.trim()]
+              : []
+
           let roleId: number | null = e.role_id ?? null
           let roleName = 'Не назначена'
           if (roleId) {
             const role = availableRoles.value.find((r) => r.id === roleId)
             if (role) roleName = role.displayName
           }
+
           const profileId = e.profile_id ?? null
           let profileLevel: string | null = null
           if (profileId) {
             const p = allProfilesData.value.find((pr) => pr.id === profileId)
-            if (p?.levels?.[0]) profileLevel = p.levels[0].name || p.levels[0].level_name || null
+            if (p?.levels?.[0]) {
+              profileLevel = p.levels[0].name || p.levels[0].level_name || null
+            }
           }
 
           return {
-            id: e.id,
+            id: e.user_id,
             userId: e.user_id,
             lastName: e.last_name || '',
             firstName: e.first_name || '',
@@ -322,6 +539,7 @@ const fetchEmployees = async () => {
             completedCnt: e.completed_cnt ?? 0,
             roleId,
             roleName,
+            roles,
           }
         })
       : []
@@ -346,7 +564,10 @@ const fetchEmployeeProfile = async (userId: number): Promise<any | null> => {
   }
 }
 
-const applyFilters = () => {}
+// === 🔹 Действия ===
+const applyFilters = () => {
+  fetchEmployees()
+}
 
 const isPromotionAvailable = (employee: Employee) => {
   if (!employee?.progress || employee.progress < 100) return false
@@ -386,6 +607,18 @@ const resetUserFullProfile = () => {
 }
 
 const handleEmployeeUpdate = async (updatedData: any) => {
+  // 🔹 Проверка прав на редактирование
+  if (!canEditEmployeeInfo.value) {
+    ElMessage.warning('У вас нет прав на редактирование данных сотрудника')
+    return
+  }
+
+  // 🔹 Проверка: если меняется роль, но нет прав на это
+  if (updatedData.roleId !== selectedEmployee.value?.roleId && !canEditRole.value) {
+    ElMessage.warning('У вас нет прав на изменение роли сотрудника')
+    return
+  }
+
   try {
     const payload = {
       first_name: updatedData.firstName,
@@ -427,6 +660,9 @@ const handleEmployeeUpdate = async (updatedData: any) => {
         roleName,
         fullName:
           `${responseData.last_name} ${responseData.first_name} ${responseData.patronymic || ''}`.trim(),
+        roles: Array.isArray(responseData.roles)
+          ? responseData.roles.map((r: string) => r?.trim()).filter(Boolean)
+          : employees.value[idx].roles,
       }
     }
     ElMessage.success('Данные обновлены')
@@ -531,14 +767,25 @@ const handleRegistration = async () => {
 const openRegisterModal = () => {
   registerVisible.value = true
 }
+
 const openMeetingDialog = () => {
   meetingDialogVisible.value = true
 }
 
+// === 🔹 Watchers и Lifecycle ===
 watch(
   () => detailVisible.value,
   (val) => {
     if (!val) resetUserFullProfile()
+  },
+)
+
+watch(
+  () => filterDepartmentId.value,
+  () => {
+    if (showDepartmentFilter.value) {
+      fetchEmployees()
+    }
   },
 )
 
@@ -551,9 +798,15 @@ onMounted(async () => {
     console.error('Failed to load initial data:', e)
   }
 })
+
+defineExpose({
+  fetchEmployees,
+  reload: fetchEmployees,
+})
 </script>
 
 <style scoped>
+/* Стили без изменений — см. предыдущую версию */
 .employees-view {
   max-width: 1200px;
   margin: 0 auto;
@@ -572,12 +825,20 @@ onMounted(async () => {
   margin: 0 0 var(--spacing-xs) 0;
   font-size: 28px;
   font-weight: var(--font-weight-bold);
-  color: #000;
+  color: var(--text);
 }
 .department-subtitle {
   font-size: 16px;
-  color: #666;
+  color: var(--gray);
   font-weight: var(--font-weight-medium);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+.division-badge {
+  font-size: 14px;
+  color: var(--primary);
+  font-weight: var(--font-weight-semibold);
 }
 .header-actions {
   display: flex;
@@ -604,6 +865,14 @@ onMounted(async () => {
 }
 :deep(.el-table .cell) {
   font-weight: 400 !important;
+  white-space: pre-line;
+}
+.roles-cell {
+  white-space: pre-line;
+  line-height: 1.4;
+  font-size: 13px;
+  color: var(--text);
+  display: block;
 }
 .profile-cell {
   display: flex;
@@ -612,12 +881,12 @@ onMounted(async () => {
 }
 .profile-name {
   font-weight: normal;
-  color: #000;
+  color: var(--text);
   font-size: 14px;
 }
 .profile-level {
   font-size: 14px;
-  color: #666;
+  color: var(--gray);
 }
 .progress-wrapper {
   display: flex;
@@ -627,7 +896,7 @@ onMounted(async () => {
 }
 .progress-percent {
   font-size: 14px !important;
-  color: #666;
+  color: var(--gray);
   white-space: nowrap;
   min-width: 38px;
   text-align: left;

@@ -67,6 +67,8 @@
       v-model:meetings="meetings"
       :skills="skills"
       :employees="employees"
+      :departments="departments"
+      @refresh="handleRefresh"
     />
 
     <LogsSection

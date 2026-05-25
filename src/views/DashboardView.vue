@@ -1,3 +1,4 @@
+<!-- src/views/DashboardView.vue -->
 <template>
   <div class="employee-dashboard">
     <div class="dashboard-content">
@@ -21,7 +22,7 @@
             </template>
 
             <div class="employee-info" v-if="currentUser">
-              <!-- 🔹 Три отдельных поля: Фамилия, Имя, Отчество -->
+              <!-- Фамилия, Имя, Отчество -->
               <div class="info-row">
                 <span class="label">Фамилия</span>
                 <span class="value">{{ currentUser.last_name || '—' }}</span>
@@ -35,17 +36,31 @@
                 <span class="value">{{ currentUser.patronymic || '—' }}</span>
               </div>
 
+              <!-- Должность -->
               <div class="info-row">
                 <span class="label">Должность</span>
                 <span class="value">{{ currentUser.position || '—' }}</span>
               </div>
+
+              <!-- Email -->
               <div class="info-row">
                 <span class="label">Email</span>
-                <span class="value">{{ currentUser.email }}</span>
+                <span class="value">{{ currentUser.email || '—' }}</span>
               </div>
+
+              <!-- Отдел -->
               <div class="info-row">
                 <span class="label">Отдел</span>
-                <span class="value">{{ currentUser.department_id || '—' }}</span>
+                <span class="value">{{ currentUser.department_name || '—' }}</span>
+              </div>
+
+              <!-- 🔹 Направление: показываем ТОЛЬКО если is_supervisor = true И division_id не null -->
+              <div
+                v-if="currentUser.is_supervisor && currentUser.division_id != null"
+                class="info-row"
+              >
+                <span class="label">Направление</span>
+                <span class="value">{{ currentUser.managed_division_name || '—' }}</span>
               </div>
             </div>
             <div v-else class="loading-placeholder">Загрузка...</div>
@@ -112,13 +127,14 @@ const profileLevels = ref<Level[]>([])
 
 onMounted(async () => {
   if (!currentUser.value) {
-    // Можно вызвать authStore.fetchCurrentUser()
+    await authStore.fetchCurrentUser()
   }
 
   await Promise.all([fetchUpcomingMeeting(), fetchProfileData()])
 })
 
 const fetchUpcomingMeeting = async () => {
+  // Заглушка - заменить на API вызов
   upcomingMeeting.value = {
     id: 1,
     skill_name: 'Разработка веб-приложений на Vue.js',
@@ -144,8 +160,8 @@ const fetchUpcomingMeeting = async () => {
   }
 }
 
-// Загрузка данных профиля (заглушка - заменить на API вызов)
 const fetchProfileData = async () => {
+  // Заглушка - заменить на API вызов
   profileLevels.value = [
     {
       id: 1,
@@ -156,113 +172,11 @@ const fetchProfileData = async () => {
           id: 1,
           name: 'Разработка веб-приложений на Vue.js',
           total_progress: 100,
-          description:
-            'Навык разработки современных SPA-приложений с использованием Vue.js 3, Composition API, Pinia и Vue Router',
-          materials: [
-            'Официальная документация Vue.js: https://vuejs.org/guide/introduction.html',
-            'Vue Router: https://router.vuejs.org/',
-            'Pinia: https://pinia.vuejs.org/',
-            'Vue Style Guide: https://vuejs.org/style-guide/',
-          ],
-          stages: [
-            {
-              id: 1,
-              type: 'practice',
-              description: 'Практическое задание по созданию SPA приложения',
-              materials: ['Vue.js Guide', 'Vue Router Documentation'],
-              // ✅ Заполненные поля для защищённого этапа
-              is_defended: true,
-              grade: 'зачтено',
-              date_time: '2026-04-20T15:30:00',
-              comment:
-                'Отлично выполнена работа с компонентами и роутингом. Рекомендуется углубить знания в области оптимизации производительности и работы с состоянием через Pinia.',
-              questions: [
-                {
-                  id: 1,
-                  text: 'В чём разница между Options API и Composition API?',
-                  answer:
-                    'Options API организует код по опциям (data, methods, computed), а Composition API позволяет группировать логику по функциональности через хуки (setup, ref, reactive). Composition API улучшает переиспользование и типизацию.',
-                },
-                {
-                  id: 2,
-                  text: 'Как работает реактивность в Vue 3?',
-                  answer:
-                    'Vue 3 использует Proxy для отслеживания изменений объектов. При чтении свойства происходит сбор зависимостей, при записи — уведомление подписчиков. Это позволяет автоматически обновлять DOM при изменении данных.',
-                },
-              ],
-            },
-            {
-              id: 2,
-              type: 'attestation',
-              description: 'Аттестация по Vue.js',
-              materials: ['Test questions', 'Practical exam'],
-              // Можно также заполнить для аттестации при необходимости
-              is_defended: true,
-              grade: 'зачтено',
-              date_time: '2026-04-22T10:00:00',
-              comment:
-                'Аттестация пройдена успешно. Кандидат продемонстрировал уверенные знания фреймворка.',
-            },
-          ],
-        },
-        {
-          id: 2,
-          name: 'Работа с Git и системами контроля версий',
-          total_progress: 100,
-          stages: [
-            {
-              id: 3,
-              type: 'practice',
-              description: 'Практика работы с Git',
-              materials: ['Git documentation'],
-            },
-            {
-              id: 4,
-              type: 'attestation',
-              description: 'Аттестация по Git',
-              materials: ['Exam'],
-            },
-          ],
+          description: 'Навык разработки современных SPA-приложений',
+          materials: [],
+          stages: [],
         },
       ],
-    },
-    {
-      id: 2,
-      name: '1 категория',
-      progress: 25,
-      skills: [
-        {
-          id: 3,
-          name: 'Архитектура frontend приложений',
-          total_progress: 25,
-          stages: [
-            {
-              id: 5,
-              type: 'practice',
-              description: 'Практика по архитектуре',
-              materials: ['Architecture patterns'],
-            },
-            {
-              id: 6,
-              type: 'attestation',
-              description: 'Аттестация',
-              materials: [],
-            },
-            {
-              id: 7,
-              type: 'performance_review',
-              description: 'Performance review',
-              materials: [],
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: 3,
-      name: '2 категория',
-      progress: 0,
-      skills: [],
     },
   ]
 }
@@ -317,7 +231,6 @@ const fetchProfileData = async () => {
   width: 100%;
 }
 
-/* Убираем hover-эффект и тень у карточек */
 .info-card,
 .meeting-card-wrapper,
 .profile-card {
@@ -332,7 +245,6 @@ const fetchProfileData = async () => {
   transform: none !important;
 }
 
-/* Убираем hover у Element Plus карточек через deep */
 :deep(.el-card.is-hover-shadow:hover) {
   box-shadow: none !important;
 }
@@ -356,7 +268,6 @@ const fetchProfileData = async () => {
   gap: var(--spacing-sm);
 }
 
-/* === ВЕРТИКАЛЬНОЕ ЦЕНТРИРОВАНИЕ ДЛЯ "ЛИЧНАЯ ИНФОРМАЦИЯ" === */
 .info-card:first-child :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
@@ -372,7 +283,6 @@ const fetchProfileData = async () => {
 
 .info-row {
   display: grid;
-  /* 🔹 Увеличиваем ширину колонки с названиями + добавляем отступ между колонками */
   grid-template-columns: 160px 1fr;
   align-items: center;
   padding: var(--spacing-sm) 0;
@@ -403,7 +313,6 @@ const fetchProfileData = async () => {
   font-size: 14px;
 }
 
-/* === ВЕРТИКАЛЬНОЕ ЦЕНТРИРОВАНИЕ ДЛЯ "БЛИЖАЙШАЯ ВСТРЕЧА" === */
 .meeting-card-wrapper :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
@@ -431,7 +340,6 @@ const fetchProfileData = async () => {
   padding: var(--spacing-lg);
 }
 
-/* 🔹 Убираем отступ справа при открытии модалок и меню (drawer) */
 :global(html.el-popup-parent--hidden),
 :global(body.el-popup-parent--hidden) {
   padding-right: 0 !important;
@@ -444,7 +352,6 @@ const fetchProfileData = async () => {
     grid-template-columns: 1fr;
   }
 
-  /* На мобильных убираем фиксированную высоту */
   .info-card:first-child :deep(.el-card__body),
   .meeting-card-wrapper :deep(.el-card__body) {
     min-height: auto;
