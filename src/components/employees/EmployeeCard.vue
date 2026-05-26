@@ -11,7 +11,6 @@
       <div class="detail-section">
         <h3 class="section-title">Основная информация</h3>
         <div class="info-grid">
-          <!-- ФИО -->
           <div class="info-item">
             <span class="info-label">ФИО:</span>
             <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
@@ -24,7 +23,6 @@
             </div>
           </div>
 
-          <!-- Должность -->
           <div class="info-item">
             <span class="info-label">Должность:</span>
             <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
@@ -38,7 +36,6 @@
             />
           </div>
 
-          <!-- Email -->
           <div class="info-item">
             <span class="info-label">Email:</span>
             <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
@@ -47,7 +44,6 @@
             <el-input v-else v-model="editForm.email" placeholder="Email" class="edit-input-full" />
           </div>
 
-          <!-- Отдел -->
           <div class="info-item">
             <span class="info-label">Отдел:</span>
             <span v-if="!isEditMode || !canEditEmployeeInfo" class="info-value">
@@ -69,7 +65,6 @@
             </el-select>
           </div>
 
-          <!-- 🔹 Роль: редактируется ТОЛЬКО если canEditRole=true (только для admin) -->
           <div class="info-item">
             <span class="info-label">Роль:</span>
             <span v-if="!isEditMode || !canEditRole" class="info-value">
@@ -92,7 +87,6 @@
           </div>
         </div>
 
-        <!-- 🔹 Кнопки редактирования доступны только если есть право на изменение основной информации -->
         <div class="detail-actions" v-if="canEditEmployeeInfo">
           <el-button v-if="!isEditMode" type="primary" @click="enableEditMode">
             Редактировать
@@ -103,7 +97,6 @@
           </template>
         </div>
 
-        <!-- 🔹 Повышение доступно и руководителю, и админу/СПО -->
         <div
           v-if="(isSupervisor || isAdmin) && nextLevel && isPromotionAvailable"
           class="promotion-actions"
@@ -115,17 +108,16 @@
       <div class="detail-section profile-section">
         <h3 class="section-title">Профиль</h3>
 
-        <!-- Просмотр профиля -->
         <ProfileCard
           v-if="employee.profileId && (userFullProfile || selectedProfileData)"
-          :profile="userFullProfile || selectedProfileData"
+          :profile="adaptProfileForCard(userFullProfile || selectedProfileData)"
           :user-id="employee.userId"
           :is-current-user="employee.userId === authUserId"
           :fetch-skill-detail="fetchSkillDetail"
           :fetch-skill-questions="fetchSkillQuestions"
+          :use-questions-endpoint="true"
         />
 
-        <!-- Кнопка отвязки профиля (доступна руководителю и админу/СПО) -->
         <div v-if="employee.profileId && (isSupervisor || isAdmin)" class="unlink-profile-section">
           <el-button
             type="danger"
@@ -140,13 +132,12 @@
           <span class="unlink-hint">Профиль будет удалён, прогресс сброшен</span>
         </div>
 
-        <!-- Назначение профиля (доступно руководителю и админу/СПО) -->
         <div v-else class="profile-unassigned">
           <span class="unassigned-text">Профиль не назначен</span>
+
           <div v-if="isSupervisor || isAdmin" class="assign-profile-section">
             <div class="assign-profile-label">Назначить профиль:</div>
 
-            <!-- 🔹 Фильтр по отделам для профилей (только для admin/SPO или supervisor с направлением) -->
             <div v-if="showDepartmentFilterForProfiles" class="profile-department-filter">
               <el-select
                 v-model="selectedDepartmentForProfiles"
@@ -340,7 +331,7 @@
                                                 >
                                                   <span>{{ idx + 1 }}.</span
                                                   ><span class="qa-question-text">
-                                                    {{ qa.text || qa.question || 'Без текста' }}
+                                                    {{ qa.question || qa.text || 'Без текста' }}
                                                   </span>
                                                   <el-icon
                                                     class="collapse-icon"
@@ -391,7 +382,7 @@
                                                     <span>{{ idx + 1 }}.</span
                                                     ><span class="task-text">
                                                       {{
-                                                        task.text || task.question || 'Без текста'
+                                                        task.question || task.text || 'Без текста'
                                                       }}
                                                     </span>
                                                     <el-icon
@@ -439,6 +430,7 @@
                 </el-collapse-transition>
               </div>
             </div>
+
             <div class="assign-profile-actions" v-if="selectedProfileForAssign">
               <el-button
                 type="primary"
@@ -468,13 +460,12 @@ const props = defineProps<{
   isAdmin: boolean
   isSupervisor: boolean
   canEditEmployeeInfo?: boolean
-  canEditRole?: boolean // 🔹 Новое: можно ли редактировать роль (только для admin)
+  canEditRole?: boolean
   departments: any[]
   availableRoles: any[]
   availableProfiles: any[]
   allProfilesData: any[]
   userFullProfile?: any | null
-  // 🔹 Новые пропсы для фильтрации профилей по отделам
   departmentProfiles?: Record<number, any[]>
   fetchDepartmentProfiles?: (deptId: number) => Promise<any[]>
   supervisorDivisionId?: number | null
@@ -504,15 +495,14 @@ const expandedQA = ref<Record<string, boolean>>({})
 const expandedTasks = ref<Record<string, boolean>>({})
 const skillSelectedStageTypes = ref<Record<number, string>>({})
 
-// 🔹 Состояние для фильтрации профилей по отделам
 const selectedDepartmentForProfiles = ref<number | null>(null)
 const localDepartmentProfiles = ref<Record<number, any[]>>({})
 
 const skillsCache = new Map<number, any>()
 const stageTypes = [
-  { key: 'practice', label: 'Практическое задание' },
-  { key: 'attestation', label: 'Аттестация' },
-  { key: 'performance', label: 'Performance review' },
+  { key: 'Практическое задание', label: 'Практическое задание' },
+  { key: 'Аттестация', label: 'Аттестация' },
+  { key: 'Performance review', label: 'Performance review' },
 ]
 
 const visible = computed({ get: () => props.visible, set: (v) => emit('update:visible', v) })
@@ -522,6 +512,24 @@ const selectedProfileData = computed(() => {
   return props.allProfilesData.find((p) => p.id === props.employee.profileId) || null
 })
 
+const adaptProfileForCard = (profile: any) => {
+  if (!profile) return null
+  return {
+    ...profile,
+    levels: (profile.levels || []).map((lvl: any) => ({
+      ...lvl,
+      level_name: lvl.level_name || lvl.name,
+      level_progress: lvl.level_progress ?? lvl.progress ?? 0,
+      skills: (lvl.skills || lvl.level_skills || []).map((sk: any) => ({
+        ...sk,
+        title: sk.title || sk.name,
+        skill_progress: sk.skill_progress ?? sk.progress ?? 0,
+        stage_cnt: sk.stage_cnt ?? 0,
+      })),
+    })),
+  }
+}
+
 const nextLevel = computed(() => {
   if (!props.employee?.profileId) return null
   const profile = props.allProfilesData.find((p) => p.id === props.employee.profileId)
@@ -529,42 +537,31 @@ const nextLevel = computed(() => {
   const currentLevelName = props.employee.profileLevel
   if (!currentLevelName) return profile.levels[0] || null
   const idx = profile.levels.findIndex(
-    (l: any) => l.name === currentLevelName || l.level_name === currentLevelName,
+    (l: any) => l.level_name === currentLevelName || l.name === currentLevelName,
   )
   return idx === -1 || idx >= profile.levels.length - 1 ? null : profile.levels[idx + 1]
 })
 
-const isPromotionAvailable = computed(() => props.employee?.progress >= 100 && !!nextLevel.value)
+const isPromotionAvailable = computed(() => {
+  if (props.employee?.readyGradeup !== undefined) {
+    return props.employee.readyGradeup === true && !!nextLevel.value
+  }
+  return props.employee?.progress >= 100 && !!nextLevel.value
+})
 
-const mapTypeToFrontendSimple = (t: string | null | undefined) => {
-  if (!t) return 'practice'
-  const s = String(t).trim().toLowerCase()
-  if (s === 'аттестация' || s === 'certification') return 'attestation'
-  if (s === 'performance review' || s === 'performance_review') return 'performance'
-  return 'practice'
-}
-
-// 🔹 Фильтрованные роли для редактирования: исключаем "Руководитель" (Supervisor)
 const filteredEditableRoles = computed(() => {
   return props.availableRoles.filter((role) => {
-    // 🔹 Исключаем роль "Руководитель" из списка для назначения
     if (role.isSupervisorRole || role.name === 'Supervisor') return false
     return true
   })
 })
 
-// 🔹 Показываем фильтр по отделам только для:
-// - admin/SPO (всегда)
-// - supervisor с направлением (division_id != null)
 const showDepartmentFilterForProfiles = computed(() => {
   if (props.isAdmin) return true
   if (props.isSupervisor && props.supervisorDivisionId) return true
   return false
 })
 
-// 🔹 Доступные отделы для фильтра:
-// - Для supervisor с направлением: только отделы из направления
-// - Для остальных: все переданные отделы
 const availableDepartmentsForFilter = computed(() => {
   if (props.isSupervisor && props.supervisorDivisionId && props.departments.length) {
     return props.departments.filter((d: any) => d.division_id === props.supervisorDivisionId)
@@ -572,22 +569,27 @@ const availableDepartmentsForFilter = computed(() => {
   return props.departments
 })
 
-// 🔹 Профили для отображения: либо из кэша по отделу, либо все доступные
+// ✅ ИСПРАВЛЕНО: для руководителя направления показываем ВСЕ профили направления
 const filteredAvailableProfiles = computed(() => {
-  // Если выбран отдел и есть функция загрузки — загружаем профили этого отдела
+  // Если выбран конкретный отдел - загружаем профили этого отдела
   if (selectedDepartmentForProfiles.value && props.fetchDepartmentProfiles) {
     const cached = localDepartmentProfiles.value[selectedDepartmentForProfiles.value]
     if (cached) return cached
-    // Если ещё не загружено — возвращаем пустой массив (загрузка инициируется в onDepartmentFilterChange)
     return []
   }
 
-  // Если есть кэш профилей по отделам из родителя — используем его
+  // Если фильтр не выбран И это руководитель направления -
+  // возвращаем ВСЕ профили направления из props.availableProfiles
+  if (!selectedDepartmentForProfiles.value && props.isSupervisor && props.supervisorDivisionId) {
+    return props.availableProfiles || []
+  }
+
+  // Если выбран отдел из departmentProfiles
   if (props.departmentProfiles && selectedDepartmentForProfiles.value) {
     return props.departmentProfiles[selectedDepartmentForProfiles.value] || props.availableProfiles
   }
 
-  // По умолчанию — все доступные профили
+  // По умолчанию возвращаем все доступные профили
   return props.availableProfiles
 })
 
@@ -617,6 +619,7 @@ const fetchSkillQuestions = async (userId: number, skillId: number) => {
   }
 }
 
+// ✅ ИСПРАВЛЕНО: используем GET /skills/{skill_id} для получения полных данных навыка
 const fetchFullSkillData = async (skillId: number) => {
   if (skillsCache.has(skillId)) return skillsCache.get(skillId)
   try {
@@ -626,15 +629,20 @@ const fetchFullSkillData = async (skillId: number) => {
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     let data = await res.json()
+
     if (data?.skill && !data?.stages) data = { ...data, ...data.skill }
+
     if (data?.stages && Array.isArray(data.stages)) {
       data.stages = data.stages.map((st: any) => ({
         id: st?.id || null,
-        type: mapTypeToFrontendSimple(st.confirmation_type),
-        confirmation_type: st.confirmation_type,
+        confirmation_type: st.confirmation_type || 'Практическое задание',
+        user_stage_id: st.user_stage_id,
+        is_accepted: st.is_accepted,
+        comment: st.comment,
+        updated_at: st.updated_at,
         questions: (Array.isArray(st.questions) ? st.questions : []).map((q: any) => ({
           id: q?.id,
-          text: q?.question || q?.text || '',
+          question: q?.question || q?.text || '',
           answer: q?.answer || '',
           num: q?.num || 1,
         })),
@@ -642,6 +650,7 @@ const fetchFullSkillData = async (skillId: number) => {
     } else {
       data.stages = []
     }
+
     skillsCache.set(skillId, data)
     return data
   } catch {
@@ -651,52 +660,80 @@ const fetchFullSkillData = async (skillId: number) => {
 
 const getLevelSkillIds = (level: any) => {
   if (!level) return []
-  const ids = level.level_skills || level.skills || []
-  return ids.map((item: any) => {
-    if (typeof item === 'object' && item?.id)
-      return { id: item.id, title: item.title || item.name || getSkillNameById(item.id) }
+
+  const skills = level.level_skills || level.skills || []
+
+  return skills.map((item: any) => {
+    if (typeof item === 'object' && item !== null) {
+      const skillId = item.id || item.skill_id
+      return {
+        id: skillId,
+        title: item.title || item.name || getSkillNameById(skillId),
+        ...item,
+      }
+    }
     return { id: item, title: getSkillNameById(item) }
   })
 }
 
 const getSkillNameById = (skillId: number) => {
-  const c = skillsCache.get(skillId)
-  if (c?.name || c?.title) return c.name || c.title
-  for (const p of props.availableProfiles)
-    for (const l of p.levels || []) {
-      const sk = (l.level_skills || l.skills || []).find(
-        (s: any) => (typeof s === 'object' && s.id === skillId) || s === skillId,
-      )
-      if (sk && typeof sk === 'object' && (sk.name || sk.title)) return sk.name || sk.title
+  const cached = skillsCache.get(skillId)
+  if (cached?.name || cached?.title) return cached.name || cached.title
+
+  for (const profile of props.availableProfiles) {
+    for (const level of profile.levels || []) {
+      const skills = level.level_skills || level.skills || []
+      const found = skills.find((s: any) => {
+        const id = typeof s === 'object' ? s.id || s.skill_id : s
+        return id === skillId
+      })
+      if (found && typeof found === 'object' && (found.name || found.title)) {
+        return found.name || found.title
+      }
     }
+  }
   return `Навык #${skillId}`
 }
 
 const getFullSkillDescription = (id: number) => skillsCache.get(id)?.description || ''
+
 const getFullSkillMaterialsArray = (id: number) => {
-  const m = skillsCache.get(id)?.materials || skillsCache.get(id)?.literature
-  return typeof m === 'string' && m.trim()
-    ? m.split('\n').filter(Boolean)
-    : Array.isArray(m)
-      ? m
-      : []
+  const skill = skillsCache.get(id)
+  const m = skill?.literature || skill?.materials
+  if (typeof m === 'string' && m.trim()) {
+    return m
+      .split('\n')
+      .map((s: string) => s.trim())
+      .filter(Boolean)
+  }
+  return Array.isArray(m) ? m : []
 }
+
 const getFullSkillStages = (id: number) => skillsCache.get(id)?.stages || []
+
 const getSkillStageTypesWithContent = (id: number) => {
-  const st = getFullSkillStages(id)
-  if (!st?.length) return stageTypes
-  const av = stageTypes.filter((t) => st.some((s) => s?.type === t.key))
-  return av.length ? av : stageTypes
+  const stages = getFullSkillStages(id)
+  if (!stages?.length) return stageTypes
+  const available = stageTypes.filter((t) =>
+    stages.some((s: any) => s?.confirmation_type === t.key),
+  )
+  return available.length ? available : stageTypes
 }
+
 const getSkillStagesByTypeSimple = (id: number, type: string) =>
-  (getFullSkillStages(id) || []).filter((s: any) => s?.type === type)
+  (getFullSkillStages(id) || []).filter((s: any) => s?.confirmation_type === type)
+
 const getStageContentTitleSimple = (t: string) =>
-  t === 'attestation' ? 'Вопросы и ответы' : 'Задания и критерии'
-const getSkillSelectedStageType = (id: number) => skillSelectedStageTypes.value[id] || 'practice'
+  t === 'Аттестация' ? 'Вопросы и ответы' : 'Задания и критерии'
+
+const getSkillSelectedStageType = (id: number) =>
+  skillSelectedStageTypes.value[id] || 'Практическое задание'
+
 const selectSkillStageType = (id: number, t: string) => {
   skillSelectedStageTypes.value[id] = t
 }
-const hasStageContent = (stages: any[], t: string) => stages.some((s) => s.type === t)
+
+const hasStageContent = (stages: any[], t: string) => stages.some((s) => s.confirmation_type === t)
 
 const toggleProfileExpand = (id: number) => {
   const idx = expandedProfiles.value.indexOf(id)
@@ -707,15 +744,20 @@ const toggleLevelExpand = async (pId: number, lId: number | string) => {
   const key = `${pId}_${lId}`
   if (!expandedLevels.value[key]) {
     expandedLevels.value[key] = true
+
     const level = props.availableProfiles
       .find((p) => p.id === pId)
-      ?.levels?.find((l) => (l.id || -1) === lId)
+      ?.levels?.find((l: any) => (l.id || -1) === lId)
+
     if (level) {
-      for (const sk of getLevelSkillIds(level)) {
-        if (!skillsCache.has(sk.id)) await fetchFullSkillData(sk.id)
-        if (!skillSelectedStageTypes.value[sk.id])
-          skillSelectedStageTypes.value[sk.id] =
-            getSkillStageTypesWithContent(sk.id)[0]?.key || 'practice'
+      for (const skillItem of getLevelSkillIds(level)) {
+        if (!skillsCache.has(skillItem.id)) {
+          await fetchFullSkillData(skillItem.id)
+        }
+        if (!skillSelectedStageTypes.value[skillItem.id]) {
+          skillSelectedStageTypes.value[skillItem.id] =
+            getSkillStageTypesWithContent(skillItem.id)[0]?.key || 'Практическое задание'
+        }
       }
     }
   } else {
@@ -727,9 +769,13 @@ const toggleSkillExpand = async (id: number) => {
   const idx = expandedSkills.value.indexOf(id)
   if (idx === -1) {
     expandedSkills.value.push(id)
-    if (!skillsCache.has(id)) await fetchFullSkillData(id)
-    if (!skillSelectedStageTypes.value[id])
-      skillSelectedStageTypes.value[id] = getSkillStageTypesWithContent(id)[0]?.key || 'practice'
+    if (!skillsCache.has(id)) {
+      await fetchFullSkillData(id)
+    }
+    if (!skillSelectedStageTypes.value[id]) {
+      skillSelectedStageTypes.value[id] =
+        getSkillStageTypesWithContent(id)[0]?.key || 'Практическое задание'
+    }
   } else {
     expandedSkills.value.splice(idx, 1)
   }
@@ -738,6 +784,7 @@ const toggleSkillExpand = async (id: number) => {
 const toggleQAExpand = (sId: number, stId: number | string, idx: number) => {
   expandedQA.value[`${sId}_${stId}_${idx}`] = !expandedQA.value[`${sId}_${stId}_${idx}`]
 }
+
 const toggleTaskExpand = (sId: number, stId: number | string, idx: number) => {
   expandedTasks.value[`${sId}_${stId}_${idx}`] = !expandedTasks.value[`${sId}_${stId}_${idx}`]
 }
@@ -762,8 +809,13 @@ const handleClose = () => {
 
 const enableEditMode = () => {
   isEditMode.value = true
+  const safeId =
+    props.employee?.userId && !isNaN(Number(props.employee?.userId))
+      ? props.employee.userId
+      : props.employee?.id || 0
+
   editForm.value = {
-    userId: props.employee?.userId,
+    userId: safeId,
     firstName: props.employee?.firstName || '',
     lastName: props.employee?.lastName || '',
     patronymic: props.employee?.patronymic || '',
@@ -775,19 +827,17 @@ const enableEditMode = () => {
   }
 }
 
+// ✅ ИСПРАВЛЕНО: cancelEdit теперь корректно выходит из режима редактирования
 const cancelEdit = () => {
   isEditMode.value = false
-  enableEditMode()
 }
 
 const saveChanges = () => {
-  // 🔹 Проверка прав на редактирование основной информации
   if (!props.canEditEmployeeInfo) {
     ElMessage.warning('У вас нет прав на редактирование основной информации')
     return
   }
 
-  // 🔹 Проверка: если пытаемся изменить роль без прав
   if (editForm.value.roleId !== props.employee?.roleId && !props.canEditRole) {
     ElMessage.warning('У вас нет прав на изменение роли сотрудника')
     return
@@ -797,15 +847,56 @@ const saveChanges = () => {
     return ElMessage.warning('Заполните обязательные поля: Имя, Фамилия, Email')
   }
 
-  emit('update', editForm.value)
+  const userId = editForm.value.userId
+
+  if (!userId || isNaN(Number(userId))) {
+    console.error('Invalid userId:', {
+      fromEditForm: editForm.value.userId,
+      fromProps: props.employee?.userId,
+      employee: props.employee,
+      editForm: editForm.value,
+    })
+    return ElMessage.error('Ошибка: некорректный ID сотрудника')
+  }
+
+  const payload: any = {
+    userId: Number(userId),
+    firstName: editForm.value.firstName,
+    lastName: editForm.value.lastName,
+    patronymic: editForm.value.patronymic || '',
+    email: editForm.value.email,
+    position: editForm.value.position || '',
+  }
+
+  if (
+    editForm.value.roleId !== null &&
+    editForm.value.roleId !== undefined &&
+    editForm.value.roleId !== ''
+  ) {
+    const roleIdNum = Number(editForm.value.roleId)
+    if (!isNaN(roleIdNum)) {
+      payload.role_id = roleIdNum
+    }
+  }
+
+  if (
+    editForm.value.departmentId !== null &&
+    editForm.value.departmentId !== undefined &&
+    editForm.value.departmentId !== ''
+  ) {
+    const deptIdNum = Number(editForm.value.departmentId)
+    if (!isNaN(deptIdNum)) {
+      payload.department_id = deptIdNum
+    }
+  }
+
+  emit('update', payload)
 }
 
-// 🔹 Загрузка профилей отдела при изменении фильтра
 const onDepartmentFilterChange = async () => {
   if (!selectedDepartmentForProfiles.value || !props.fetchDepartmentProfiles) return
 
   try {
-    // Проверяем, есть ли уже в кэше
     if (localDepartmentProfiles.value[selectedDepartmentForProfiles.value]) return
 
     const profiles = await props.fetchDepartmentProfiles(selectedDepartmentForProfiles.value)
@@ -858,7 +949,7 @@ const unlinkProfile = async () => {
 const showPromoteDialog = () => {
   if (!props.employee || !nextLevel.value) return
   ElMessageBox.confirm(
-    `Повысить ${props.employee.fullName} до "${nextLevel.value.name}"?`,
+    `Повысить ${props.employee.fullName} до "${nextLevel.value.level_name || nextLevel.value.name}"?`,
     'Подтверждение',
     { confirmButtonText: 'Повысить', cancelButtonText: 'Отмена', type: 'warning' },
   ).then(() => emit('promote', props.employee, nextLevel.value))
@@ -875,7 +966,6 @@ watch(
   { immediate: true },
 )
 
-// 🔹 Сбрасываем фильтр при открытии модалки
 watch(
   () => props.visible,
   (v) => {
@@ -887,7 +977,7 @@ watch(
 </script>
 
 <style scoped>
-/* Стили без изменений — см. предыдущую версию */
+/* Стили без изменений */
 .employee-detail {
   display: flex;
   flex-direction: column;
@@ -973,8 +1063,6 @@ watch(
   color: #000;
   margin-bottom: var(--spacing-xs);
 }
-
-/* 🔹 Стили для фильтра профилей по отделам */
 .profile-department-filter {
   display: flex;
   align-items: center;
@@ -991,7 +1079,6 @@ watch(
   font-size: 12px;
   color: var(--gray);
 }
-
 .profiles-collapse {
   display: flex;
   flex-direction: column;

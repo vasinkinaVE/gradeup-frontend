@@ -13,14 +13,16 @@
             ><ArrowRight
           /></el-icon>
           <span class="level-title">{{
-            level.name || level.level_name || `Уровень ${level.num}`
+            level.level_name || level.name || `Уровень ${level.num}`
           }}</span>
           <div class="level-progress">
-            <span class="level-progress-text">{{ level.progress ?? 0 }}%</span>
+            <span class="level-progress-text"
+              >{{ level.level_progress ?? level.progress ?? 0 }}%</span
+            >
             <div class="level-progress-bar">
               <div
                 class="level-progress-fill"
-                :style="{ width: (level.progress ?? 0) + '%' }"
+                :style="{ width: (level.level_progress ?? level.progress ?? 0) + '%' }"
               ></div>
             </div>
           </div>
@@ -42,23 +44,23 @@
                 class="skill-row"
                 @click="openSkillModal(skill)"
               >
-                <td class="skill-name">{{ skill.name || skill.title || 'Навык' }}</td>
+                <td class="skill-name">{{ skill.title || skill.name || 'Навык' }}</td>
                 <td class="skill-progress">
                   <div class="progress-bar-wrapper">
                     <span class="progress-text"
-                      >{{ skill.total_progress ?? skill.progress ?? 0 }}%</span
+                      >{{ skill.skill_progress ?? skill.progress ?? 0 }}%</span
                     >
                     <div class="progress-bar">
                       <div
                         class="progress-bar-fill"
-                        :style="{ width: (skill.total_progress ?? skill.progress ?? 0) + '%' }"
+                        :style="{ width: (skill.skill_progress ?? skill.progress ?? 0) + '%' }"
                       ></div>
                     </div>
                   </div>
                 </td>
                 <td class="skill-stages">
-                  <div class="stages-count" :class="{ 'no-data': getStagesCount(skill) === 0 }">
-                    {{ getStagesCount(skill) > 0 ? getStagesCount(skill) : '—' }}
+                  <div class="stages-count" :class="{ 'no-data': skill.stage_cnt === 0 }">
+                    {{ skill.stage_cnt > 0 ? skill.stage_cnt : '—' }}
                   </div>
                 </td>
               </tr>
@@ -70,7 +72,7 @@
 
     <el-dialog
       v-model="isModalVisible"
-      :title="selectedSkill?.name || selectedSkill?.title || ''"
+      :title="selectedSkill?.title || selectedSkill?.name || ''"
       width="90%"
       :style="{ maxWidth: '800px' }"
       :close-on-click-modal="false"
@@ -88,8 +90,12 @@
           </div>
           <div class="skill-materials">
             <h4 class="section-title">Материалы для подготовки</h4>
-            <div v-if="selectedSkill.materials?.length" class="materials-text">
-              <p v-for="(mat, i) in selectedSkill.materials" :key="i" class="material-text">
+            <div v-if="selectedSkill.literature" class="materials-text">
+              <p
+                v-for="(mat, i) in parseLiterature(selectedSkill.literature)"
+                :key="i"
+                class="material-text"
+              >
                 {{ mat }}
               </p>
             </div>
@@ -101,22 +107,20 @@
           <el-tab-pane
             v-for="stage in normalizedStages"
             :key="stage.uniqueKey"
-            :label="getStageTypeName(stage.type)"
+            :label="getStageTypeName(stage.confirmation_type)"
             :name="stage.uniqueKey"
           >
             <div class="stage-content">
+              <!-- ✅ Блок 1: Статус защиты (независимый) -->
               <div
-                v-if="stage.is_accepted === undefined || stage.is_accepted === null"
-                class="placeholder-text"
+                v-if="stage.is_accepted !== undefined && stage.is_accepted !== null"
+                class="stage-defended"
               >
-                Этот этап навыка еще не был защищен
-              </div>
-              <div v-else class="stage-defended">
                 <div class="stage-grade">
                   <span class="grade-label">Оценка:</span>
-                  <span :class="['grade-value', stage.is_accepted ? 'passed' : 'failed']">{{
-                    stage.is_accepted ? 'зачтено' : 'незачтено'
-                  }}</span>
+                  <span :class="['grade-value', stage.is_accepted ? 'passed' : 'failed']">
+                    {{ stage.is_accepted ? 'зачтено' : 'незачтено' }}
+                  </span>
                   <span v-if="stage.updated_at" class="grade-date"
                     >, {{ formatDate(stage.updated_at) }}</span
                   >
@@ -125,42 +129,39 @@
                   <span class="comment-label">Комментарий:</span>
                   <p class="comment-text">{{ stage.comment }}</p>
                 </div>
+              </div>
+              <div v-else class="placeholder-text">Этот этап навыка еще не был защищен</div>
 
-                <!-- ✅ Вопросы рендерятся из нормализованного массива -->
-                <div v-if="hasQuestions(stage)" class="stage-questions">
-                  <h4 class="section-title">{{ getQuestionsTitle(stage.type) }}</h4>
-                  <div class="questions-list">
-                    <div
-                      v-for="q in stage.normalizedQuestions"
-                      :key="q.uniqueKey"
-                      class="question-item"
-                    >
-                      <div class="question-header" @click="toggleQuestion(q.uniqueKey)">
-                        <el-icon
-                          class="question-toggle-icon"
-                          :class="{ 'is-expanded': expandedQuestions.has(q.uniqueKey) }"
-                          ><ArrowRight
-                        /></el-icon>
-                        <span class="question-text">{{
-                          q.text || q.question || 'Без текста'
-                        }}</span>
-                      </div>
-                      <transition name="expand">
-                        <div v-show="expandedQuestions.has(q.uniqueKey)" class="answer-block">
-                          <span class="answer-label">{{ getAnswerLabel(stage.type) }}</span>
-                          <p class="answer-text">{{ q.answer || 'Ответ не указан' }}</p>
-                        </div>
-                      </transition>
+              <!-- ✅ Блок 2: Вопросы/задания (независимый) -->
+              <div v-if="hasQuestions(stage)" class="stage-questions">
+                <h4 class="section-title">{{ getQuestionsTitle(stage.confirmation_type) }}</h4>
+                <div class="questions-list">
+                  <div
+                    v-for="q in stage.normalizedQuestions"
+                    :key="q.uniqueKey"
+                    class="question-item"
+                  >
+                    <div class="question-header" @click="toggleQuestion(q.uniqueKey)">
+                      <el-icon
+                        class="question-toggle-icon"
+                        :class="{ 'is-expanded': expandedQuestions.has(q.uniqueKey) }"
+                      >
+                        <ArrowRight />
+                      </el-icon>
+                      <span class="question-text">{{ q.question || q.text || 'Без текста' }}</span>
                     </div>
+                    <transition name="expand">
+                      <div v-show="expandedQuestions.has(q.uniqueKey)" class="answer-block">
+                        <span class="answer-label">{{
+                          getAnswerLabel(stage.confirmation_type)
+                        }}</span>
+                        <p class="answer-text">{{ q.answer || 'Ответ не указан' }}</p>
+                      </div>
+                    </transition>
                   </div>
                 </div>
-                <div
-                  v-else-if="stage.is_accepted !== undefined && stage.is_accepted !== null"
-                  class="placeholder-text"
-                >
-                  Вопросы к этому этапу пока не добавлены
-                </div>
               </div>
+              <div v-else class="placeholder-text">Вопросы/задания не добавлены</div>
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -174,16 +175,15 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
 
 interface StageTypeMap {
-  certification: string
-  practice: string
-  performance_review: string
+  Аттестация: string
+  'Практическое задание': string
+  'Performance review': string
 }
 const stageTypesNames: StageTypeMap = {
-  certification: 'Аттестация',
-  practice: 'Практическое задание',
-  performance_review: 'Performance review',
+  Аттестация: 'Аттестация',
+  'Практическое задание': 'Практическое задание',
+  'Performance review': 'Performance review',
 }
-export type StageType = keyof StageTypeMap
 
 interface Question {
   uniqueKey: string | number
@@ -195,8 +195,8 @@ interface Question {
 interface Stage {
   uniqueKey: string
   id?: number | null
-  stage_id?: number | null
-  type?: StageType | string
+  confirmation_type?: string
+  user_stage_id?: number | null
   is_accepted?: boolean | null
   updated_at?: string
   comment?: string | null
@@ -206,10 +206,11 @@ interface Skill {
   id: number
   name?: string
   title?: string
-  total_progress?: number
+  skill_progress?: number
   progress?: number
+  stage_cnt?: number
   description?: string
-  materials?: string[]
+  literature?: string | string[]
   stages?: any[]
 }
 interface Level {
@@ -217,6 +218,7 @@ interface Level {
   name?: string
   level_name?: string
   num?: number
+  level_progress?: number
   progress?: number
   skills?: Skill[]
   level_skills?: (number | Skill)[]
@@ -236,8 +238,13 @@ const props = withDefaults(
     isCurrentUser?: boolean
     fetchSkillDetail?: (userId: number, skillId: number) => Promise<any>
     fetchSkillQuestions?: (userId: number, skillId: number) => Promise<any>
+    useQuestionsEndpoint?: boolean
   }>(),
-  { userId: 0, isCurrentUser: false },
+  {
+    userId: 0,
+    isCurrentUser: false,
+    useQuestionsEndpoint: true,
+  },
 )
 
 const expandedLevels = ref<number[]>([])
@@ -250,8 +257,8 @@ const expandedQuestions = ref<Set<string | number>>(new Set())
 const profileLevels = computed(() =>
   (props.profile?.levels || []).map((l) => ({
     ...l,
-    name: l.name || l.level_name || `Уровень ${l.num || ''}`,
-    progress: l.progress ?? 0,
+    level_name: l.level_name || l.name || `Уровень ${l.num || ''}`,
+    level_progress: l.level_progress ?? l.progress ?? 0,
   })),
 )
 
@@ -261,44 +268,42 @@ const getLevelSkills = (level: Level): Skill[] => {
     if (typeof item === 'object' && item !== null) {
       return {
         id: item.id,
-        name: item.name || item.title || 'Навык',
-        title: item.name || item.title,
-        total_progress: item.total_progress ?? item.progress ?? 0,
-        progress: item.progress ?? item.total_progress ?? 0,
+        title: item.title || item.name || 'Навык',
+        name: item.name || item.title,
+        skill_progress: item.skill_progress ?? item.progress ?? 0,
+        progress: item.progress ?? item.skill_progress ?? 0,
+        stage_cnt: item.stage_cnt ?? 0,
         description: item.description,
-        materials: item.materials,
+        literature: item.literature,
         stages: Array.isArray(item.stages) ? item.stages : [],
         is_accepted: item.is_accepted,
       }
     }
     return {
       id: item as number,
-      name: `Навык #${item}`,
       title: `Навык #${item}`,
-      total_progress: 0,
+      name: `Навык #${item}`,
+      skill_progress: 0,
       progress: 0,
+      stage_cnt: 0,
       stages: [],
     }
   })
 }
 
-const getStagesCount = (skill: Skill | any): number => {
-  if (typeof skill.stages_count === 'number') return skill.stages_count
-  if (Array.isArray(skill.stage_ids)) return skill.stage_ids.length
-  if (Array.isArray(skill.stages)) return skill.stages.length
-  return 0
+const parseLiterature = (lit: string | string[] | undefined): string[] => {
+  if (!lit) return []
+  if (Array.isArray(lit)) return lit
+  if (typeof lit === 'string') {
+    return lit
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+  return []
 }
 
-const mapStageType = (type: string | null | undefined): StageType => {
-  if (!type) return 'practice'
-  const t = String(type).toLowerCase().trim()
-  if (t === 'certification' || t === 'аттестация') return 'certification'
-  if (t === 'practice' || t === 'практическое задание') return 'practice'
-  if (t === 'performance_review' || t === 'performance review') return 'performance_review'
-  return 'practice'
-}
-
-const normalizeQuestions = (raw: any[], type: StageType): Question[] => {
+const normalizeQuestions = (raw: any[], confirmationType: string): Question[] => {
   if (!Array.isArray(raw)) return []
   return raw.map((q, i) => {
     if (q.uniqueKey) return q as Question
@@ -311,20 +316,28 @@ const normalizeQuestions = (raw: any[], type: StageType): Question[] => {
   })
 }
 
-// ✅ ИДЕМПОТЕНТНАЯ нормализация: не ломает уже нормализованные данные
 const normalizeStages = (skill: Skill | null): Stage[] => {
   if (!skill?.stages || !Array.isArray(skill.stages)) return []
   return skill.stages.map((st: any, i) => {
-    const id = st.id ?? st.stage_id ?? `s_${i}`
-    const type = mapStageType(st.type || st.confirmation_type)
-    const normQ = Array.isArray(st.normalizedQuestions)
-      ? st.normalizedQuestions
-      : normalizeQuestions(st.questions || st.questions_list || st.items || [], type)
+    // ✅ Если normalizedQuestions уже есть — используем их
+    if (st.normalizedQuestions && Array.isArray(st.normalizedQuestions)) {
+      return {
+        uniqueKey: `${st.id ?? `s_${i}`}_${st.confirmation_type}`,
+        ...st,
+      }
+    }
+
+    const id = st.id ?? `s_${i}`
+    const confirmationType = st.confirmation_type || 'Практическое задание'
+    const normQ = normalizeQuestions(
+      st.questions || st.questions_list || st.items || [],
+      confirmationType,
+    )
     return {
-      uniqueKey: `${id}_${type}`,
+      uniqueKey: `${id}_${confirmationType}`,
       id,
-      stage_id: id,
-      type,
+      confirmation_type: confirmationType,
+      user_stage_id: st.user_stage_id,
       is_accepted: st.is_accepted,
       updated_at: st.updated_at || st.date_time,
       comment: st.comment || st.feedback,
@@ -341,7 +354,7 @@ const toggleLevel = (id: number) => {
   i > -1 ? expandedLevels.value.splice(i, 1) : expandedLevels.value.push(id)
 }
 
-// ✅ ИСПРАВЛЕННАЯ ЗАГРУЗКА И СЛИЯНИЕ ВОПРОСОВ
+// ✅ ИСПРАВЛЕНО: Нормализация стадий при получении данных из API
 const openSkillModal = async (skill: Skill) => {
   selectedSkill.value = { ...skill }
   isModalVisible.value = true
@@ -351,44 +364,36 @@ const openSkillModal = async (skill: Skill) => {
   try {
     let apiData: any = null
 
-    // Пробуем загрузить вопросы/детали
-    if (props.fetchSkillQuestions && props.userId) {
+    if (props.useQuestionsEndpoint && props.fetchSkillQuestions && props.userId) {
       apiData = await props.fetchSkillQuestions(props.userId, skill.id)
     } else if (props.fetchSkillDetail && props.userId) {
       apiData = await props.fetchSkillDetail(props.userId, skill.id)
     }
 
     if (apiData && selectedSkill.value) {
-      // Извлекаем вопросы из разных возможных форматов ответа API
-      const rawQuestions =
-        apiData.questions || apiData.items || apiData.data?.questions || apiData.data?.items || []
+      // Обновляем базовые поля
+      if (apiData.description) selectedSkill.value.description = apiData.description
+      if (apiData.literature) selectedSkill.value.literature = apiData.literature
 
-      // Если API вернул этапы с вопросами внутри
+      // ✅ ИСПРАВЛЕНО: Если API вернул стадии — нормализуем их сразу
       if (apiData.stages && Array.isArray(apiData.stages)) {
-        selectedSkill.value.stages = selectedSkill.value.stages?.map((oldStage: any) => {
-          const oldId = oldStage.id ?? oldStage.stage_id
-          const matched = apiData.stages.find((s: any) => (s.id ?? s.stage_id) === oldId)
-          return {
-            ...oldStage,
-            questions: matched?.questions || matched?.items || oldStage.questions || [],
-          }
-        })
-      }
-      // Если API вернул плоский список вопросов
-      else if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
-        selectedSkill.value.stages = selectedSkill.value.stages?.map((oldStage: any) => {
-          const stageId = oldStage.id ?? oldStage.stage_id
-          const stageType = mapStageType(oldStage.type || oldStage.confirmation_type)
-
-          // Фильтруем вопросы по stage_id или типу этапа
-          const matched = rawQuestions.filter(
-            (q: any) =>
-              (q.stage_id ?? q.stageId ?? q.type) === stageId ||
-              (q.stage_id ?? q.stageId) === stageId ||
-              mapStageType(q.type || q.confirmation_type) === stageType,
-          )
-          return { ...oldStage, questions: matched.length ? matched : oldStage.questions || [] }
-        })
+        selectedSkill.value.stages = apiData.stages.map((st: any) => ({
+          id: st?.id ?? null,
+          confirmation_type: st.confirmation_type || 'Практическое задание',
+          user_stage_id: st.user_stage_id,
+          is_accepted: st.is_accepted,
+          comment: st.comment,
+          updated_at: st.updated_at,
+          // ✅ Преобразуем вопросы в формат Question с normalizedQuestions
+          normalizedQuestions: (Array.isArray(st.questions) ? st.questions : []).map(
+            (q: any, idx: number) => ({
+              uniqueKey: q?.id ?? q?.num ?? `q_${idx}`,
+              text: q?.question ?? q?.text ?? '',
+              question: q?.question ?? q?.text ?? '',
+              answer: q?.answer ?? '',
+            }),
+          ),
+        }))
       }
     }
   } catch (e) {
@@ -397,7 +402,6 @@ const openSkillModal = async (skill: Skill) => {
     skillLoading.value = false
   }
 
-  // Ждем обновления DOM перед переключением вкладки
   await nextTick()
   if (normalizedStages.value.length > 0) {
     activeTab.value = normalizedStages.value[0].uniqueKey
@@ -409,17 +413,27 @@ const onModalClosed = () => {
   expandedQuestions.value.clear()
   activeTab.value = ''
 }
+
 const toggleQuestion = (k: string | number) =>
   expandedQuestions.value.has(k)
     ? expandedQuestions.value.delete(k)
     : expandedQuestions.value.add(k)
 
-const getStageTypeName = (t: StageType | string | undefined | null) =>
-  t && stageTypesNames[t as StageType] ? stageTypesNames[t as StageType] : 'Практическое задание'
-const getQuestionsTitle = (t: StageType | string | undefined | null) =>
-  t === 'practice' || t === 'performance_review' ? 'Задания и критерии' : 'Вопросы и ответы'
-const getAnswerLabel = (t: StageType | string | undefined | null) =>
-  t === 'practice' || t === 'performance_review' ? 'Критерий оценивания:' : 'Эталонный ответ:'
+const getStageTypeName = (t: string | undefined | null) =>
+  t && stageTypesNames[t as keyof StageTypeMap]
+    ? stageTypesNames[t as keyof StageTypeMap]
+    : 'Практическое задание'
+
+const getQuestionsTitle = (t: string | undefined | null) =>
+  t === 'Практическое задание' || t === 'Performance review'
+    ? 'Задания и критерии'
+    : 'Вопросы и ответы'
+
+const getAnswerLabel = (t: string | undefined | null) =>
+  t === 'Практическое задание' || t === 'Performance review'
+    ? 'Критерий оценивания:'
+    : 'Эталонный ответ:'
+
 const formatDate = (d: string | null | undefined) => {
   if (!d) return ''
   const date = new Date(d)
@@ -451,7 +465,6 @@ watch(
   color: var(--gray);
   font-style: italic;
 }
-/* Стили ProfileCard (полностью идентичны исходным, добавлен только .no-data) */
 .profile-card {
   padding: var(--spacing-md);
 }
@@ -611,7 +624,6 @@ watch(
   color: var(--gray);
   font-style: italic;
 }
-/* ... остальные media-queries и стили модалки остаются без изменений ... */
 @media (max-width: 560px) {
   .level-progress {
     flex-direction: column;
