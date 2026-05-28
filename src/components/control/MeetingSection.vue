@@ -3,7 +3,7 @@
   <section class="tab-content">
     <div class="section-header">
       <h2>Управление встречами</h2>
-      <el-button type="primary" @click="openMeetingDialog()">
+      <el-button type="primary" @click="openCreateDialog">
         <el-icon><Plus /></el-icon>
         Создать встречу
       </el-button>
@@ -12,8 +12,8 @@
     <!-- Поиск -->
     <div class="filters-row">
       <el-input
-        v-model="meetingSearch"
-        placeholder="Поиск по названию навыка"
+        v-model="searchQuery"
+        placeholder="Поиск по навыку или участнику"
         prefix-icon="Search"
         clearable
         class="search-input"
@@ -21,188 +21,334 @@
     </div>
 
     <!-- Таблица встреч -->
-    <el-table :data="filteredMeetings" stripe border class="data-table">
-      <el-table-column prop="skillName" label="Навык" min-width="180" />
-      <el-table-column prop="stageType" label="Тип этапа" width="140">
+    <el-table
+      :data="filteredMeetings"
+      stripe
+      border
+      class="data-table"
+      @row-click="openViewDialog"
+      style="cursor: pointer"
+    >
+      <el-table-column prop="skill_title" label="Навык" min-width="180" />
+      <el-table-column prop="confirmation_type" label="Тип этапа" width="140">
         <template #default="{ row }">
-          <el-tag size="small" :type="getStageTypeTag(row.stageType)">
-            {{ getStageTypeLabel(row.stageType) }}
+          <el-tag size="small" :type="getStageTypeTag(row.confirmation_type)">
+            {{ getStageTypeLabel(row.confirmation_type) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="date" label="Дата и время" width="170" sortable />
-      <el-table-column prop="location" label="Место" min-width="140" />
-      <el-table-column prop="duration" label="Длительность" width="150" align="center">
-        <template #default="{ row }"> {{ row.duration }} мин. </template>
+      <el-table-column prop="started_at" label="Дата и время" width="170" sortable>
+        <template #default="{ row }">
+          {{ formatDateTime(row.started_at) }}
+        </template>
       </el-table-column>
-      <el-table-column prop="participants" label="Участники" min-width="180">
+      <el-table-column prop="location" label="Место" min-width="140" />
+      <el-table-column prop="duration" label="Длительность" width="100" align="center">
+        <template #default="{ row }">{{ row.duration }} мин.</template>
+      </el-table-column>
+      <el-table-column label="Участники" min-width="200">
         <template #default="{ row }">
           <div class="participants-display">
-            <el-tag size="small" type="warning">Аттестуемый: {{ row.attestedName }}</el-tag>
-            <el-tag size="small" type="success">Аттестующий: {{ row.attestorName }}</el-tag>
+            <el-tag size="small" type="warning">
+              Аттестуемый: {{ row.student?.full_name || '—' }}
+            </el-tag>
+            <el-tag size="small" type="success">
+              Аттестующий: {{ row.examiner?.full_name || '—' }}
+            </el-tag>
           </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="Действия" width="120" align="center" :resizable="false">
+        <template #default="{ row }">
+          <el-button link type="primary" size="small" @click.stop="openEditDialog(row)">
+            Редактировать
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- ✅ Подключенный компонент MeetingDialog -->
+    <!-- Модальное окно создания/редактирования -->
+    <!-- ✅ employees больше не передаётся — MeetingDialog загружает их сам -->
     <MeetingDialog
-      v-model="meetingDialogVisible"
-      :meeting="editingMeeting"
-      :skills="skills"
-      :employees="employees"
-      @save="handleMeetingSave"
-      @close="meetingDialogVisible = false"
+      v-model="dialogVisible"
+      :meeting="selectedMeeting"
+      @save="onMeetingSaved"
+      @close="onDialogClose"
     />
+
+    <!-- Модальное окно просмотра (только чтение + кнопки) -->
+    <el-dialog
+      v-model="viewDialogVisible"
+      title="Просмотр встречи"
+      width="90%"
+      :style="{ maxWidth: '600px' }"
+      :close-on-click-modal="true"
+      class="view-dialog"
+      align-center
+    >
+      <div v-if="viewMeeting" class="view-content">
+        <div class="view-row">
+          <span class="label">Навык:</span>
+          <span class="value">{{ viewMeeting.skill_title }}</span>
+        </div>
+        <div class="view-row">
+          <span class="label">Тип этапа:</span>
+          <el-tag size="small" :type="getStageTypeTag(viewMeeting.confirmation_type)">
+            {{ getStageTypeLabel(viewMeeting.confirmation_type) }}
+          </el-tag>
+        </div>
+        <div class="view-row">
+          <span class="label">Дата и время:</span>
+          <span class="value">{{ formatDateTime(viewMeeting.started_at) }}</span>
+        </div>
+        <div class="view-row">
+          <span class="label">Место:</span>
+          <span class="value">{{ viewMeeting.location }}</span>
+        </div>
+        <div class="view-row">
+          <span class="label">Длительность:</span>
+          <span class="value">{{ viewMeeting.duration }} мин.</span>
+        </div>
+        <div class="view-row">
+          <span class="label">Аттестуемый:</span>
+          <span class="value">{{ viewMeeting.student?.full_name }}</span>
+        </div>
+        <div class="view-row">
+          <span class="label">Аттестующий:</span>
+          <span class="value">{{ viewMeeting.examiner?.full_name }}</span>
+        </div>
+        <div class="view-row" v-if="viewMeeting.description">
+          <span class="label">Описание:</span>
+          <span class="value">{{ viewMeeting.description }}</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="view-footer">
+          <el-button type="danger" size="small" @click="confirmDelete">Удалить</el-button>
+          <el-button type="primary" size="small" @click="openEditDialog(viewMeeting)">
+            Редактировать
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
-<script setup>
-import { ref, computed } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import MeetingDialog from '@/components/common/MeetingDialog.vue'
+import axios from 'axios'
 
-const props = defineProps({
-  meetings: {
-    type: Array,
-    required: true,
-  },
-  skills: {
-    type: Array,
-    required: true,
-  },
-  employees: {
-    type: Array,
-    required: true,
-  },
-})
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-const emit = defineEmits(['update:meetings'])
+interface Meeting {
+  id: number
+  skill_title: string
+  confirmation_type: string
+  started_at: string
+  location: string
+  duration: number
+  description?: string
+  status: string
+  student?: { id: number; full_name: string }
+  examiner?: { id: number; full_name: string }
+}
 
-// === Поиск ===
-const meetingSearch = ref('')
+// ✅ Employee интерфейс оставлен для типов встреч (student/examiner)
+interface Employee {
+  id: number
+  first_name: string
+  last_name: string
+  patronymic?: string
+  department_name?: string
+}
 
+// ✅ employees prop оставлен для совместимости, но не используется для диалога
+const props = defineProps<{
+  employees?: Employee[]
+}>()
+
+const emit = defineEmits<{
+  (e: 'refresh'): void
+}>()
+
+const meetings = ref<Meeting[]>([])
+const searchQuery = ref('')
+const dialogVisible = ref(false)
+const viewDialogVisible = ref(false)
+const selectedMeeting = ref<Meeting | null>(null)
+const viewMeeting = ref<Meeting | null>(null)
+
+// === Загрузка встреч ===
+const fetchMeetings = async () => {
+  try {
+    const res = await axios.get<Meeting[]>(`${API_BASE}/meetings/`)
+    if (Array.isArray(res.data)) {
+      meetings.value = res.data
+    } else {
+      console.error('Expected array but got:', res.data)
+      meetings.value = []
+      ElMessage.error('Неверный формат данных встреч')
+    }
+  } catch (err: any) {
+    console.error('Ошибка загрузки встреч:', err)
+    const errorMsg = err.response?.data?.detail || err.message || 'Не удалось загрузить встречи'
+    ElMessage.error(errorMsg)
+    meetings.value = []
+  }
+}
+
+// === Фильтрация ===
 const filteredMeetings = computed(() => {
-  if (!meetingSearch.value) return props.meetings
-  const q = meetingSearch.value.toLowerCase()
-  return props.meetings.filter((m) => m.skillName?.toLowerCase().includes(q))
+  if (!Array.isArray(meetings.value)) return []
+  if (!searchQuery.value) return meetings.value
+  const q = searchQuery.value.toLowerCase()
+  return meetings.value.filter((m) => {
+    const skill = m.skill_title?.toLowerCase() || ''
+    const student = m.student?.full_name?.toLowerCase() || ''
+    const examiner = m.examiner?.full_name?.toLowerCase() || ''
+    return skill.includes(q) || student.includes(q) || examiner.includes(q)
+  })
 })
-
-// === Модальное окно ===
-const meetingDialogVisible = ref(false)
-const editingMeeting = ref(null)
 
 // === Хелперы ===
-const getStageTypeLabel = (type) =>
-  ({
-    attestation: 'Аттестация',
-    practice: 'Практика',
-    performance: 'Perf. Review',
-  })[type] || type
-
-const getStageTypeTag = (type) =>
-  ({
-    attestation: 'warning',
-    practice: 'success',
-    performance: 'danger',
-  })[type] || 'info'
-
-// === Встречи: действия ===
-const openMeetingDialog = (meeting = null) => {
-  editingMeeting.value = meeting
-  meetingDialogVisible.value = true
-}
-
-const handleMeetingSave = (meetingData, originalMeeting) => {
-  if (originalMeeting) {
-    // Редактирование
-    const idx = props.meetings.findIndex((m) => m.id === originalMeeting.id)
-    if (idx !== -1) {
-      const updated = [...props.meetings]
-      updated[idx] = { ...updated[idx], ...meetingData }
-      emit('update:meetings', updated)
-    }
-    ElMessage.success('Встреча обновлена')
-  } else {
-    // Создание
-    const newMeeting = {
-      id: Date.now(),
-      ...meetingData,
-    }
-    emit('update:meetings', [newMeeting, ...props.meetings])
-    ElMessage.success('Встреча создана')
+const getStageTypeLabel = (type: string) => {
+  const map: Record<string, string> = {
+    Аттестация: 'Аттестация',
+    'Практическое задание': 'Практическое задание',
+    'Performance review': 'Performance review',
   }
-  meetingDialogVisible.value = false
+  return map[type] || type
 }
 
-const deleteMeeting = async (meeting) => {
+const getStageTypeTag = (type: string) => {
+  const map: Record<string, string> = {
+    Аттестация: 'warning',
+    'Практическое задание': 'success',
+    'Performance review': 'danger',
+  }
+  return (map[type] || 'info') as 'success' | 'warning' | 'danger' | 'info'
+}
+
+const formatDateTime = (dt: string) => {
+  if (!dt) return '—'
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(dt))
+}
+
+// === Диалоги ===
+const openCreateDialog = () => {
+  selectedMeeting.value = null
+  dialogVisible.value = true
+}
+
+const openEditDialog = (meeting: Meeting) => {
+  selectedMeeting.value = meeting
+  dialogVisible.value = true
+  viewDialogVisible.value = false
+}
+
+const openViewDialog = (meeting: Meeting) => {
+  viewMeeting.value = meeting
+  viewDialogVisible.value = true
+}
+
+// === Обработчики событий ===
+const onMeetingSaved = () => {
+  fetchMeetings()
+}
+
+const onDialogClose = () => {
+  selectedMeeting.value = null
+}
+
+const confirmDelete = async () => {
+  if (!viewMeeting.value) return
   try {
-    await ElMessageBox.confirm(
-      `Удалить встречу по навыку "${meeting.skillName}"?`,
-      'Подтверждение',
-      { type: 'warning' },
-    )
-    emit(
-      'update:meetings',
-      props.meetings.filter((m) => m.id !== meeting.id),
-    )
+    await ElMessageBox.confirm('Удалить эту встречу?', 'Подтверждение', {
+      type: 'warning',
+      confirmButtonText: 'Удалить',
+      cancelButtonText: 'Отмена',
+    })
+    await axios.delete(`${API_BASE}/meetings/${viewMeeting.value.id}`)
     ElMessage.success('Встреча удалена')
-  } catch {
-    /* отменено */
+    viewDialogVisible.value = false
+    fetchMeetings()
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      console.error('Ошибка удаления:', err)
+      const errorMsg = err.response?.data?.detail || err.message || 'Не удалось удалить встречу'
+      ElMessage.error(errorMsg)
+    }
   }
 }
+
+onMounted(() => {
+  fetchMeetings()
+})
 </script>
 
 <style scoped>
-/* === Секция === */
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-md);
 }
-
 .section-header h2 {
   margin: 0;
   font-size: 20px;
   font-weight: var(--font-weight-semibold);
-  color: var(--text);
 }
-
 .filters-row {
-  display: flex;
-  gap: var(--spacing-md);
   margin-bottom: var(--spacing-md);
-  flex-wrap: wrap;
 }
-
 .search-input {
-  flex: 1;
-  min-width: 200px;
   max-width: 400px;
 }
-
-.data-table {
-  width: 100%;
-  margin-bottom: var(--spacing-md);
+.data-table :deep(.el-table__row) {
+  cursor: pointer;
 }
-
-/* Участники в таблице */
 .participants-display {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-
-/* Адаптивность */
+.view-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+.view-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--spacing-sm);
+  align-items: baseline;
+}
+.view-row .label {
+  color: var(--gray);
+  font-weight: var(--font-weight-medium);
+}
+.view-row .value {
+  color: var(--text);
+}
+.view-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
 @media (max-width: 768px) {
-  .filters-row {
-    flex-direction: column;
-  }
-
-  .search-input {
-    width: 100%;
+  .view-row {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xs);
   }
 }
 </style>

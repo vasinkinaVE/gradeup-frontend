@@ -239,7 +239,7 @@ const fetchSkills = async () => {
   }
 }
 
-// ✅ Загружаем ВСЕХ сотрудников с полем is_supervisor для фильтрации в DirectionsSection
+// ✅ Загружаем ВСЕХ сотрудников с полем department_name и is_supervisor
 const fetchEmployees = async () => {
   try {
     const res = await fetch(`${API_BASE}/users/`, {
@@ -249,16 +249,26 @@ const fetchEmployees = async () => {
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
 
-    // ✅ Сохраняем is_supervisor для фильтрации доступных руководителей
+    // ✅ Отладка: смотрим структуру ответа
+    if (data.length > 0) {
+      console.log('📦 Raw employee sample:', data[0])
+    }
+
+    // ✅ Сохраняем все нужные поля, включая department_name
     employees.value = data.map((emp) => ({
       id: emp.id,
       first_name: emp.first_name || '',
       last_name: emp.last_name || '',
       patronymic: emp.patronymic || '',
-      is_supervisor: emp.is_supervisor ?? false, // ✅ Критично для DirectionsSection
+      department_name: emp.department_name || '', // ✅ Добавлено поле отдела
+      is_supervisor: emp.is_supervisor ?? false,
     }))
 
     console.log('✅ Employees loaded:', employees.value.length)
+    // ✅ Отладка: проверяем маппинг
+    if (employees.value.length > 0) {
+      console.log('✅ Mapped employee sample:', employees.value[0])
+    }
   } catch (err) {
     console.error('❌ Error fetching employees:', err)
     ElMessage.error('Не удалось загрузить список сотрудников')
@@ -487,7 +497,7 @@ onMounted(async () => {
   await Promise.all([
     fetchCategories(),
     fetchSkills(),
-    fetchEmployees(), // ✅ Загружает сотрудников с is_supervisor
+    fetchEmployees(), // ✅ Загружает сотрудников с department_name и is_supervisor
     fetchDepartments(),
   ])
 
@@ -508,6 +518,9 @@ watch(activeTab, async (newTab) => {
   }
   if (newTab === 'profiles' && !profiles.value.length) {
     await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
+  }
+  if (newTab === 'meetings' && !employees.value.length) {
+    await fetchEmployees()
   }
 })
 
