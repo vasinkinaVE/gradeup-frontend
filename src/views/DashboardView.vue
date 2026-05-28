@@ -96,7 +96,18 @@
               </div>
             </template>
 
-            <ProfileCard :levels="profileLevels" />
+            <!-- ✅ Показываем ProfileCard только если профиль загружен -->
+            <ProfileCard
+              v-if="userProfile"
+              :profile="userProfile"
+              :user-id="currentUserId"
+              :is-current-user="true"
+              :fetch-skill-detail="fetchSkillDetail"
+              :fetch-skill-questions="undefined"
+              :use-questions-endpoint="false"
+            />
+            <!-- ✅ Если профиля нет (404) -->
+            <div v-else class="profile-placeholder">Профиль не назначен</div>
           </el-card>
         </div>
       </div>
@@ -110,10 +121,20 @@ import { User, Calendar, List } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import MeetingCard, { type Meeting } from '@/components/common/MeetingCard.vue'
 import ProfileCard, { type Level } from '@/components/common/ProfileCard.vue'
+import axios from 'axios'
+
+// ✅ Создаем экземпляр axios с baseURL из .env (VITE_API_URL=/api)
+const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
 
 const authStore = useAuthStore()
 
 const currentUser = computed(() => authStore.user)
+const currentUserId = computed(() => currentUser.value?.id)
 
 const fullName = computed(() => {
   const user = currentUser.value
@@ -123,14 +144,24 @@ const fullName = computed(() => {
 })
 
 const upcomingMeeting = ref<Meeting | null>(null)
-const profileLevels = ref<Level[]>([])
+
+// ✅ Профиль пользователя — может быть null, если не назначен
+const userProfile = ref<{
+  user_id: number
+  profile_id: number
+  title: string
+  current_level_id: number
+  levels: Level[]
+  profile_progress: number
+  ready_gradeup: boolean
+} | null>(null)
 
 onMounted(async () => {
   if (!currentUser.value) {
     await authStore.fetchCurrentUser()
   }
 
-  await Promise.all([fetchUpcomingMeeting(), fetchProfileData()])
+  await Promise.all([fetchUpcomingMeeting(), fetchUserProfile()])
 })
 
 const fetchUpcomingMeeting = async () => {
@@ -160,25 +191,30 @@ const fetchUpcomingMeeting = async () => {
   }
 }
 
-const fetchProfileData = async () => {
-  // Заглушка - заменить на API вызов
-  profileLevels.value = [
-    {
-      id: 1,
-      name: 'Ученик',
-      progress: 100,
-      skills: [
-        {
-          id: 1,
-          name: 'Разработка веб-приложений на Vue.js',
-          total_progress: 100,
-          description: 'Навык разработки современных SPA-приложений',
-          materials: [],
-          stages: [],
-        },
-      ],
-    },
-  ]
+// ✅ Загрузка профиля пользователя с сервера
+const fetchUserProfile = async () => {
+  const userId = currentUserId.value
+  if (!userId) return
+
+  try {
+    const response = await apiClient.get(`/users/${userId}/profile/`)
+    userProfile.value = response.data
+  } catch (error: any) {
+    // ✅ Если 404 — профиль не назначен, это нормальная ситуация
+    if (error?.response?.status === 404) {
+      userProfile.value = null
+    } else {
+      console.error('Ошибка загрузки профиля:', error)
+      userProfile.value = null
+    }
+  }
+}
+
+// ✅ Загрузка деталей навыка: GET /users/{user_id}/skills/{skill_id}
+// Возвращает описание, материалы, стадии — без вопросов (вопросы не предусмотрены этим эндпоинтом)
+const fetchSkillDetail = async (userId: number, skillId: number) => {
+  const response = await apiClient.get(`/users/${userId}/skills/${skillId}`)
+  return response.data
 }
 </script>
 
@@ -328,6 +364,20 @@ const fetchProfileData = async () => {
   padding: var(--spacing-md) 0;
   text-align: center;
   width: 100%;
+}
+
+/* ✅ Стиль для сообщения "Профиль не назначен" */
+.profile-placeholder {
+  color: var(--gray);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: var(--spacing-lg) 0;
+  text-align: center;
+  width: 100%;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 :deep(.el-card__header) {

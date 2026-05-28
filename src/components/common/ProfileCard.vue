@@ -161,7 +161,10 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="placeholder-text">Вопросы/задания не добавлены</div>
+              <!-- ✅ Показываем сообщение только если useQuestionsEndpoint=true и вопросов нет -->
+              <div v-else-if="props.useQuestionsEndpoint" class="placeholder-text">
+                Вопросы/задания не добавлены
+              </div>
             </div>
           </el-tab-pane>
         </el-tabs>
