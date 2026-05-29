@@ -1,3 +1,4 @@
+<!-- src/views/CalendarView.vue -->
 <template>
   <div class="calendar-page">
     <!-- Заголовок -->
@@ -11,7 +12,7 @@
         <el-input
           v-model="searchQuery"
           placeholder="Поиск по теме или ФИО участника"
-          prefix-icon="Search"
+          :prefix-icon="Search"
           clearable
           class="search-input"
           @input="applyFilters"
@@ -64,12 +65,11 @@
           popper-class="custom-select-popper"
         >
           <el-option label="Все типы" value="all" />
-          <el-option label="Аттестация" value="EXAM" />
-          <el-option label="Практика" value="PRACTICE" />
-          <el-option label="Performance Review" value="REVIEW" />
+          <el-option label="Аттестация" value="Аттестация" />
+          <el-option label="Практика" value="Практика" />
+          <el-option label="Performance Review" value="Performance Review" />
         </el-select>
 
-        <!-- ✅ Добавлен clearable и исправлена работа очистки -->
         <el-date-picker
           v-model="dateRange"
           type="daterange"
@@ -90,24 +90,25 @@
       </div>
     </div>
 
-    <!-- Список аттестаций через MeetingCard -->
+    <!-- Список встреч через MeetingCard -->
     <div class="attestations-list">
+      <el-empty v-if="!meetingsLoaded" description="Загрузка встреч..." :image-size="80" />
       <el-empty
-        v-if="filteredAttestations.length === 0"
+        v-else-if="filteredMeetings.length === 0"
         description="Нет встреч по выбранным фильтрам"
         :image-size="80"
       />
 
       <el-card
-        v-for="attestation in filteredAttestations"
-        :key="attestation.id"
+        v-for="meeting in filteredMeetings"
+        :key="meeting.id"
         class="attestation-card"
         shadow="never"
-        :class="{ 'is-past': attestation.isPast, 'is-today': attestation.isToday }"
+        :class="{ 'is-past': meeting.isPast, 'is-today': meeting.isToday }"
       >
         <MeetingCard
           ref="meetingCardRefs"
-          :meeting="mapToMeeting(attestation)"
+          :meeting="meeting"
           :can-grade="canGradeMeeting"
           @view-results="handleViewResults"
           @open-grading="handleOpenGrading"
@@ -119,16 +120,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ru'
 import MeetingCard, { type Meeting } from '@/components/common/MeetingCard.vue'
+import axios from 'axios'
 
 dayjs.locale('ru')
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 const authStore = useAuthStore()
 const currentUser = computed(() => authStore.user)
 
@@ -144,193 +147,169 @@ const canGradeMeeting = computed(() => {
 // Фильтры
 const searchQuery = ref('')
 const filterStatus = ref<'all' | 'upcoming' | 'past'>('all')
-const filterMeetings = ref<'all' | 'my' | 'subordinates'>('all') // ✅ Новый фильтр
+const filterMeetings = ref<'all' | 'my' | 'subordinates'>('all')
 const filterRole = ref<'all' | 'ATTESTED' | 'ATTESTOR'>('all')
-const filterType = ref<'all' | 'EXAM' | 'PRACTICE' | 'REVIEW'>('all')
+const filterType = ref<'all' | 'Аттестация' | 'Практика' | 'Performance Review'>('all')
 const dateRange = ref<[string, string] | null>(null)
 
-// ✅ Рефы для доступа к методам MeetingCard
+// Данные
+const meetingsLoaded = ref(false)
+const allMeetings = ref<Meeting[]>([])
 const meetingCardRefs = ref<InstanceType<typeof MeetingCard>[]>([])
 
-// Вспомогательные
-const currentUserId = computed(() => currentUser.value?.id || '1')
+const currentUserId = computed(() => currentUser.value?.id)
 
-// Mapper: конвертируем данные календаря в формат MeetingCard
-const mapToMeeting = (attestation: any): Meeting => {
+// ✅ Маппер: конвертируем ответ API в формат Meeting
+const mapApiMeetingToMeeting = (apiData: any): Meeting => {
+  const participants: Meeting['participants'] = []
+  let userRole: Meeting['role']
+  const isCurrentUserStudent = apiData.student?.user_id === currentUserId.value
+  const isCurrentUserExaminer = apiData.examiner?.user_id === currentUserId.value
+
+  if (apiData.student) {
+    participants.push({
+      id: apiData.student.id,
+      user_id: apiData.student.user_id, // ✅ ДОБАВЛЕНО: user_id
+      full_name: apiData.student.full_name,
+      role: 'Аттестуемый',
+      is_current_user: isCurrentUserStudent,
+    })
+    if (isCurrentUserStudent) userRole = 'ATTESTED'
+  }
+  if (apiData.examiner) {
+    participants.push({
+      id: apiData.examiner.id,
+      user_id: apiData.examiner.user_id, // ✅ ДОБАВЛЕНО: user_id
+      full_name: apiData.examiner.full_name,
+      role: 'Аттестующий',
+      is_current_user: isCurrentUserExaminer,
+    })
+    if (isCurrentUserExaminer) userRole = 'ATTESTOR'
+  }
+
+  const startTime = dayjs(apiData.started_at)
+  const now = dayjs()
+  const isPast = apiData.status === 'completed' || startTime.isBefore(now, 'day')
+  const isToday = startTime.isSame(now, 'day')
+  const isUpcoming = !isPast && !isToday
+
   return {
-    id: attestation.id,
-    skill_name: attestation.topic,
-    confirmation_type: attestation.confirmationType,
-    status: attestation.status,
-    date_time: attestation.startTime,
-    location: attestation.location,
-    duration: attestation.duration,
-    description: attestation.description,
-    materials: [],
-    participants: attestation.participants.map((p: any) => ({
-      id: p.id,
-      full_name: p.name,
-      role: p.role === 'ATTESTED' ? 'Аттестуемый' : 'Аттестующий',
-      is_current_user: p.id === currentUserId.value,
-    })),
-    role: attestation.participants.find((p: any) => p.id === currentUserId.value)?.role,
-    isPast: attestation.isPast,
-    isToday: attestation.isToday,
-    isUpcoming: attestation.isUpcoming,
-    result: attestation.result,
-    questions: attestation.questions,
+    id: apiData.id,
+    skill_name: apiData.title || 'Без названия',
+    confirmation_type: apiData.confirmation_type || '',
+    status: apiData.status as 'planned' | 'completed',
+    date_time: apiData.started_at,
+    location: apiData.location || 'Не указано',
+    duration: apiData.duration || 60,
+    description: apiData.description || undefined,
+    participants,
+    role: userRole,
+    isPast,
+    isToday,
+    isUpcoming,
+    stage_id: apiData.stage_id,
+    stage_version_id: apiData.stage_version_id,
+    skill_id: apiData.skill_id,
   }
 }
 
-// ✅ Mock-данные
-const mockAttestations = computed(() => [
-  {
-    id: '1',
-    topic: 'Базы данных: Индексы и оптимизация',
-    description: 'Проверка знаний по оптимизации запросов и работе с индексами в PostgreSQL',
-    confirmationType: 'EXAM',
-    startTime: dayjs().subtract(3, 'day').hour(15).minute(0).toDate(),
-    duration: 45,
-    location: 'Переговорная "Альфа", 3 этаж',
-    status: 'completed',
-    isPast: true,
-    isToday: false,
-    isUpcoming: false,
-    participants: [
-      { id: currentUserId.value, name: 'Текущий пользователь', role: 'ATTESTED' },
-      { id: 'emp2', name: 'Петров П.П.', role: 'ATTESTOR' },
-    ],
-    result: {
-      score: 85,
-      feedback: 'Хорошая работа! Рекомендую углубить знания по индексам.',
-      passed: true,
-      date: '2026-04-20T16:30:00',
-    },
-  },
-  {
-    id: '2',
-    topic: 'Frontend: Vue 3 Composition API',
-    description: 'Оценка навыков работы с Composition API и реактивностью во Vue 3',
-    confirmationType: 'PRACTICE',
-    startTime: dayjs().add(5, 'day').hour(10).minute(0).toDate(),
-    duration: 60,
-    location: 'Zoom',
-    status: 'scheduled',
-    isPast: false,
-    isToday: false,
-    isUpcoming: true,
-    participants: [
-      { id: 'emp3', name: 'Сидорова А.В.', role: 'ATTESTED' },
-      { id: currentUserId.value, name: 'Текущий пользователь', role: 'ATTESTOR' },
-    ],
-  },
-  {
-    id: '3',
-    topic: 'Проектирование схем БД',
-    description: 'Проверка знаний по проектированию реляционных баз данных',
-    confirmationType: 'EXAM',
-    startTime: dayjs().add(2, 'day').hour(14).minute(0).toDate(),
-    duration: 60,
-    location: 'Zoom',
-    status: 'scheduled',
-    isPast: false,
-    isToday: false,
-    isUpcoming: true,
-    participants: [
-      { id: 'emp7', name: 'Смирнов А.К.', role: 'ATTESTED' },
-      { id: 'emp8', name: 'Васильева М.И.', role: 'ATTESTOR' },
-    ],
-    questions: [
-      {
-        id: 'q1',
-        text: 'Что такое нормализация и зачем она нужна?',
-        idealAnswer:
-          'Нормализация — это процесс организации данных в базе данных для уменьшения избыточности и улучшения целостности данных',
-      },
-      {
-        id: 'q2',
-        text: 'В чем разница между Clustered и Non-Clustered индексом?',
-        idealAnswer:
-          'Clustered индекс определяет физический порядок данных в таблице (может быть только один), Non-Clustered создает отдельную структуру с указателями на данные (может быть несколько)',
-      },
-      {
-        id: 'q3',
-        text: 'Опишите уровни изоляции транзакций',
-        idealAnswer:
-          'Read Uncommitted, Read Committed, Repeatable Read, Serializable — каждый следующий уровень обеспечивает большую изоляцию, но снижает производительность',
-      },
-    ],
-  },
-])
+// ✅ Загрузка встреч с сервера
+const fetchMeetings = async () => {
+  try {
+    const params: Record<string, any> = {}
 
-// Фильтрация
-const filteredAttestations = computed(() => {
-  let result = [...mockAttestations.value]
-
-  // ✅ Фильтр по встречам (только для руководителя)
-  if (canGradeMeeting.value && filterMeetings.value !== 'all') {
-    if (filterMeetings.value === 'my') {
-      // Только встречи, где текущий пользователь является участником
-      result = result.filter((a) => a.participants.some((p: any) => p.id === currentUserId.value))
-    } else if (filterMeetings.value === 'subordinates') {
-      // Только встречи подчиненных (где текущий пользователь НЕ участвует)
-      result = result.filter((a) => !a.participants.some((p: any) => p.id === currentUserId.value))
+    // Фильтр по дате
+    if (dateRange.value?.[0] && dateRange.value?.[1]) {
+      params.start_date = dayjs(dateRange.value[0]).startOf('day').format('YYYY-MM-DDTHH:mm:ss')
+      params.end_date = dayjs(dateRange.value[1]).endOf('day').format('YYYY-MM-DDTHH:mm:ss')
     }
-  } else if (!canGradeMeeting.value) {
-    // Для не-руководителей показываем только их встречи
-    result = result.filter((a) => a.participants.some((p: any) => p.id === currentUserId.value))
-  }
 
+    // Фильтр по статусу
+    if (filterStatus.value === 'upcoming') {
+      params.status = 'planned'
+    } else if (filterStatus.value === 'past') {
+      params.status = 'completed'
+    }
+
+    // Фильтр по типу подтверждения
+    if (filterType.value !== 'all') {
+      params.confirmation_type = filterType.value
+    }
+
+    // Фильтр по роли пользователя
+    if (filterRole.value !== 'all' && currentUserId.value) {
+      params.user_id = currentUserId.value
+      if (filterRole.value === 'ATTESTED' || filterRole.value === 'ATTESTOR') {
+        params.user_role = filterRole.value
+      }
+    }
+
+    // Фильтр "Мои встречи" / "Встречи подчиненных" для руководителя
+    if (canGradeMeeting.value && filterMeetings.value !== 'all' && currentUserId.value) {
+      if (filterMeetings.value === 'my') {
+        params.user_id = currentUserId.value
+      }
+    } else if (!canGradeMeeting.value && currentUserId.value) {
+      params.user_id = currentUserId.value
+    }
+
+    const response = await axios.get(`${API_BASE}/meetings/`, {
+      params,
+      headers: { 'Content-Type': 'application/json' },
+      withCredentials: true,
+    })
+
+    const mapped = (response.data || []).map(mapApiMeetingToMeeting)
+    allMeetings.value = mapped
+    meetingsLoaded.value = true
+  } catch (error) {
+    console.error('Ошибка загрузки встреч:', error)
+    ElMessage.error('Не удалось загрузить встречи')
+    meetingsLoaded.value = true
+  }
+}
+
+// ✅ Клиентская фильтрация
+const filteredMeetings = computed(() => {
+  let result = [...allMeetings.value]
+
+  // Поиск по теме или ФИО
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
-    result = result.filter((a) => {
-      const topicMatch = a.topic.toLowerCase().includes(query)
-      const participantMatch = a.participants.some((p: any) => p.name.toLowerCase().includes(query))
+    result = result.filter((m) => {
+      const topicMatch = m.skill_name.toLowerCase().includes(query)
+      const participantMatch = m.participants.some((p) => p.full_name.toLowerCase().includes(query))
       return topicMatch || participantMatch
     })
   }
 
-  if (filterStatus.value === 'upcoming') result = result.filter((a) => a.isUpcoming)
-  else if (filterStatus.value === 'past') result = result.filter((a) => a.isPast)
-
-  if (filterRole.value !== 'all') result = result.filter((a) => a.role === filterRole.value)
-  if (filterType.value !== 'all')
-    result = result.filter((a) => a.confirmationType === filterType.value)
-
-  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
-    const [start, end] = dateRange.value
-    result = result.filter((a) => {
-      const attDate = dayjs(a.startTime)
-      return (
-        attDate.isAfter(dayjs(start).subtract(1, 'day')) &&
-        attDate.isBefore(dayjs(end).add(1, 'day'))
-      )
-    })
+  // Фильтр "Встречи подчиненных" (клиентская часть)
+  if (canGradeMeeting.value && filterMeetings.value === 'subordinates' && currentUserId.value) {
+    result = result.filter((m) => !m.participants.some((p) => p.is_current_user))
   }
 
+  // Сортировка: сначала предстоящие, потом прошедшие
   return result.sort((a, b) => {
     if (a.isUpcoming && !b.isUpcoming) return -1
     if (!a.isUpcoming && b.isUpcoming) return 1
-    return new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+    return new Date(b.date_time).getTime() - new Date(a.date_time).getTime()
   })
 })
 
 // Методы
-const applyFilters = () => {}
+const applyFilters = () => {
+  fetchMeetings()
+}
 
-// ✅ Обработчик очистки даты
 const handleDateClear = () => {
   dateRange.value = null
   applyFilters()
 }
 
-// ✅ Валидация: блокируем выбор даты начала позже даты конца
 const disabledDate = (date: Date) => {
   if (dateRange.value?.[1]) {
     const endDate = dayjs(dateRange.value[1])
-    if (!dateRange.value[0]) {
-      return date > endDate.toDate()
-    }
+    if (!dateRange.value[0]) return date > endDate.toDate()
   }
   if (dateRange.value?.[0]) {
     const startDate = dayjs(dateRange.value[0])
@@ -339,11 +318,8 @@ const disabledDate = (date: Date) => {
   return false
 }
 
-// ✅ Валидация при изменении диапазона - ИСПРАВЛЕНО: не сбрасываем если значение null
 watch(dateRange, ([start, end]) => {
-  // Если очищаем - не показываем ошибку
   if (!start && !end) return
-
   if (start && end && dayjs(start).isAfter(dayjs(end))) {
     ElMessage.warning('Дата начала не может быть позже даты окончания')
     dateRange.value = null
@@ -351,27 +327,56 @@ watch(dateRange, ([start, end]) => {
 })
 
 // ✅ Обработчики событий от MeetingCard
-const handleViewResults = (meeting: Meeting) => {
-  const card = meetingCardRefs.value.find((ref) => ref?.$el.contains(document.activeElement))
-  card?.openResultsModal()
+const handleViewResults = async (meeting: Meeting) => {
+  console.log('Просмотр результатов:', meeting)
 }
 
 const handleOpenGrading = (meeting: Meeting) => {
-  const card = meetingCardRefs.value.find((ref) => ref?.$el.contains(document.activeElement))
-  card?.openGradingModal()
+  console.log('Открытие оценки:', meeting)
 }
 
-const handleSaveGrade = (meeting: Meeting, grade: 'зачтено' | 'незачтено', comment: string) => {
-  const attestation = mockAttestations.value.find((a) => a.id === meeting.id)
-  if (attestation) {
-    attestation.result = {
-      passed: grade === 'зачтено',
-      feedback: comment,
-      date: new Date().toISOString(),
+const handleSaveGrade = async (
+  meeting: Meeting,
+  grade: 'зачтено' | 'незачтено',
+  comment: string,
+) => {
+  try {
+    if (!meeting.stage_id) {
+      ElMessage.error('Недостаточно данных для сохранения оценки')
+      return
     }
-    attestation.status = 'completed'
+
+    // ✅ Берём user_id аттестуемого из участников
+    const attested = meeting.participants.find(
+      (p) => p.role === 'Аттестуемый' || p.role === 'ATTESTED',
+    )
+    const attestedUserId = attested?.user_id
+
+    if (!attestedUserId) {
+      ElMessage.error('Не удалось определить аттестуемого')
+      return
+    }
+
+    await axios.post(
+      `${API_BASE}/evaluations/`,
+      {
+        user_id: attestedUserId,
+        stage_id: meeting.stage_id,
+        is_accepted: grade === 'зачтено',
+        comment,
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        withCredentials: true,
+      },
+    )
+
+    ElMessage.success('Оценка сохранена')
+    await fetchMeetings()
+  } catch (error) {
+    console.error('Ошибка сохранения оценки:', error)
+    ElMessage.error('Не удалось сохранить оценку')
   }
-  ElMessage.success('Оценка сохранена')
 }
 
 // Быстрые даты
@@ -379,7 +384,6 @@ const dateShortcuts = [
   {
     text: 'Ближайшие 7 дней',
     value: () => {
-      // ✅ Исправлено: от сегодня до +7 дней вперед
       const start = dayjs().startOf('day')
       const end = dayjs().add(7, 'day').endOf('day')
       return [start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
@@ -400,6 +404,10 @@ const dateShortcuts = [
     ],
   },
 ]
+
+onMounted(() => {
+  fetchMeetings()
+})
 </script>
 
 <style scoped>
@@ -454,18 +462,11 @@ const dateShortcuts = [
   width: 240px !important;
   flex-shrink: 0;
 }
-
-/* === Стили для date-picker с форматом __.__.____г. === */
-:deep(.custom-date-picker .el-input__inner) {
-  font-feature-settings: 'tnum';
-  font-variant-numeric: tabular-nums;
-}
+:deep(.custom-date-picker .el-input__inner),
 :deep(.custom-date-picker .el-range-input) {
   font-feature-settings: 'tnum';
   font-variant-numeric: tabular-nums;
 }
-
-/* Фокус с фиолетовой обводкой */
 :deep(.custom-date-picker .el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1px #4a2c6d inset !important;
   border-color: #4a2c6d !important;
@@ -473,8 +474,6 @@ const dateShortcuts = [
 :deep(.custom-date-picker .el-input__wrapper) {
   border-radius: 4px !important;
 }
-
-/* === Стили для кнопки очистки (крестик) === */
 :deep(.custom-date-picker .el-input__clear) {
   cursor: pointer;
   transition: color 0.2s;
@@ -482,7 +481,6 @@ const dateShortcuts = [
 :deep(.custom-date-picker .el-input__clear:hover) {
   color: var(--danger);
 }
-
 .attestations-list {
   display: flex;
   flex-direction: column;
@@ -573,8 +571,6 @@ const dateShortcuts = [
 :deep(.el-input__inner) {
   border-radius: 4px !important;
 }
-
-/* === Стили для кастомных селектов === */
 :deep(.custom-select .el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1px #4a2c6d inset !important;
   border-color: #4a2c6d !important;
@@ -583,8 +579,6 @@ const dateShortcuts = [
 :deep(.custom-date-picker .el-input__wrapper) {
   border-radius: 4px !important;
 }
-
-/* === Стили для радио-кнопок === */
 :deep(.custom-radio-group .el-radio-button__inner) {
   background-color: #f5f5f5 !important;
   border: 1px solid #d9d9d9 !important;
@@ -630,8 +624,6 @@ const dateShortcuts = [
   color: var(--text) !important;
   box-shadow: none !important;
 }
-
-/* === Стили для выпадающих списков селектов === */
 :global(.custom-select-popper .el-select-dropdown__item) {
   background-color: transparent !important;
   color: var(--text) !important;
@@ -650,8 +642,6 @@ const dateShortcuts = [
   background-color: transparent !important;
   color: #4a2c6d !important;
 }
-
-/* === Адаптив === */
 @media (max-width: 768px) {
   .filters-row {
     flex-wrap: wrap;
@@ -662,8 +652,6 @@ const dateShortcuts = [
     flex-shrink: 1;
   }
 }
-
-/* === Дополнительные стили для фокуса === */
 :deep(.el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1px #4a2c6d inset !important;
   border-color: #4a2c6d !important;

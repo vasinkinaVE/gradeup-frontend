@@ -639,7 +639,7 @@ const handleEmployeeUpdate = async (updatedData: any) => {
 
     console.log(`PATCH /users/${userId} with payload:`, payload)
 
-    const res = await fetchWithAuth(`${API_BASE}/users/${userId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/users/${userId}/`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     })
