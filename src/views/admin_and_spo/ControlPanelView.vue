@@ -75,7 +75,10 @@
       v-if="activeTab === 'logs'"
       v-model:logs="logs"
       :loading="logsLoading"
-      @refresh="fetchLogs"
+      :api-filters="currentLogsFilters"
+      @refresh="() => fetchLogs(currentLogsFilters.value)"
+      @update:api-filters="handleLogsFiltersUpdate"
+      @update:logs="handleLogsUpdate"
     />
   </div>
 </template>
@@ -132,6 +135,7 @@ const employees = ref([])
 const logs = ref([])
 
 const profileDepartmentFilter = ref([])
+const currentLogsFilters = ref({}) // ✅ Хранилище текущих фильтров для логов
 
 const extractCategoryIds = (categoriesData) => {
   if (!categoriesData) return []
@@ -249,23 +253,20 @@ const fetchEmployees = async () => {
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
 
-    // ✅ Отладка: смотрим структуру ответа
     if (data.length > 0) {
       console.log('📦 Raw employee sample:', data[0])
     }
 
-    // ✅ Сохраняем все нужные поля, включая department_name
     employees.value = data.map((emp) => ({
       id: emp.id,
       first_name: emp.first_name || '',
       last_name: emp.last_name || '',
       patronymic: emp.patronymic || '',
-      department_name: emp.department_name || '', // ✅ Добавлено поле отдела
+      department_name: emp.department_name || '',
       is_supervisor: emp.is_supervisor ?? false,
     }))
 
     console.log('✅ Employees loaded:', employees.value.length)
-    // ✅ Отладка: проверяем маппинг
     if (employees.value.length > 0) {
       console.log('✅ Mapped employee sample:', employees.value[0])
     }
@@ -394,31 +395,76 @@ const fetchProfiles = async (deptIds = null) => {
   }
 }
 
-const fetchLogs = async () => {
+// ✅ Загрузка логов с сервера: GET /admin/events
+const fetchLogs = async (filters = {}) => {
   try {
     logsLoading.value = true
-    const res = await fetch(`${API_BASE}/logs/`, {
+
+    // Формируем query-параметры из фильтров
+    const params = new URLSearchParams()
+
+    if (filters.event_type) params.append('event_type', filters.event_type)
+    if (filters.access_scope) params.append('access_scope', filters.access_scope)
+    if (filters.target_type) params.append('target_type', filters.target_type)
+    if (filters.actor_id) params.append('actor_id', filters.actor_id)
+    if (filters.target_id) params.append('target_id', filters.target_id)
+    if (filters.start_date) params.append('start_date', filters.start_date)
+    if (filters.end_date) params.append('end_date', filters.end_date)
+
+    const queryString = params.toString()
+    const url = `${API_BASE}/admin/events${queryString ? '?' + queryString : ''}`
+
+    const res = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+
+    if (!res.ok) {
+      if (res.status === 422) {
+        const errorData = await res.json()
+        console.warn('Validation error:', errorData)
+        ElMessage.warning('Некорректные параметры фильтрации')
+      } else {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      }
+      return
+    }
+
     const data = await res.json()
 
-    logs.value = data.map((log) => ({
-      id: log.id,
-      timestamp: log.timestamp || log.created_at || '',
-      event_type: log.event_type || log.type || '',
-      actor: log.actor || log.user || log.who || '',
-      target: log.target || log.to_whom || log.recipient || '',
-      message: log.message || log.description || '',
-      severity: log.severity || log.level || 'info',
-    }))
+    // ✅ Маппинг ответа API в формат для компонента
+    logs.value = Array.isArray(data)
+      ? data.map((log) => ({
+          id: log.id,
+          created_at: log.created_at,
+          actor_id: log.actor_id,
+          actor_name: log.actor_name,
+          access_scope: log.access_scope,
+          target_id: log.target_id,
+          target_type: log.target_type,
+          event_type: log.event_type,
+          message: log.message,
+        }))
+      : []
   } catch (err) {
     console.error('Error fetching logs:', err)
     ElMessage.error('Не удалось загрузить журнал событий')
     logs.value = []
   } finally {
     logsLoading.value = false
+  }
+}
+
+// ✅ Обработчик обновления фильтров из LogsSection
+const handleLogsFiltersUpdate = (newFilters) => {
+  currentLogsFilters.value = newFilters
+  fetchLogs(newFilters)
+}
+
+// ✅ Обработчик обновления логов (если нужно локально изменить данные)
+const handleLogsUpdate = (newLogs) => {
+  if (Array.isArray(newLogs)) {
+    logs.value = newLogs
   }
 }
 
@@ -464,8 +510,9 @@ const onTabChange = async (tabId) => {
   if (tabId === 'profiles' && !profiles.value.length) {
     await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
   }
-  if (tabId === 'logs' && !logs.value.length) {
-    await fetchLogs()
+  if (tabId === 'logs') {
+    // ✅ Передаём текущие фильтры при загрузке
+    await fetchLogs(currentLogsFilters.value)
   }
 }
 
@@ -494,19 +541,11 @@ const reloadProfiles = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([
-    fetchCategories(),
-    fetchSkills(),
-    fetchEmployees(), // ✅ Загружает сотрудников с department_name и is_supervisor
-    fetchDepartments(),
-  ])
+  await Promise.all([fetchCategories(), fetchSkills(), fetchEmployees(), fetchDepartments()])
 
   await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
 
-  if (activeTab.value === 'logs') {
-    await fetchLogs()
-  }
-  // Directions загружаются по требованию при активации вкладки
+  // Directions и logs загружаются по требованию при активации вкладки
 })
 
 watch(activeTab, async (newTab) => {
@@ -532,6 +571,7 @@ defineExpose({
   fetchDirections,
   fetchProfiles,
   fetchEmployees,
+  fetchLogs, // ✅ Экспортируем для возможного внешнего вызова
 })
 </script>
 
