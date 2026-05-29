@@ -70,7 +70,9 @@
               :can-grade="canGradeMeeting"
               @view-results="handleViewResults"
               @open-grading="handleOpenGrading"
-              @save-grade="handleSaveGrade"
+              @save-grade="handleGradeSaved"
+              @grade-saved="handleGradeSaved"
+              @grade-error="handleGradeError"
             />
             <!-- ✅ Если встреч нет — показываем сообщение -->
             <div v-else-if="meetingLoadError" class="meeting-placeholder">
@@ -153,7 +155,7 @@ onMounted(async () => {
   await Promise.all([fetchUpcomingMeeting(), fetchUserProfile()])
 })
 
-// ✅ Маппер: конвертируем ответ API в формат Meeting
+// ✅ Маппер
 const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
   const participants: Meeting['participants'] = []
   let userRole: Meeting['role']
@@ -161,7 +163,7 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
   if (apiData.student) {
     participants.push({
       id: apiData.student.id,
-      user_id: apiData.student.user_id, // ✅ ДОБАВЛЕНО: user_id
+      user_id: apiData.student.user_id,
       full_name: apiData.student.full_name,
       role: 'Аттестуемый',
       is_current_user: apiData.student.user_id === userId,
@@ -171,7 +173,7 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
   if (apiData.examiner) {
     participants.push({
       id: apiData.examiner.id,
-      user_id: apiData.examiner.user_id, // ✅ ДОБАВЛЕНО: user_id
+      user_id: apiData.examiner.user_id,
       full_name: apiData.examiner.full_name,
       role: 'Аттестующий',
       is_current_user: apiData.examiner.user_id === userId,
@@ -197,7 +199,7 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
   }
 }
 
-// ✅ Загрузка ближайшей встречи с сервера
+// ✅ Загрузка ближайшей встречи
 const fetchUpcomingMeeting = async () => {
   meetingLoadError.value = null
   upcomingMeeting.value = null
@@ -210,7 +212,6 @@ const fetchUpcomingMeeting = async () => {
 
     const data = response.data
 
-    // ✅ Проверка: если в ответе есть detail с сообщением об отсутствии встреч
     if (
       data?.detail &&
       typeof data.detail === 'string' &&
@@ -220,13 +221,11 @@ const fetchUpcomingMeeting = async () => {
       return
     }
 
-    // ✅ Если ответ не содержит id — встреча не найдена
     if (!data?.id) {
       meetingLoadError.value = 'Запланированных встреч нет'
       return
     }
 
-    // ✅ Всё ок — маппим данные
     upcomingMeeting.value = mapMeetingData(data, currentUserId.value)
   } catch (error: any) {
     console.error('Ошибка загрузки встречи:', error)
@@ -234,7 +233,7 @@ const fetchUpcomingMeeting = async () => {
   }
 }
 
-// ✅ Загрузка профиля пользователя с сервера
+// ✅ Загрузка профиля
 const fetchUserProfile = async () => {
   const userId = currentUserId.value
   if (!userId) return
@@ -253,7 +252,7 @@ const fetchUserProfile = async () => {
   }
 }
 
-// ✅ Загрузка деталей навыка: GET /users/{user_id}/skills/{skill_id}
+// ✅ Загрузка деталей навыка
 const fetchSkillDetail = async (userId: number, skillId: number) => {
   const response = await axios.get(`${API_BASE}/users/${userId}/skills/${skillId}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -262,7 +261,7 @@ const fetchSkillDetail = async (userId: number, skillId: number) => {
   return response.data
 }
 
-// ✅ Обработчики событий от MeetingCard
+// ✅ Обработчики — только реакция, без API-вызовов
 const handleViewResults = (meeting: Meeting) => {
   console.log('Просмотр результатов:', meeting)
 }
@@ -271,18 +270,13 @@ const handleOpenGrading = (meeting: Meeting) => {
   console.log('Открытие оценки:', meeting)
 }
 
-const handleSaveGrade = async (
-  meeting: Meeting,
-  grade: 'зачтено' | 'незачтено',
-  comment: string,
-) => {
-  try {
-    ElMessage.success('Оценка сохранена')
-    await fetchUpcomingMeeting()
-  } catch (error) {
-    console.error('Ошибка сохранения оценки:', error)
-    ElMessage.error('Не удалось сохранить оценку')
-  }
+// ✅ После сохранения — просто перезагружаем встречу
+const handleGradeSaved = async () => {
+  await fetchUpcomingMeeting()
+}
+
+const handleGradeError = (error: any) => {
+  console.error('Ошибка от MeetingCard:', error)
 }
 </script>
 

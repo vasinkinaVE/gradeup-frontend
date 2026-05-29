@@ -137,8 +137,11 @@
             <div v-else class="placeholder-text">Материалы пока не добавлены</div>
           </div>
 
-          <!-- Вопросы и ответы — сервер сам фильтрует по роли -->
-          <div v-if="meetingDetails.questions?.length" class="modal-section">
+          <!-- ✅ Вопросы и ответы — ТОЛЬКО для аттестующего И если вопросы есть -->
+          <div
+            v-if="meeting.role === 'ATTESTOR' && meetingDetails.questions?.length"
+            class="modal-section"
+          >
             <h4 class="section-title">{{ getQuestionsTitle(meeting.confirmation_type) }}</h4>
             <div class="questions-list">
               <div
@@ -167,7 +170,7 @@
               </div>
             </div>
           </div>
-          <div v-else class="placeholder-text">Вопросы пока не добавлены</div>
+          <!-- ✅ Для аттестуемого блок вопросов не отображается вообще (даже с заглушкой) -->
         </template>
       </div>
     </el-dialog>
@@ -361,6 +364,8 @@ const emit = defineEmits<{
   'view-results': [meeting: Meeting]
   'open-grading': [meeting: Meeting]
   'save-grade': [meeting: Meeting, grade: 'зачтено' | 'незачтено', comment: string]
+  'grade-saved': []
+  'grade-error': [error: any]
 }>()
 
 const isModalVisible = ref(false)
@@ -397,7 +402,6 @@ const fetchMeetingMaterials = async () => {
     const response = await axios.get(`${API_BASE}/meetings/${props.meeting.id}/materials`, {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
-      // ❌ Никаких params с user_id не передаём!
     })
 
     const data = response.data
@@ -416,7 +420,6 @@ const fetchMeetingMaterials = async () => {
           .filter((line: string) => line.trim())
       : []
 
-    // ✅ Передаём всё как есть — сервер уже отфильтровал по роли
     meetingDetails.value = {
       description: data.description,
       materials,
@@ -447,8 +450,8 @@ const fetchEvaluationResult = async () => {
   }
 }
 
-// ✅ Сохранение оценки: POST /evaluations/
-// Здесь user_id НУЖЕН, потому что эндпоинт требует его в теле запроса
+// ✅ Сохранение оценки: ПОСТ /evaluations/
+// Эта функция теперь полностью отвечает за логику сохранения
 const submitGrade = async (
   attestedUserId: number | undefined,
   stageId: number | undefined,
@@ -462,7 +465,7 @@ const submitGrade = async (
   const response = await axios.post(
     `${API_BASE}/evaluations/`,
     {
-      user_id: attestedUserId, // ✅ Только здесь передаём user_id
+      user_id: attestedUserId,
       stage_id: stageId,
       is_accepted: grade === 'зачтено',
       comment,
@@ -509,6 +512,7 @@ const closeGradingModal = () => {
   gradingMeeting.value = null
 }
 
+// ✅ Сохранение оценки — вся логика здесь, родитель только слушает события
 const saveGrade = async () => {
   if (!gradingMeeting.value) return
   try {
@@ -520,12 +524,15 @@ const saveGrade = async () => {
       gradeValue.value,
       gradeComment.value,
     )
+
     ElMessage.success('Оценка сохранена')
     emit('save-grade', gradingMeeting.value, gradeValue.value, gradeComment.value)
+    emit('grade-saved') // ✅ Событие для родителя, чтобы обновить данные
     closeGradingModal()
   } catch (error) {
     console.error('Ошибка сохранения оценки:', error)
     ElMessage.error('Не удалось сохранить оценку')
+    emit('grade-error', error)
   }
 }
 
@@ -973,7 +980,6 @@ defineExpose({
   color: var(--text);
   margin: 0;
 }
-/* Стили модалок оценки и результатов (без изменений) */
 .grading-modal-content {
   padding: var(--spacing-sm) 0;
 }

@@ -112,7 +112,9 @@
           :can-grade="canGradeMeeting"
           @view-results="handleViewResults"
           @open-grading="handleOpenGrading"
-          @save-grade="handleSaveGrade"
+          @save-grade="handleGradeSaved"
+          @grade-saved="handleGradeSaved"
+          @grade-error="handleGradeError"
         />
       </el-card>
     </div>
@@ -169,7 +171,7 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
   if (apiData.student) {
     participants.push({
       id: apiData.student.id,
-      user_id: apiData.student.user_id, // ✅ ДОБАВЛЕНО: user_id
+      user_id: apiData.student.user_id,
       full_name: apiData.student.full_name,
       role: 'Аттестуемый',
       is_current_user: isCurrentUserStudent,
@@ -179,7 +181,7 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
   if (apiData.examiner) {
     participants.push({
       id: apiData.examiner.id,
-      user_id: apiData.examiner.user_id, // ✅ ДОБАВЛЕНО: user_id
+      user_id: apiData.examiner.user_id,
       full_name: apiData.examiner.full_name,
       role: 'Аттестующий',
       is_current_user: isCurrentUserExaminer,
@@ -218,25 +220,21 @@ const fetchMeetings = async () => {
   try {
     const params: Record<string, any> = {}
 
-    // Фильтр по дате
     if (dateRange.value?.[0] && dateRange.value?.[1]) {
       params.start_date = dayjs(dateRange.value[0]).startOf('day').format('YYYY-MM-DDTHH:mm:ss')
       params.end_date = dayjs(dateRange.value[1]).endOf('day').format('YYYY-MM-DDTHH:mm:ss')
     }
 
-    // Фильтр по статусу
     if (filterStatus.value === 'upcoming') {
       params.status = 'planned'
     } else if (filterStatus.value === 'past') {
       params.status = 'completed'
     }
 
-    // Фильтр по типу подтверждения
     if (filterType.value !== 'all') {
       params.confirmation_type = filterType.value
     }
 
-    // Фильтр по роли пользователя
     if (filterRole.value !== 'all' && currentUserId.value) {
       params.user_id = currentUserId.value
       if (filterRole.value === 'ATTESTED' || filterRole.value === 'ATTESTOR') {
@@ -244,7 +242,6 @@ const fetchMeetings = async () => {
       }
     }
 
-    // Фильтр "Мои встречи" / "Встречи подчиненных" для руководителя
     if (canGradeMeeting.value && filterMeetings.value !== 'all' && currentUserId.value) {
       if (filterMeetings.value === 'my') {
         params.user_id = currentUserId.value
@@ -273,7 +270,6 @@ const fetchMeetings = async () => {
 const filteredMeetings = computed(() => {
   let result = [...allMeetings.value]
 
-  // Поиск по теме или ФИО
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter((m) => {
@@ -283,12 +279,10 @@ const filteredMeetings = computed(() => {
     })
   }
 
-  // Фильтр "Встречи подчиненных" (клиентская часть)
   if (canGradeMeeting.value && filterMeetings.value === 'subordinates' && currentUserId.value) {
     result = result.filter((m) => !m.participants.some((p) => p.is_current_user))
   }
 
-  // Сортировка: сначала предстоящие, потом прошедшие
   return result.sort((a, b) => {
     if (a.isUpcoming && !b.isUpcoming) return -1
     if (!a.isUpcoming && b.isUpcoming) return 1
@@ -326,57 +320,24 @@ watch(dateRange, ([start, end]) => {
   }
 })
 
-// ✅ Обработчики событий от MeetingCard
-const handleViewResults = async (meeting: Meeting) => {
+// ✅ Обработчики событий — ТОЛЬКО реакция, без дублирования API-логики
+const handleViewResults = (meeting: Meeting) => {
   console.log('Просмотр результатов:', meeting)
+  // При необходимости: навигация или дополнительная логика
 }
 
 const handleOpenGrading = (meeting: Meeting) => {
   console.log('Открытие оценки:', meeting)
 }
 
-const handleSaveGrade = async (
-  meeting: Meeting,
-  grade: 'зачтено' | 'незачтено',
-  comment: string,
-) => {
-  try {
-    if (!meeting.stage_id) {
-      ElMessage.error('Недостаточно данных для сохранения оценки')
-      return
-    }
+// ✅ После сохранения оценки — просто обновляем список
+const handleGradeSaved = async () => {
+  await fetchMeetings()
+}
 
-    // ✅ Берём user_id аттестуемого из участников
-    const attested = meeting.participants.find(
-      (p) => p.role === 'Аттестуемый' || p.role === 'ATTESTED',
-    )
-    const attestedUserId = attested?.user_id
-
-    if (!attestedUserId) {
-      ElMessage.error('Не удалось определить аттестуемого')
-      return
-    }
-
-    await axios.post(
-      `${API_BASE}/evaluations/`,
-      {
-        user_id: attestedUserId,
-        stage_id: meeting.stage_id,
-        is_accepted: grade === 'зачтено',
-        comment,
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        withCredentials: true,
-      },
-    )
-
-    ElMessage.success('Оценка сохранена')
-    await fetchMeetings()
-  } catch (error) {
-    console.error('Ошибка сохранения оценки:', error)
-    ElMessage.error('Не удалось сохранить оценку')
-  }
+const handleGradeError = (error: any) => {
+  console.error('Ошибка от MeetingCard:', error)
+  // Дополнительная обработка ошибки при необходимости
 }
 
 // Быстрые даты
