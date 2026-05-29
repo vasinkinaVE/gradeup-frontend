@@ -17,6 +17,7 @@
             <span class="participant-label">Аттестуемый:</span>
             <el-select
               v-model="form.student_id"
+              :key="'student-' + employeesList.length"
               placeholder="Выберите аттестуемого"
               filterable
               class="participant-select"
@@ -46,6 +47,7 @@
             <span class="participant-label">Аттестующий:</span>
             <el-select
               v-model="form.examiner_id"
+              :key="'examiner-' + employeesList.length"
               placeholder="Выберите аттестующего"
               filterable
               class="participant-select"
@@ -210,7 +212,7 @@ const props = defineProps<{
     location: string
     duration: number
     description?: string
-    skill_title?: string
+    title?: string
     confirmation_type?: string
   } | null
   employees?: Employee[]
@@ -295,8 +297,14 @@ const fetchAvailableEmployees = async () => {
   }
 }
 
-// ✅ Загрузка формы при редактировании
+// ✅ Загрузка формы при редактировании — ТОЛЬКО если сотрудники уже загружены
 const loadMeeting = () => {
+  // ✅ Критически важно: не заполнять форму, пока нет списка сотрудников
+  if (employeesList.value.length === 0 && props.meeting) {
+    console.log('⏳ loadMeeting: employees not loaded yet, skipping')
+    return
+  }
+
   if (props.meeting) {
     form.value = {
       student_id: props.meeting.student?.id ?? null,
@@ -456,12 +464,14 @@ const handleClose = () => {
   resetForm()
 }
 
-// ✅ Watchers
+// ✅ Watchers — ИСПРАВЛЕНО: гарантируем порядок загрузки
 watch(
   () => props.modelValue,
-  (val) => {
+  async (val) => {
     if (val) {
-      fetchAvailableEmployees()
+      // 1. Сначала загружаем сотрудников
+      await fetchAvailableEmployees()
+      // 2. Только потом заполняем форму — select'ы найдут нужные опции по ID
       loadMeeting()
     }
   },
@@ -471,16 +481,20 @@ watch(
 watch(
   () => props.meeting,
   () => {
-    if (props.modelValue) {
+    // Обновляем форму только если диалог открыт И сотрудники уже загружены
+    // Это предотвращает показ "сырых" ID вместо имён
+    if (props.modelValue && employeesList.value.length > 0) {
       loadMeeting()
     }
   },
   { deep: true },
 )
 
-onMounted(() => {
+// ✅ onMounted — тоже с ожиданием
+onMounted(async () => {
   if (props.modelValue) {
-    fetchAvailableEmployees()
+    await fetchAvailableEmployees()
+    loadMeeting()
   }
 })
 </script>

@@ -29,7 +29,7 @@
       @row-click="openViewDialog"
       style="cursor: pointer"
     >
-      <el-table-column prop="skill_title" label="Навык" min-width="180" />
+      <el-table-column prop="title" label="Навык" min-width="180" />
       <el-table-column prop="confirmation_type" label="Тип этапа" width="140">
         <template #default="{ row }">
           <el-tag size="small" :type="getStageTypeTag(row.confirmation_type)">
@@ -58,13 +58,6 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="Действия" width="120" align="center" :resizable="false">
-        <template #default="{ row }">
-          <el-button link type="primary" size="small" @click.stop="openEditDialog(row)">
-            Редактировать
-          </el-button>
-        </template>
-      </el-table-column>
     </el-table>
 
     <!-- Модальное окно создания/редактирования -->
@@ -89,7 +82,7 @@
       <div v-if="viewMeeting" class="view-content">
         <div class="view-row">
           <span class="label">Навык:</span>
-          <span class="value">{{ viewMeeting.skill_title }}</span>
+          <span class="value">{{ viewMeeting.title }}</span>
         </div>
         <div class="view-row">
           <span class="label">Тип этапа:</span>
@@ -146,7 +139,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 interface Meeting {
   id: number
-  skill_title: string
+  title: string
   confirmation_type: string
   started_at: string
   location: string
@@ -207,7 +200,7 @@ const filteredMeetings = computed(() => {
   if (!searchQuery.value) return meetings.value
   const q = searchQuery.value.toLowerCase()
   return meetings.value.filter((m) => {
-    const skill = m.skill_title?.toLowerCase() || ''
+    const skill = m.title?.toLowerCase() || ''
     const student = m.student?.full_name?.toLowerCase() || ''
     const examiner = m.examiner?.full_name?.toLowerCase() || ''
     return skill.includes(q) || student.includes(q) || examiner.includes(q)

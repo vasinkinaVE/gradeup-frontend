@@ -123,13 +123,8 @@ import MeetingCard, { type Meeting } from '@/components/common/MeetingCard.vue'
 import ProfileCard, { type Level } from '@/components/common/ProfileCard.vue'
 import axios from 'axios'
 
-// ✅ Создаем экземпляр axios с baseURL из .env (VITE_API_URL=/api)
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+// ✅ Единый стиль подключения: как в MeetingDialog.vue
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 const authStore = useAuthStore()
 
@@ -191,13 +186,17 @@ const fetchUpcomingMeeting = async () => {
   }
 }
 
-// ✅ Загрузка профиля пользователя с сервера
+// ✅ Загрузка профиля пользователя с сервера — в стиле MeetingDialog.vue
 const fetchUserProfile = async () => {
   const userId = currentUserId.value
   if (!userId) return
 
   try {
-    const response = await apiClient.get(`/users/${userId}/profile/`)
+    // ✅ withCredentials: true для передачи cookies/сессии
+    const response = await axios.get(`${API_BASE}/users/${userId}/profile/`, {
+      headers: { 'Content-Type': 'application/json' },
+      withCredentials: true,
+    })
     userProfile.value = response.data
   } catch (error: any) {
     // ✅ Если 404 — профиль не назначен, это нормальная ситуация
@@ -213,7 +212,10 @@ const fetchUserProfile = async () => {
 // ✅ Загрузка деталей навыка: GET /users/{user_id}/skills/{skill_id}
 // Возвращает описание, материалы, стадии — без вопросов (вопросы не предусмотрены этим эндпоинтом)
 const fetchSkillDetail = async (userId: number, skillId: number) => {
-  const response = await apiClient.get(`/users/${userId}/skills/${skillId}`)
+  const response = await axios.get(`${API_BASE}/users/${userId}/skills/${skillId}`, {
+    headers: { 'Content-Type': 'application/json' },
+    withCredentials: true,
+  })
   return response.data
 }
 </script>
