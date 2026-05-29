@@ -135,7 +135,7 @@ const employees = ref([])
 const logs = ref([])
 
 const profileDepartmentFilter = ref([])
-const currentLogsFilters = ref({}) // ✅ Хранилище текущих фильтров для логов
+const currentLogsFilters = ref({})
 
 const extractCategoryIds = (categoriesData) => {
   if (!categoriesData) return []
@@ -243,7 +243,6 @@ const fetchSkills = async () => {
   }
 }
 
-// ✅ Загружаем ВСЕХ сотрудников с полем department_name и is_supervisor
 const fetchEmployees = async () => {
   try {
     const res = await fetch(`${API_BASE}/users/`, {
@@ -325,7 +324,6 @@ const fetchDepartments = async () => {
   }
 }
 
-// ✅ Загрузка направлений с сервера
 const fetchDirections = async () => {
   try {
     directionsLoading.value = true
@@ -400,12 +398,10 @@ const fetchLogs = async (filters = {}) => {
   try {
     logsLoading.value = true
 
-    // Формируем query-параметры из фильтров
     const params = new URLSearchParams()
 
     if (filters.event_type) params.append('event_type', filters.event_type)
     if (filters.access_scope) params.append('access_scope', filters.access_scope)
-    if (filters.target_type) params.append('target_type', filters.target_type)
     if (filters.actor_id) params.append('actor_id', filters.actor_id)
     if (filters.target_id) params.append('target_id', filters.target_id)
     if (filters.start_date) params.append('start_date', filters.start_date)
@@ -432,7 +428,7 @@ const fetchLogs = async (filters = {}) => {
 
     const data = await res.json()
 
-    // ✅ Маппинг ответа API в формат для компонента
+    // ✅ Маппинг ответа API — БЕЗ target_type
     logs.value = Array.isArray(data)
       ? data.map((log) => ({
           id: log.id,
@@ -440,8 +436,6 @@ const fetchLogs = async (filters = {}) => {
           actor_id: log.actor_id,
           actor_name: log.actor_name,
           access_scope: log.access_scope,
-          target_id: log.target_id,
-          target_type: log.target_type,
           event_type: log.event_type,
           message: log.message,
         }))
@@ -455,13 +449,25 @@ const fetchLogs = async (filters = {}) => {
   }
 }
 
-// ✅ Обработчик обновления фильтров из LogsSection
+// ✅ ИСПРАВЛЕНА: Корректная обработка фильтров от LogsSection
 const handleLogsFiltersUpdate = (newFilters) => {
-  currentLogsFilters.value = newFilters
-  fetchLogs(newFilters)
+  // ✅ МЕРДЖИМ новые фильтры с существующими
+  currentLogsFilters.value = {
+    ...currentLogsFilters.value,
+    ...newFilters,
+  }
+
+  // ✅ Удаляем ключи со значениями null/''/пустой массив — это сигнал "очистить фильтр"
+  Object.keys(currentLogsFilters.value).forEach((key) => {
+    const val = currentLogsFilters.value[key]
+    if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) {
+      delete currentLogsFilters.value[key]
+    }
+  })
+
+  fetchLogs(currentLogsFilters.value)
 }
 
-// ✅ Обработчик обновления логов (если нужно локально изменить данные)
 const handleLogsUpdate = (newLogs) => {
   if (Array.isArray(newLogs)) {
     logs.value = newLogs
@@ -511,7 +517,6 @@ const onTabChange = async (tabId) => {
     await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
   }
   if (tabId === 'logs') {
-    // ✅ Передаём текущие фильтры при загрузке
     await fetchLogs(currentLogsFilters.value)
   }
 }
@@ -544,8 +549,6 @@ onMounted(async () => {
   await Promise.all([fetchCategories(), fetchSkills(), fetchEmployees(), fetchDepartments()])
 
   await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
-
-  // Directions и logs загружаются по требованию при активации вкладки
 })
 
 watch(activeTab, async (newTab) => {
@@ -571,7 +574,7 @@ defineExpose({
   fetchDirections,
   fetchProfiles,
   fetchEmployees,
-  fetchLogs, // ✅ Экспортируем для возможного внешнего вызова
+  fetchLogs,
 })
 </script>
 

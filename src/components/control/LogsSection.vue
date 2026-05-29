@@ -12,7 +12,7 @@
 
     <!-- Поиск и фильтры -->
     <div class="filters-row">
-      <!-- Поиск по сообщению (локальный, т.к. API не поддерживает full-text search) -->
+      <!-- Поиск по сообщению (локальный) -->
       <el-input
         v-model="logSearch"
         placeholder="Поиск по сообщению"
@@ -22,16 +22,17 @@
         @input="applyLocalFilters"
       />
 
-      <!-- Тип события (из серверных enum) -->
+      <!-- Тип события (загружается с сервера) -->
       <el-select
         v-model="eventTypeFilter"
         placeholder="Тип события"
         clearable
         class="filter-select"
-        @change="applyFilters"
+        :disabled="eventTypesLoading"
+        @change="onFilterChange"
       >
         <el-option
-          v-for="type in EVENT_TYPES"
+          v-for="type in eventTypes"
           :key="type"
           :label="getEventTypeLabel(type)"
           :value="type"
@@ -44,25 +45,9 @@
         placeholder="Доступ"
         clearable
         class="filter-select"
-        @change="applyFilters"
+        @change="onFilterChange"
       >
         <el-option v-for="scope in ACCESS_SCOPES" :key="scope" :label="scope" :value="scope" />
-      </el-select>
-
-      <!-- Тип цели -->
-      <el-select
-        v-model="targetTypeFilter"
-        placeholder="Тип цели"
-        clearable
-        class="filter-select"
-        @change="applyFilters"
-      >
-        <el-option
-          v-for="type in TARGET_TYPES"
-          :key="type"
-          :label="getTargetTypeLabel(type)"
-          :value="type"
-        />
       </el-select>
 
       <!-- Диапазон дат (по умолчанию: вчера — сегодня) -->
@@ -75,7 +60,7 @@
         clearable
         class="filter-select date-range"
         value-format="YYYY-MM-DDTHH:mm:ss"
-        @change="applyFilters"
+        @change="onFilterChange"
         @clear="onDateRangeClear"
       />
     </div>
@@ -120,16 +105,6 @@
         </template>
       </el-table-column>
 
-      <!-- Тип цели -->
-      <el-table-column prop="target_type" label="Цель" width="130">
-        <template #default="{ row }">
-          <span v-if="row.target_type">
-            {{ getTargetTypeLabel(row.target_type) }}
-          </span>
-          <span v-else class="text-muted">—</span>
-        </template>
-      </el-table-column>
-
       <!-- Сообщение -->
       <el-table-column prop="message" label="Сообщение" min-width="220" show-overflow-tooltip>
         <template #default="{ row }">
@@ -154,7 +129,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  // ✅ Новые пропсы для передачи фильтров на сервер
   apiFilters: {
     type: Object,
     default: () => ({}),
@@ -163,47 +137,61 @@ const props = defineProps({
 
 const emit = defineEmits(['update:logs', 'refresh', 'update:apiFilters'])
 
-// === Константы из серверных Enum ===
-const EVENT_TYPES = [
-  'EVALUATE',
-  'GRADEUP',
-  'SCHEDULE_MEETING',
-  'MEETING_CHANGED',
-  'REGISTRATION',
-  'SET_PROFILE',
-  'SET_DEPARTMENT_SUPERVISOR',
-  'SET_DIVISION_SUPERVISOR',
-  'REMOVE_DEPARTMENT_SUPERVISOR',
-  'REMOVE_DIVISION_SUPERVISOR',
-  'ROLE_CHANGED',
-]
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-const TARGET_TYPES = ['USER', 'DEPARTMENT', 'DIVISION', 'USER_STAGE', 'USER_PROFILE', 'MEETING']
+// === Серверные данные ===
+const eventTypes = ref([])
+const eventTypesLoading = ref(false)
 
+// === Статические значения ===
 const ACCESS_SCOPES = ['Admin', 'Specialist', 'Supervisor', 'Employee']
 
 // === Локальные фильтры ===
 const logSearch = ref('')
 const eventTypeFilter = ref('')
 const accessScopeFilter = ref('')
-const targetTypeFilter = ref('')
-const dateRange = ref(null) // [start, end] в формате YYYY-MM-DDTHH:mm:ss
+const dateRange = ref(null)
 
-// === Инициализация дат по умолчанию: вчера — сегодня ===
+// === Для отслеживания "эха" от родителя ===
+const lastEmittedFilters = ref(null)
+
+// === Загрузка типов событий с сервера ===
+const fetchEventTypes = async () => {
+  try {
+    eventTypesLoading.value = true
+    const res = await fetch(`${API_BASE}/admin/event-types`, {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+
+    const data = await res.json()
+
+    if (data && typeof data === 'object') {
+      eventTypes.value = Object.values(data).filter((v) => typeof v === 'string' && v.trim())
+    }
+  } catch (err) {
+    console.error('Error fetching event types:', err)
+    ElMessage.error('Не удалось загрузить типы событий')
+    eventTypes.value = []
+  } finally {
+    eventTypesLoading.value = false
+  }
+}
+
+// === Инициализация дат по умолчанию ===
 const getDefaultDateRange = () => {
   const today = new Date()
   const yesterday = new Date(today)
   yesterday.setDate(today.getDate() - 1)
 
-  // Форматируем в нужный формат: YYYY-MM-DDTHH:mm:ss
   const formatDate = (date) => {
     const pad = (n) => String(n).padStart(2, '0')
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
   }
 
-  // Начало вчера: 00:00:00
   yesterday.setHours(0, 0, 0, 0)
-  // Конец сегодня: 23:59:59
   today.setHours(23, 59, 59, 999)
 
   return [formatDate(yesterday), formatDate(today)]
@@ -225,30 +213,40 @@ const displayedLogs = computed(() => {
   })
 })
 
-// === Применение фильтров (отправка на сервер) ===
+// === Сбор ВСЕХ фильтров (включая null для очищенных) ===
+const collectAllFilters = () => ({
+  event_type: eventTypeFilter.value || null,
+  access_scope: accessScopeFilter.value || null,
+  start_date: dateRange.value?.[0] || null,
+  end_date: dateRange.value?.[1] || null,
+})
+
+// === Применение фильтров ===
 const applyFilters = () => {
-  const filters = {
-    event_type: eventTypeFilter.value || null,
-    access_scope: accessScopeFilter.value || null,
-    target_type: targetTypeFilter.value || null,
-    start_date: dateRange.value?.[0] || null,
-    end_date: dateRange.value?.[1] || null,
-  }
+  const filters = collectAllFilters()
 
-  const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null))
-
-  emit('update:apiFilters', cleanFilters)
+  // ✅ Отправляем ВСЕ фильтры, включая null (родитель очистит лишнее)
+  emit('update:apiFilters', filters)
   emit('refresh')
+
+  // ✅ Сохраняем для сравнения с "эхом" от родителя
+  lastEmittedFilters.value = { ...filters }
 }
 
-const applyLocalFilters = () => {
-  // Только обновляет отображение через computed свойство
+// === Единый обработчик изменений ===
+const onFilterChange = () => {
+  applyFilters()
 }
 
 // === Обработчик очистки дат ===
 const onDateRangeClear = () => {
   dateRange.value = null
   applyFilters()
+}
+
+// === Локальный поиск (не триггерит сервер) ===
+const applyLocalFilters = () => {
+  // Только пересчитывает displayedLogs через computed
 }
 
 // === Форматирование ===
@@ -281,18 +279,6 @@ const getEventTypeLabel = (type) => {
   return labels[type] || type || '—'
 }
 
-const getTargetTypeLabel = (type) => {
-  const labels = {
-    USER: 'Пользователь',
-    DEPARTMENT: 'Отдел',
-    DIVISION: 'Направление',
-    USER_STAGE: 'Этап пользователя',
-    USER_PROFILE: 'Профиль пользователя',
-    MEETING: 'Встреча',
-  }
-  return labels[type] || type || '—'
-}
-
 const getEventTypeTag = (type) => {
   const map = {
     EVALUATE: 'success',
@@ -315,41 +301,69 @@ const resetFilters = () => {
   logSearch.value = ''
   eventTypeFilter.value = ''
   accessScopeFilter.value = ''
-  targetTypeFilter.value = ''
-  // ✅ При сбросе восстанавливаем дефолтный диапазон дат
   dateRange.value = getDefaultDateRange()
-  emit('update:apiFilters', {
+
+  // ✅ Отправляем только даты (остальные фильтры очищены = null)
+  const filters = {
+    event_type: null,
+    access_scope: null,
     start_date: dateRange.value[0],
     end_date: dateRange.value[1],
-  })
+  }
+  emit('update:apiFilters', filters)
   emit('refresh')
+
+  lastEmittedFilters.value = { ...filters }
+}
+
+// === Синхронизация локальных фильтров с пропсами ===
+const syncFiltersFromProps = (newFilters) => {
+  // Синхронизация дат
+  if (newFilters?.start_date && newFilters?.end_date) {
+    dateRange.value = [newFilters.start_date, newFilters.end_date]
+  } else {
+    dateRange.value = null
+  }
+
+  // Синхронизация типа события (может быть пустая строка после очистки)
+  if (newFilters?.event_type !== undefined) {
+    eventTypeFilter.value = newFilters.event_type || ''
+  }
+
+  // Синхронизация доступа
+  if (newFilters?.access_scope !== undefined) {
+    accessScopeFilter.value = newFilters.access_scope || ''
+  }
 }
 
 // === Инициализация при монтировании ===
-onMounted(() => {
-  // ✅ Если фильтры не переданы извне — устанавливаем дефолтные даты
-  if (!props.apiFilters?.start_date && !props.apiFilters?.end_date) {
-    dateRange.value = getDefaultDateRange()
-    // ✅ Автоматически применяем фильтры при первой загрузке
-    applyFilters()
+onMounted(async () => {
+  await fetchEventTypes()
+
+  // ✅ Если есть фильтры от родителя — синхронизируем
+  if (Object.keys(props.apiFilters).length > 0) {
+    syncFiltersFromProps(props.apiFilters)
   } else {
-    // ✅ Если фильтры переданы — синхронизируем локальное состояние
-    if (props.apiFilters.start_date && props.apiFilters.end_date) {
-      dateRange.value = [props.apiFilters.start_date, props.apiFilters.end_date]
-    }
+    // ✅ Иначе устанавливаем дефолтные даты и применяем
+    dateRange.value = getDefaultDateRange()
+    applyFilters()
   }
 })
 
-// ✅ Следим за изменениями apiFilters из родителя
+// ✅ Watch на apiFilters с защитой от "эха"
 watch(
   () => props.apiFilters,
   (newFilters) => {
-    if (newFilters?.start_date && newFilters?.end_date) {
-      dateRange.value = [newFilters.start_date, newFilters.end_date]
-    } else if (!newFilters?.start_date && !newFilters?.end_date) {
-      // Если родитель сбросил фильтры — восстанавливаем дефолтные даты
-      dateRange.value = getDefaultDateRange()
+    // Если новые фильтры совпадают с последними отправленными — это наше "эхо", игнорируем
+    if (
+      lastEmittedFilters.value &&
+      JSON.stringify(newFilters) === JSON.stringify(lastEmittedFilters.value)
+    ) {
+      return
     }
+
+    // Иначе — это внешнее изменение (переключение вкладки, сброс), синхронизируем
+    syncFiltersFromProps(newFilters)
   },
   { deep: true },
 )
@@ -357,7 +371,8 @@ watch(
 defineExpose({
   resetFilters,
   applyFilters,
-  getDefaultDateRange, // ✅ Экспортируем для возможного использования извне
+  getDefaultDateRange,
+  fetchEventTypes,
 })
 </script>
 
@@ -404,11 +419,6 @@ defineExpose({
 .data-table {
   width: 100%;
   margin-bottom: var(--spacing-md);
-}
-
-.text-muted {
-  color: var(--gray);
-  font-size: 13px;
 }
 
 /* Адаптивность */
