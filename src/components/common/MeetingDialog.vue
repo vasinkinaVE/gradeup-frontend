@@ -17,7 +17,6 @@
             <span class="participant-label">Аттестуемый:</span>
             <el-select
               v-model="form.student_id"
-              :key="'student-' + employeesList.length"
               placeholder="Выберите аттестуемого"
               filterable
               class="participant-select"
@@ -42,12 +41,12 @@
               </el-option>
             </el-select>
           </div>
+
           <!-- Аттестующий -->
           <div class="participant-row">
             <span class="participant-label">Аттестующий:</span>
             <el-select
               v-model="form.examiner_id"
-              :key="'examiner-' + employeesList.length"
               placeholder="Выберите аттестующего"
               filterable
               class="participant-select"
@@ -74,7 +73,7 @@
         </div>
       </el-form-item>
 
-      <!-- ✅ Навык (без prop — валидируем через stage_id) -->
+      <!-- ✅ Навык -->
       <el-form-item label="Навык *">
         <el-select
           v-model="selectedSkillId"
@@ -94,7 +93,7 @@
         <div v-if="skillsLoading" class="loading-text">Загрузка навыков...</div>
       </el-form-item>
 
-      <!-- ✅ Тип этапа (prop="stage_id" — валидация выбора конкретного этапа) -->
+      <!-- ✅ Тип этапа -->
       <el-form-item label="Тип этапа *" prop="stage_id">
         <el-select
           v-model="form.stage_id"
@@ -205,8 +204,8 @@ const props = defineProps<{
   modelValue: boolean
   meeting?: {
     id: number
-    student: { id: number; full_name: string }
-    examiner: { id: number; full_name: string }
+    student: { id: number; user_id?: number; full_name: string }
+    examiner: { id: number; user_id?: number; full_name: string }
     stage_id: number
     started_at: string
     location: string
@@ -214,6 +213,9 @@ const props = defineProps<{
     description?: string
     title?: string
     confirmation_type?: string
+    student_id?: number
+    examiner_id?: number
+    skill_id?: number
   } | null
   employees?: Employee[]
 }>()
@@ -246,14 +248,39 @@ const form = ref<MeetingForm>({
   description: '',
 })
 
-// ✅ Локальный список сотрудников (загружается внутри компонента)
 const employeesList = ref<Employee[]>([])
-
 const selectedSkillId = ref<number | null>(null)
 const availableSkills = ref<Skill[]>([])
 const availableStages = ref<Array<{ id: number; confirmation_type: string }>>([])
 
-// ✅ Правила валидации (убрано skill_id — валидируем только stage_id)
+// 🔥 Вспомогательные computed для отображения текущих значений
+const currentStudentLabel = computed(() => {
+  if (!form.value.student_id || !props.meeting) return ''
+  // 🔥 Используем полное ФИО из встречи
+  return props.meeting.student?.full_name || ''
+})
+
+const currentExaminerLabel = computed(() => {
+  if (!form.value.examiner_id || !props.meeting) return ''
+  // 🔥 Используем полное ФИО из встречи
+  return props.meeting.examiner?.full_name || ''
+})
+
+const currentSkillLabel = computed(() => {
+  if (!selectedSkillId.value) return ''
+  const skill = availableSkills.value.find((s) => s.id === selectedSkillId.value)
+  if (skill) return skill.title
+  return props.meeting?.title || ''
+})
+
+const currentStageLabel = computed(() => {
+  if (!form.value.stage_id) return ''
+  const stage = availableStages.value.find((s) => s.id === form.value.stage_id)
+  if (stage) return getStageTypeLabel(stage.confirmation_type)
+  return props.meeting?.confirmation_type || ''
+})
+
+// ✅ Правила валидации
 const rules = {
   student_id: [{ required: true, message: 'Выберите аттестуемого', trigger: 'change' }],
   examiner_id: [{ required: true, message: 'Выберите аттестующего', trigger: 'change' }],
@@ -263,13 +290,13 @@ const rules = {
   duration: [{ required: true, message: 'Укажите длительность', trigger: 'blur' }],
 }
 
-// ✅ Фильтрация: аттестующий не может быть тем же, кто выбран как аттестуемый
+// ✅ Фильтрация аттестующих: исключаем выбранного аттестуемого
 const availableExaminers = computed(() => {
   if (!Array.isArray(employeesList.value)) return []
   return employeesList.value.filter((emp) => emp.id !== form.value.student_id)
 })
 
-// ✅ Загрузка сотрудников с only_subordinates=true
+// ✅ Загрузка сотрудников
 const fetchAvailableEmployees = async () => {
   try {
     employeesLoading.value = true
@@ -278,7 +305,6 @@ const fetchAvailableEmployees = async () => {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
     })
-
     employeesList.value = res.data.map((emp) => ({
       id: emp.id,
       first_name: emp.first_name || '',
@@ -286,10 +312,8 @@ const fetchAvailableEmployees = async () => {
       patronymic: emp.patronymic || '',
       department_name: emp.department_name || '',
     }))
-
-    console.log('✅ MeetingDialog: employees loaded:', employeesList.value.length)
   } catch (err: any) {
-    console.error('❌ Error fetching employees for meetings:', err)
+    console.error('Error fetching employees:', err)
     ElMessage.error('Не удалось загрузить список сотрудников')
     employeesList.value = []
   } finally {
@@ -297,30 +321,67 @@ const fetchAvailableEmployees = async () => {
   }
 }
 
-// ✅ Загрузка формы при редактировании — ТОЛЬКО если сотрудники уже загружены
-const loadMeeting = () => {
-  // ✅ Критически важно: не заполнять форму, пока нет списка сотрудников
-  if (employeesList.value.length === 0 && props.meeting) {
-    console.log('⏳ loadMeeting: employees not loaded yet, skipping')
+// ✅ Загрузка формы при редактировании - 🔥 ИСПРАВЛЕНО: используем user_id
+const loadMeeting = async () => {
+  if (!props.meeting) {
+    resetForm()
     return
   }
 
-  if (props.meeting) {
-    form.value = {
-      student_id: props.meeting.student?.id ?? null,
-      examiner_id: props.meeting.examiner?.id ?? null,
-      stage_id: props.meeting.stage_id ?? null,
-      started_at: props.meeting.started_at ?? null,
-      location: props.meeting.location || '',
-      duration: props.meeting.duration || 60,
-      description: props.meeting.description || '',
+  // Ждем загрузки списка сотрудников
+  if (employeesLoading.value) {
+    await new Promise((res) => setTimeout(res, 150))
+    if (employeesLoading.value) return
+  }
+
+  // 🔥 ИСПРАВЛЕНО: используем user_id для формы (а не id записи)
+  const studentId =
+    props.meeting.student?.user_id ??
+    props.meeting.student?.id ??
+    (props.meeting as any).student_id ??
+    null
+  const examinerId =
+    props.meeting.examiner?.user_id ??
+    props.meeting.examiner?.id ??
+    (props.meeting as any).examiner_id ??
+    null
+  const stageId = props.meeting.stage_id ?? null
+  const skillId = (props.meeting as any).skill_id ?? null
+
+  // 🔥 Заполняем форму используя user_id
+  form.value.student_id = studentId
+  form.value.examiner_id = examinerId
+  form.value.started_at = props.meeting.started_at || null
+  form.value.location = props.meeting.location || ''
+  form.value.duration = props.meeting.duration || 60
+  form.value.description = props.meeting.description || ''
+  form.value.stage_id = null
+  selectedSkillId.value = null
+
+  // Загружаем навыки используя user_id
+  if (studentId) {
+    await loadAvailableSkills(studentId)
+
+    // 🔥 ВОССТАНОВЛЕНИЕ КАСКАДА: навык → этапы → выбранный этап
+    if (stageId && availableSkills.value.length > 0) {
+      const matchedSkill = availableSkills.value.find(
+        (skill) => Array.isArray(skill.stages) && skill.stages.some((s) => s.id === stageId),
+      )
+
+      if (matchedSkill) {
+        selectedSkillId.value = matchedSkill.id
+        availableStages.value = matchedSkill.stages || []
+        form.value.stage_id = stageId
+      } else if (skillId) {
+        // Фолбэк: если этап не найден, но есть skill_id
+        selectedSkillId.value = skillId
+        const skill = availableSkills.value.find((s) => s.id === skillId)
+        if (skill) {
+          availableStages.value = skill.stages || []
+          form.value.stage_id = stageId
+        }
+      }
     }
-    // При редактировании загружаем навыки для аттестуемого
-    if (form.value.student_id) {
-      loadAvailableSkills(form.value.student_id)
-    }
-  } else {
-    resetForm()
   }
 }
 
@@ -339,29 +400,31 @@ const resetForm = () => {
   availableStages.value = []
 }
 
-// ✅ Загрузка доступных навыков для аттестуемого: GET /users/{user_id}/skills/available
+// ✅ Загрузка навыков
 const loadAvailableSkills = async (userId: number) => {
+  if (!userId || typeof userId !== 'number' || isNaN(userId)) {
+    ElMessage.error('Некорректный ID аттестуемого')
+    availableSkills.value = []
+    skillsLoading.value = false
+    return
+  }
+
   try {
     skillsLoading.value = true
     availableSkills.value = []
     availableStages.value = []
-    selectedSkillId.value = null
-    form.value.stage_id = null
 
-    const res = await axios.get<AvailableSkillsResponse>(
-      `${API_BASE}/users/${userId}/skills/available`,
-    )
+    const url = `${API_BASE}/users/${userId}/skills/available`
+    const res = await axios.get<AvailableSkillsResponse>(url)
 
-    if (res.data && res.data.current_level && Array.isArray(res.data.current_level.skills)) {
+    if (res.data?.current_level?.skills) {
       availableSkills.value = res.data.current_level.skills
     } else {
-      console.warn('Неверный формат ответа API навыков:', res.data)
-      ElMessage.warning('Навыки не найдены или неверный формат ответа')
+      ElMessage.warning('Навыки не найдены')
     }
   } catch (err: any) {
     console.error('Ошибка загрузки навыков:', err)
-    const errorMsg =
-      err.response?.data?.detail || err.message || 'Не удалось загрузить доступные навыки'
+    const errorMsg = err.response?.data?.detail || err.message || 'Не удалось загрузить навыки'
     ElMessage.error(errorMsg)
     availableSkills.value = []
   } finally {
@@ -373,6 +436,11 @@ const loadAvailableSkills = async (userId: number) => {
 const onStudentChange = (userId: number) => {
   if (userId) {
     loadAvailableSkills(userId)
+    if (!isEditing.value) {
+      selectedSkillId.value = null
+      availableStages.value = []
+      form.value.stage_id = null
+    }
     if (form.value.examiner_id === userId) {
       form.value.examiner_id = null
     }
@@ -387,15 +455,13 @@ const onStudentChange = (userId: number) => {
 // ✅ Обработчик изменения навыка
 const onSkillChange = (skillId: number) => {
   const skill = availableSkills.value.find((s) => s.id === skillId)
-  if (skill && Array.isArray(skill.stages)) {
-    availableStages.value = skill.stages
-  } else {
-    availableStages.value = []
+  availableStages.value = skill?.stages || []
+  if (!isEditing.value) {
+    form.value.stage_id = null
   }
-  form.value.stage_id = null
 }
 
-// ✅ Форматирование типа этапа
+// ✅ Хелперы
 const getStageTypeLabel = (type: string) => {
   const map: Record<string, string> = {
     Аттестация: 'Аттестация',
@@ -405,12 +471,9 @@ const getStageTypeLabel = (type: string) => {
   return map[type] || type
 }
 
-// ✅ Валидация даты: нельзя выбрать прошлое
-const disablePastDates = (date: Date) => {
-  return date.getTime() < Date.now() - 60 * 60 * 1000
-}
+const disablePastDates = (date: Date) => date.getTime() < Date.now() - 60 * 60 * 1000
 
-// ✅ Сохранение: POST или PUT
+// ✅ Сохранение
 const handleSave = async () => {
   if (!formRef.value) return
   try {
@@ -419,6 +482,7 @@ const handleSave = async () => {
     ElMessage.warning('Заполните все обязательные поля')
     return
   }
+
   submitting.value = true
   try {
     const payload = {
@@ -440,15 +504,11 @@ const handleSave = async () => {
       response = await axios.post(`${API_BASE}/meetings/`, payload)
       ElMessage.success('Встреча создана')
     }
-
     emit('save', response.data)
     dialogVisible.value = false
   } catch (err: any) {
-    console.error('Ошибка сохранения встречи:', err)
     const msg =
-      err.response?.data?.detail?.[0]?.msg ||
-      err.response?.data?.detail ||
-      'Ошибка при сохранении встречи'
+      err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || 'Ошибка сохранения'
     ElMessage.error(msg)
   } finally {
     submitting.value = false
@@ -464,15 +524,13 @@ const handleClose = () => {
   resetForm()
 }
 
-// ✅ Watchers — ИСПРАВЛЕНО: гарантируем порядок загрузки
+// ✅ Watchers
 watch(
   () => props.modelValue,
   async (val) => {
     if (val) {
-      // 1. Сначала загружаем сотрудников
       await fetchAvailableEmployees()
-      // 2. Только потом заполняем форму — select'ы найдут нужные опции по ID
-      loadMeeting()
+      if (props.meeting) await loadMeeting()
     }
   },
   { immediate: true },
@@ -480,21 +538,16 @@ watch(
 
 watch(
   () => props.meeting,
-  () => {
-    // Обновляем форму только если диалог открыт И сотрудники уже загружены
-    // Это предотвращает показ "сырых" ID вместо имён
-    if (props.modelValue && employeesList.value.length > 0) {
-      loadMeeting()
-    }
+  async (newVal) => {
+    if (props.modelValue && newVal) await loadMeeting()
   },
   { deep: true },
 )
 
-// ✅ onMounted — тоже с ожиданием
 onMounted(async () => {
   if (props.modelValue) {
     await fetchAvailableEmployees()
-    loadMeeting()
+    if (props.meeting) await loadMeeting()
   }
 })
 </script>
@@ -503,57 +556,47 @@ onMounted(async () => {
 .meeting-form {
   max-height: 65vh;
   overflow-y: auto;
-  padding-right: var(--spacing-sm, 8px);
+  padding-right: 8px;
 }
-
 .form-row {
   display: flex;
-  gap: var(--spacing-md, 12px);
+  gap: 12px;
   margin-bottom: 0;
 }
-
 .form-row.with-top-margin {
   margin-top: 18px;
 }
-
 .form-row .el-form-item {
   flex: 1;
   margin-bottom: 0;
 }
-
 .el-form-item.with-top-margin {
   margin-top: 18px;
 }
-
 .full-width-select,
 .full-width-input {
   width: 100%;
 }
-
 .participants-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md, 12px);
+  gap: 12px;
 }
-
 .participant-row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md, 12px);
+  gap: 12px;
 }
-
 .participant-label {
   min-width: 140px;
   flex-shrink: 0;
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--text, #303133);
+  font-weight: 500;
+  color: #303133;
 }
-
 .participant-select {
   flex: 1;
   min-width: 200px;
 }
-
 .option-content {
   display: flex;
   justify-content: space-between;
@@ -561,48 +604,45 @@ onMounted(async () => {
   width: 100%;
   gap: 8px;
 }
-
 .option-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .option-department {
-  color: var(--el-text-color-secondary, #909399);
+  color: #909399;
   font-size: 12px;
   white-space: nowrap;
   flex-shrink: 0;
 }
-
 .loading-text {
   font-size: 13px;
-  color: var(--el-text-color-secondary, #909399);
+  color: #909399;
   margin-top: 4px;
 }
-
+.current-item :deep(.el-select-dropdown__item) {
+  background-color: #f5f7fa;
+  font-weight: 600;
+  color: #303133;
+}
 @media (max-width: 768px) {
   .participant-row {
     flex-direction: column;
     align-items: flex-start;
   }
-
   .participant-label {
     min-width: auto;
-    margin-bottom: var(--spacing-xs, 4px);
+    margin-bottom: 4px;
   }
-
   .participant-select {
     width: 100%;
     min-width: auto;
   }
-
   .form-row {
     flex-direction: column;
-    gap: var(--spacing-sm, 8px);
+    gap: 8px;
   }
-
   .meeting-form {
     max-height: 60vh;
   }
