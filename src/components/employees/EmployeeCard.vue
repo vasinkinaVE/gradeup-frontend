@@ -98,7 +98,9 @@
         </div>
 
         <div
-          v-if="canPromoteEmployees && nextLevel && isPromotionAvailable"
+          v-if="
+            canPromoteEmployees && nextLevel && isPromotionAvailable && canManageSpecificEmployee
+          "
           class="promotion-actions"
         >
           <el-button type="success" @click="showPromoteDialog"> Повысить сотрудника </el-button>
@@ -119,8 +121,11 @@
           :use-questions-endpoint="true"
         />
 
-        <!-- ✅ Кнопка отвязки только для тех, кто может управлять профилями -->
-        <div v-if="employee.profileId && canAssignProfile" class="unlink-profile-section">
+        <!-- ✅ Кнопка отвязки только для тех, кто может управлять профилями И может управлять этим сотрудником -->
+        <div
+          v-if="employee.profileId && canAssignProfile && canManageSpecificEmployee"
+          class="unlink-profile-section"
+        >
           <el-button
             type="danger"
             link
@@ -138,8 +143,8 @@
         <div v-if="!employee.profileId" class="profile-unassigned">
           <span class="unassigned-text">Профиль не назначен</span>
 
-          <!-- ✅ Секция назначения только для тех, кто может назначать профили -->
-          <div v-if="canAssignProfile" class="assign-profile-section">
+          <!-- ✅ Секция назначения только для тех, кто может назначать профили И может управлять этим сотрудником -->
+          <div v-if="canAssignProfile && canManageSpecificEmployee" class="assign-profile-section">
             <div class="assign-profile-label">Назначить профиль:</div>
 
             <div v-if="showDepartmentFilterForProfiles" class="profile-department-filter">
@@ -463,6 +468,7 @@ const props = defineProps<{
   employee: any
   isAdmin: boolean
   isSupervisor: boolean
+  isSPOAndSupervisor?: boolean
   canEditEmployeeInfo?: boolean
   canEditRole?: boolean
   canAssignProfile?: boolean
@@ -476,6 +482,7 @@ const props = defineProps<{
   fetchDepartmentProfiles?: (deptId: number) => Promise<any[]>
   supervisorDivisionId?: number | null
   supervisorDepartmentId?: number | null
+  canManageSpecificEmployee?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -591,6 +598,11 @@ const filteredAvailableProfiles = computed(() => {
   }
 
   return props.availableProfiles
+})
+
+// ✅ ИСПОЛЬЗУЕМ prop из родителя
+const canManageSpecificEmployee = computed(() => {
+  return props.canManageSpecificEmployee ?? false
 })
 
 const fetchSkillDetail = async (userId: number, skillId: number) => {

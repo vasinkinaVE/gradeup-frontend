@@ -86,11 +86,16 @@
           <span class="roles-cell">{{ getTranslatedRoles(row.roles) }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="canPromoteEmployees" label="Повышение" width="150">
+      <el-table-column v-if="canPromoteEmployees" label="Повышение" width="180">
         <template #default="{ row }">
-          <el-tag :type="isPromotionAvailable(row) ? 'success' : 'info'" size="small">
-            {{ isPromotionAvailable(row) ? 'Доступно' : 'Не доступно' }}
-          </el-tag>
+          <div v-if="canManageSpecificEmployee(row)" class="promotion-cell">
+            <el-tag :type="isPromotionAvailable(row) ? 'success' : 'info'" size="small">
+              {{ isPromotionAvailable(row) ? 'Доступно' : 'Не доступно' }}
+            </el-tag>
+          </div>
+          <div v-else class="no-rights-cell">
+            <span class="no-rights-text">Нет прав на повышение</span>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -101,6 +106,7 @@
       :employee="selectedEmployee"
       :is-admin="isAdminOrSPO"
       :is-supervisor="isSupervisor"
+      :is-spo-and-supervisor="isSPOAndSupervisor"
       :can-edit-employee-info="canEditEmployeeInfo"
       :can-edit-role="canEditRole"
       :departments="availableDepartments"
@@ -114,6 +120,7 @@
       :supervisor-department-id="supervisorDepartmentId"
       :can-assign-profile="canAssignProfiles"
       :can-promote-employees="canPromoteEmployees"
+      :can-manage-specific-employee="canManageSpecificEmployee(selectedEmployee)"
       @update="handleEmployeeUpdate"
       @assign-profile="handleAssignProfile"
       @promote="handlePromoteEmployee"
@@ -231,6 +238,9 @@ const isSupervisor = computed(() => {
   return hasSupervisorFlag || hasSupervisorRole
 })
 
+// ✅ НОВОЕ: Проверяем, является ли пользователь одновременно СПО и руководителем
+const isSPOAndSupervisor = computed(() => isSPO.value && isSupervisor.value)
+
 const isSupervisorWithDivision = computed(() => {
   return isSupervisor.value && authStore.user?.managed_division_id != null
 })
@@ -262,16 +272,54 @@ const allProfilesData = ref<Profile[]>([])
 const divisionDepartmentIds = ref<number[]>([])
 const departmentProfilesCache = ref<Record<number, Profile[]>>({})
 
-const showDepartmentFilter = computed(() => !isSupervisor.value || isSupervisorWithDivision.value)
-const showDepartmentColumn = computed(() => !isSupervisor.value || isSupervisorWithDivision.value)
+// ✅ ИСПРАВЛЕНО: Для СПО+руководителя показываем колонку Отдел и фильтр
+const showDepartmentFilter = computed(() => {
+  // Для СПО+руководителя показываем фильтр
+  if (isSPOAndSupervisor.value) return true
+  return !isSupervisor.value || isSupervisorWithDivision.value
+})
 
-const canAssignProfiles = computed(() => isAdmin.value || isSupervisor.value)
-const canPromoteEmployees = computed(() => isAdmin.value || isSupervisor.value)
+const showDepartmentColumn = computed(() => {
+  // Для СПО+руководителя показываем колонку
+  if (isSPOAndSupervisor.value) return true
+  return !isSupervisor.value || isSupervisorWithDivision.value
+})
+
+// ✅ ИСПРАВЛЕНО: СПО не может назначать профили, только СПО+руководитель (и то только своим)
+const canAssignProfiles = computed(() => {
+  // СПО без роли руководителя НЕ может назначать профили
+  if (isSPO.value && !isSupervisor.value) return false
+  // Админ может назначать профили всем
+  if (isAdmin.value) return true
+  // СПО+руководитель может назначать (но только своим сотрудникам - проверка в handleAssignProfile)
+  if (isSPOAndSupervisor.value) return true
+  // Руководитель может назначать (но только своим сотрудникам - проверка в handleAssignProfile)
+  if (isSupervisor.value) return true
+  return false
+})
+
+// ✅ ИСПРАВЛЕНО: СПО не может повышать, только СПО+руководитель (и то только своих)
+const canPromoteEmployees = computed(() => {
+  // СПО без роли руководителя НЕ может повышать
+  if (isSPO.value && !isSupervisor.value) return false
+  // Админ может повышать всех
+  if (isAdmin.value) return true
+  // СПО+руководитель может повышать (но только своих сотрудников - проверка в canManageSpecificEmployee)
+  if (isSPOAndSupervisor.value) return true
+  // Руководитель может повышать (но только своих сотрудников - проверка в canManageSpecificEmployee)
+  if (isSupervisor.value) return true
+  return false
+})
+
 const canManageProfiles = computed(() => canAssignProfiles.value || canPromoteEmployees.value)
 const canEditEmployeeInfo = computed(() => isAdminOrSPO.value)
 const canEditRole = computed(() => isAdmin.value)
 
+// ✅ ИСПРАВЛЕНО: Для СПО+руководителя показываем все отделы
 const availableDepartments = computed(() => {
+  // Для СПО+руководителя показываем все отделы
+  if (isSPOAndSupervisor.value) return departments.value
+
   if (!isSupervisorWithDivision.value) return departments.value
   return departments.value.filter((dept) => divisionDepartmentIds.value.includes(dept.id))
 })
@@ -282,6 +330,32 @@ const filteredRoles = computed(() => {
     return true
   })
 })
+
+// ✅ НОВОЕ: Проверяем, может ли текущий пользователь управлять конкретным сотрудником
+const canManageSpecificEmployee = (employee: Employee | null): boolean => {
+  if (!employee) return false
+
+  // Админ может управлять всеми
+  if (isAdmin.value) return true
+
+  // СПО без роли руководителя не может управлять (не может назначать/повышать)
+  if (isSPO.value && !isSupervisor.value) return false
+
+  // Для руководителя (включая СПО+руководителя) проверяем отдел
+  if (isSupervisor.value) {
+    // Если у руководителя есть направление, проверяем отделы направления
+    if (isSupervisorWithDivision.value && supervisorDivisionId.value) {
+      return divisionDepartmentIds.value.includes(employee.departmentId || -1)
+    }
+
+    // Если руководитель отдела, проверяем конкретный отдел
+    if (supervisorDepartmentId.value) {
+      return employee.departmentId === supervisorDepartmentId.value
+    }
+  }
+
+  return false
+}
 
 const filteredEmployees = computed(() => {
   let result = employees.value
@@ -348,6 +422,23 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 
 const fetchDepartments = async () => {
   try {
+    // ✅ ИСПРАВЛЕНО: Для СПО+руководителя загружаем все отделы
+    if (isSPOAndSupervisor.value) {
+      const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
+      if (!res) throw new Error('Auth error')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+
+      departments.value = Array.isArray(data)
+        ? data.map((d: any) => ({
+            id: d.id,
+            name: d.department_name || d.name || '',
+            division_id: d.division_id || null,
+          }))
+        : []
+      return
+    }
+
     if (isSupervisorWithDivision.value && supervisorDivisionId.value) {
       const res = await fetchWithAuth(`${API_BASE}/admin/divisions/${supervisorDivisionId.value}`)
       if (!res) throw new Error('Auth error')
@@ -395,6 +486,11 @@ const fetchDepartments = async () => {
 const fetchAvailableProfiles = async (departmentIds?: number[]) => {
   try {
     let url = `${API_BASE}/profiles/levels`
+
+    // ✅ ИСПРАВЛЕНО: Для СПО+руководителя загружаем профили всех отделов
+    if (isSPOAndSupervisor.value) {
+      departmentIds = undefined
+    }
 
     if (departmentIds && departmentIds.length > 0) {
       const params = new URLSearchParams()
@@ -460,18 +556,15 @@ const fetchEmployees = async () => {
     let url = `${API_BASE}/users/profiles/`
     const params = new URLSearchParams()
 
-    let departmentIdsToFilter: number[] = []
-
-    if (isSupervisorWithDivision.value) {
+    // ✅ ИСПРАВЛЕНО: Для СПО+руководителя загружаем всех сотрудников
+    if (isSPOAndSupervisor.value) {
+      // Не добавляем фильтры по отделам
+    } else if (isSupervisorWithDivision.value) {
       if (divisionDepartmentIds.value.length > 0) {
-        departmentIdsToFilter = [...divisionDepartmentIds.value]
+        divisionDepartmentIds.value.forEach((id) => params.append('departments_id', String(id)))
       }
     } else if (isSupervisor.value && supervisorDepartmentId.value) {
-      departmentIdsToFilter = [supervisorDepartmentId.value]
-    }
-
-    if (departmentIdsToFilter.length > 0) {
-      departmentIdsToFilter.forEach((id) => params.append('departments_id', String(id)))
+      params.append('departments_id', String(supervisorDepartmentId.value))
     }
 
     if (filterDepartmentId.value && !isSupervisor.value) {
@@ -696,8 +789,16 @@ const handleEmployeeUpdate = async (updatedData: any) => {
 const handleAssignProfile = async (userId: number, profileId: number) => {
   console.log('Assigning profile:', { userId, profileId })
 
+  // ✅ ИСПРАВЛЕНО: Проверяем права на назначение профиля
   if (!canAssignProfiles.value) {
     ElMessage.warning('У вас нет прав на назначение профиля')
+    return
+  }
+
+  // Проверяем, может ли текущий пользователь управлять этим сотрудником
+  const employee = employees.value.find((e) => e.userId === userId)
+  if (employee && !canManageSpecificEmployee(employee)) {
+    ElMessage.warning('Вы можете назначать профили только сотрудникам своего отдела')
     return
   }
 
@@ -757,8 +858,15 @@ const handleAssignProfile = async (userId: number, profileId: number) => {
 }
 
 const handlePromoteEmployee = async (employee: Employee, nextLevel: any) => {
+  // ✅ ИСПРАВЛЕНО: Проверяем права на повышение
   if (!canPromoteEmployees.value) {
     ElMessage.warning('У вас нет прав на повышение сотрудника')
+    return
+  }
+
+  // Проверяем, может ли текущий пользователь управлять этим сотрудником
+  if (!canManageSpecificEmployee(employee)) {
+    ElMessage.warning('Вы можете повышать только сотрудников своего отдела')
     return
   }
 
@@ -856,7 +964,10 @@ onMounted(async () => {
   try {
     await fetchDepartments()
 
-    if (
+    if (isSPOAndSupervisor.value) {
+      // Для СПО+руководителя загружаем все профили
+      await fetchAvailableProfiles()
+    } else if (
       isSupervisorWithDivision.value &&
       supervisorDivisionId.value &&
       divisionDepartmentIds.value.length > 0
@@ -986,6 +1097,18 @@ defineExpose({
 :deep(.profile-progress .el-progress__text) {
   font-size: 14px !important;
   font-weight: 400;
+}
+.promotion-cell {
+  display: flex;
+  align-items: center;
+}
+.no-rights-cell {
+  color: var(--gray);
+  font-size: 13px;
+  font-style: italic;
+}
+.no-rights-text {
+  color: #999;
 }
 @media (max-width: 768px) {
   .view-header {
