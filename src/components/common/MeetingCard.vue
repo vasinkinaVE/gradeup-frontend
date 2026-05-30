@@ -73,9 +73,9 @@
 
     <!-- Футер с кнопками -->
     <div class="meeting-footer">
-      <!-- Кнопка "Оценить" — только для аттестующего, если встреча не завершена -->
+      <!-- ✅ ИСПРАВЛЕНО: проверяем роль 'examiner' вместо 'ATTESTOR' -->
       <el-button
-        v-if="meeting.role === 'ATTESTOR' && meeting.status === 'planned'"
+        v-if="meeting.role === 'examiner' && meeting.status === 'planned'"
         class="btn-grade"
         size="small"
         @click="openGradingModal"
@@ -84,9 +84,9 @@
         Оценить
       </el-button>
 
-      <!-- Кнопка "Результаты" — для аттестуемого, если встреча завершена -->
+      <!-- ✅ ИСПРАВЛЕНО: проверяем роль 'student' вместо 'ATTESTED' -->
       <el-button
-        v-if="meeting.role === 'ATTESTED' && meeting.status === 'completed'"
+        v-if="meeting.role === 'student' && meeting.status === 'completed'"
         class="btn-results"
         size="small"
         plain
@@ -137,9 +137,9 @@
             <div v-else class="placeholder-text">Материалы пока не добавлены</div>
           </div>
 
-          <!-- ✅ Вопросы и ответы — ТОЛЬКО для аттестующего И если вопросы есть -->
+          <!-- ✅ ИСПРАВЛЕНО: проверяем роль 'examiner' вместо 'ATTESTOR' -->
           <div
-            v-if="meeting.role === 'ATTESTOR' && meetingDetails.questions?.length"
+            v-if="meeting.role === 'examiner' && meetingDetails.questions?.length"
             class="modal-section"
           >
             <h4 class="section-title">{{ getQuestionsTitle(meeting.confirmation_type) }}</h4>
@@ -170,7 +170,6 @@
               </div>
             </div>
           </div>
-          <!-- ✅ Для аттестуемого блок вопросов не отображается вообще (даже с заглушкой) -->
         </template>
       </div>
     </el-dialog>
@@ -331,6 +330,7 @@ export interface EvaluationData {
   confirmation_type: string
 }
 
+// ✅ ИСПРАВЛЕНО: роль теперь 'student' | 'examiner' (соответствует бэкенду)
 export interface Meeting {
   id: number | string
   skill_name: string
@@ -341,7 +341,7 @@ export interface Meeting {
   duration: number
   description?: string
   participants: MeetingParticipant[]
-  role?: 'ATTESTED' | 'ATTESTOR'
+  role?: 'student' | 'examiner'
   isPast?: boolean
   isToday?: boolean
   isUpcoming?: boolean
@@ -392,8 +392,6 @@ const openMeetingModal = () => {
   isModalVisible.value = true
 }
 
-// ✅ Загрузка материалов: ТОЛЬКО meeting_id, без user_id
-// Сервер сам определит пользователя из сессии/куки
 const fetchMeetingMaterials = async () => {
   materialsLoading.value = true
   meetingDetails.value = { description: undefined, materials: [], questions: [] }
@@ -405,15 +403,11 @@ const fetchMeetingMaterials = async () => {
     })
 
     const data = response.data
-
-    // Преобразуем вопросы в формат Question
     const questions: Question[] = (data.questions || []).map((q: any) => ({
       id: q.id,
       text: q.question,
       idealAnswer: q.answer,
     }))
-
-    // Преобразуем литературу в массив строк
     const materials: string[] = data.literature
       ? String(data.literature)
           .split('\n')
@@ -433,7 +427,6 @@ const fetchMeetingMaterials = async () => {
   }
 }
 
-// ✅ Загрузка результатов: GET /evaluations/{stage_version_id}
 const fetchEvaluationResult = async () => {
   const stageVersionId = props.meeting.stage_version_id
   if (!stageVersionId) return null
@@ -450,8 +443,6 @@ const fetchEvaluationResult = async () => {
   }
 }
 
-// ✅ Сохранение оценки: ПОСТ /evaluations/
-// Эта функция теперь полностью отвечает за логику сохранения
 const submitGrade = async (
   attestedUserId: number | undefined,
   stageId: number | undefined,
@@ -478,10 +469,10 @@ const submitGrade = async (
   return response.data
 }
 
-// ✅ Получение user_id аттестуемого из участников
+// ✅ ИСПРАВЛЕНО: ищем участника с ролью 'Аттестуемый' или 'student'
 const getAttestedUserId = (): number | undefined => {
   const attested = props.meeting.participants.find(
-    (p) => p.role === 'Аттестуемый' || p.role === 'ATTESTED',
+    (p) => p.role === 'Аттестуемый' || p.role === 'student',
   )
   return attested?.user_id
 }
@@ -512,7 +503,6 @@ const closeGradingModal = () => {
   gradingMeeting.value = null
 }
 
-// ✅ Сохранение оценки — вся логика здесь, родитель только слушает события
 const saveGrade = async () => {
   if (!gradingMeeting.value) return
   try {
@@ -527,7 +517,7 @@ const saveGrade = async () => {
 
     ElMessage.success('Оценка сохранена')
     emit('save-grade', gradingMeeting.value, gradeValue.value, gradeComment.value)
-    emit('grade-saved') // ✅ Событие для родителя, чтобы обновить данные
+    emit('grade-saved')
     closeGradingModal()
   } catch (error) {
     console.error('Ошибка сохранения оценки:', error)
@@ -560,8 +550,9 @@ const loadResultsData = async () => {
   }
 }
 
+// ✅ ИСПРАВЛЕНО: ищем участника с ролью 'Аттестуемый' или 'student'
 const getAttestedName = (participants: MeetingParticipant[]): string => {
-  const attested = participants.find((p) => p.role === 'Аттестуемый' || p.role === 'ATTESTED')
+  const attested = participants.find((p) => p.role === 'Аттестуемый' || p.role === 'student')
   return attested?.full_name || '—'
 }
 
@@ -603,50 +594,36 @@ const getStatusText = (status: string) => {
   return status === 'planned' ? 'Запланирована' : 'Завершена'
 }
 
+// ✅ ИСПРАВЛЕНО: корректное отображение типов встреч (бэкенд → пользователь)
 const getMeetingTypeText = (type: string) => {
   if (!type) return ''
-  const lower = type.toLowerCase()
-  if (lower.includes('практик') || type === 'PRACTICE') return 'Практика'
-  if (lower.includes('аттест') || type === 'EXAM') return 'Аттестация'
-  if (lower.includes('perf') || lower.includes('review') || type === 'REVIEW')
-    return 'Performance review'
-  return type
+  const typeMap: Record<string, string> = {
+    certification: 'Аттестация',
+    practice: 'Практическое задание',
+    performance_review: 'Performance review',
+  }
+  return typeMap[type] || type
 }
 
+// ✅ ИСПРАВЛЕНО: цвета для типов встреч
 const getConfirmationColor = (type: string) => {
-  if (!type) return 'var(--gray)'
-  const lower = type.toLowerCase()
-  if (lower.includes('практик') || type === 'PRACTICE') return '#4caf50'
-  if (lower.includes('аттест') || type === 'EXAM') return '#ff9800'
-  if (lower.includes('perf') || lower.includes('review') || type === 'REVIEW') return '#f44336'
-  return 'var(--gray)'
+  const colorMap: Record<string, string> = {
+    certification: '#ff9800',
+    practice: '#4caf50',
+    performance_review: '#f44336',
+  }
+  return colorMap[type] || 'var(--gray)'
 }
 
 const getQuestionsTitle = (type: string): string => {
-  if (!type) return 'Вопросы и ответы'
-  const lower = type.toLowerCase()
-  if (
-    lower.includes('практик') ||
-    type === 'PRACTICE' ||
-    lower.includes('perf') ||
-    lower.includes('review') ||
-    type === 'REVIEW'
-  ) {
+  if (type === 'practice' || type === 'performance_review') {
     return 'Задания и критерии'
   }
   return 'Вопросы и ответы'
 }
 
 const getAnswerLabel = (type: string): string => {
-  if (!type) return 'Эталонный ответ:'
-  const lower = type.toLowerCase()
-  if (
-    lower.includes('практик') ||
-    type === 'PRACTICE' ||
-    lower.includes('perf') ||
-    lower.includes('review') ||
-    type === 'REVIEW'
-  ) {
+  if (type === 'practice' || type === 'performance_review') {
     return 'Критерий оценивания:'
   }
   return 'Эталонный ответ:'
@@ -662,6 +639,7 @@ defineExpose({
 </script>
 
 <style scoped>
+/* Стили остаются без изменений */
 .meeting-card {
   position: relative;
   background: #fff;
@@ -1176,8 +1154,6 @@ defineExpose({
   text-align: center;
   padding: var(--spacing-lg) 0;
 }
-
-/* Адаптивность */
 @media (max-width: 700px) {
   .meeting-info {
     grid-template-columns: repeat(2, 1fr);
@@ -1196,8 +1172,6 @@ defineExpose({
     padding: var(--spacing-sm);
   }
 }
-
-/* Стили модалок */
 :deep(.meeting-modal),
 :deep(.grading-modal),
 :deep(.results-modal) {

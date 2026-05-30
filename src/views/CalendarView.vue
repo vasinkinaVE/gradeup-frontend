@@ -28,9 +28,9 @@
           </el-radio-group>
         </div>
 
-        <!-- ✅ Фильтр по встречам (только для руководителя) -->
+        <!-- ✅ Фильтр по встречам: показывается для всех, кроме Сотрудника -->
         <el-select
-          v-if="canGradeMeeting"
+          v-if="showMeetingsFilter"
           v-model="filterMeetings"
           placeholder="Все встречи"
           size="default"
@@ -52,8 +52,8 @@
           popper-class="custom-select-popper"
         >
           <el-option label="Все роли" value="all" />
-          <el-option label="Аттестуемый" value="ATTESTED" />
-          <el-option label="Аттестующий" value="ATTESTOR" />
+          <el-option label="Аттестуемый" value="Аттестуемый" />
+          <el-option label="Аттестующий" value="Аттестующий" />
         </el-select>
 
         <el-select
@@ -66,8 +66,8 @@
         >
           <el-option label="Все типы" value="all" />
           <el-option label="Аттестация" value="Аттестация" />
-          <el-option label="Практика" value="Практика" />
-          <el-option label="Performance Review" value="Performance Review" />
+          <el-option label="Практическое задание" value="Практическое задание" />
+          <el-option label="Performance review" value="Performance review" />
         </el-select>
 
         <el-date-picker
@@ -137,21 +137,92 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api'
 const authStore = useAuthStore()
 const currentUser = computed(() => authStore.user)
 
-// ✅ Проверка роли: руководитель
+// ✅ ИСПРАВЛЕНО: надёжная проверка, является ли пользователь ТОЛЬКО Сотрудником
+const isEmployee = computed(() => {
+  const user = currentUser.value
+  if (!user) return false
+
+  const employeeRoles = ['employee', 'сотрудник']
+
+  // Проверяем role_name (строка)
+  if (user.role_name) {
+    const role = String(user.role_name).trim().toLowerCase()
+    // Считаем сотрудником только если role_name И ТОЛЬКО employee/сотрудник
+    if (employeeRoles.includes(role)) {
+      // Дополнительно проверяем, нет ли других ролей в массиве
+      if (Array.isArray(user.roles)) {
+        const otherRoles = user.roles.filter((r: any) => {
+          const normalized = String(r).trim().toLowerCase()
+          return !employeeRoles.includes(normalized)
+        })
+        // Если есть другие роли кроме employee - это не "чистый" сотрудник
+        if (otherRoles.length > 0) return false
+      }
+      return true
+    }
+  }
+
+  // Проверяем roles (массив)
+  if (Array.isArray(user.roles)) {
+    const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
+
+    // Считаем сотрудником только если ВСЕ роли - это employee/сотрудник
+    // Если есть хоть одна другая роль (supervisor, admin, etc.) - не сотрудник
+    const hasOnlyEmployeeRoles = roles.every((r) => employeeRoles.includes(r))
+
+    if (hasOnlyEmployeeRoles && roles.length > 0) {
+      return true
+    }
+
+    // Если есть другие роли - не считаем сотрудником
+    return false
+  }
+
+  return false
+})
+
+// ✅ ИСПРАВЛЕНО: вычисляемое свойство для показа фильтра встреч
+const showMeetingsFilter = computed(() => {
+  // Показываем фильтр всем, кроме "чистого" Сотрудника
+  return !isEmployee.value
+})
+
+// ✅ Проверка роли: может ли оценивать встречи (руководитель, СПО, админ)
 const canGradeMeeting = computed(() => {
-  const role = currentUser.value?.role_name
-  if (!role) return false
-  const normalizedRole = role.trim().toLowerCase()
-  const allowedRoles = ['supervisor', 'manager', 'admin', 'spo', 'руководитель']
-  return allowedRoles.includes(normalizedRole)
+  const user = currentUser.value
+  if (!user) return false
+
+  const allowedRoles = [
+    'supervisor',
+    'manager',
+    'admin',
+    'spo',
+    'руководитель',
+    'специалист',
+    'администратор',
+  ]
+
+  // Проверяем role_name
+  if (user.role_name) {
+    const role = String(user.role_name).trim().toLowerCase()
+    if (allowedRoles.includes(role)) return true
+  }
+
+  // Проверяем roles (массив)
+  if (Array.isArray(user.roles)) {
+    const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
+    if (roles.some((r) => allowedRoles.includes(r))) return true
+  }
+
+  return false
 })
 
 // Фильтры
 const searchQuery = ref('')
 const filterStatus = ref<'all' | 'upcoming' | 'past'>('all')
 const filterMeetings = ref<'all' | 'my' | 'subordinates'>('all')
-const filterRole = ref<'all' | 'ATTESTED' | 'ATTESTOR'>('all')
-const filterType = ref<'all' | 'Аттестация' | 'Практика' | 'Performance Review'>('all')
+const filterRole = ref<'all' | 'Аттестуемый' | 'Аттестующий'>('all')
+const filterType = ref<'all' | 'Аттестация' | 'Практическое задание' | 'Performance review'>('all')
 const dateRange = ref<[string, string] | null>(null)
 
 // Данные
@@ -176,7 +247,7 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
       role: 'Аттестуемый',
       is_current_user: isCurrentUserStudent,
     })
-    if (isCurrentUserStudent) userRole = 'ATTESTED'
+    if (isCurrentUserStudent) userRole = 'student'
   }
   if (apiData.examiner) {
     participants.push({
@@ -186,7 +257,7 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
       role: 'Аттестующий',
       is_current_user: isCurrentUserExaminer,
     })
-    if (isCurrentUserExaminer) userRole = 'ATTESTOR'
+    if (isCurrentUserExaminer) userRole = 'examiner'
   }
 
   const startTime = dayjs(apiData.started_at)
@@ -237,16 +308,19 @@ const fetchMeetings = async () => {
 
     if (filterRole.value !== 'all' && currentUserId.value) {
       params.user_id = currentUserId.value
-      if (filterRole.value === 'ATTESTED' || filterRole.value === 'ATTESTOR') {
+      if (filterRole.value === 'Аттестуемый' || filterRole.value === 'Аттестующий') {
         params.user_role = filterRole.value
       }
     }
 
-    if (canGradeMeeting.value && filterMeetings.value !== 'all' && currentUserId.value) {
+    // ✅ Логика фильтра встреч для не-Сотрудников
+    if (showMeetingsFilter.value && filterMeetings.value !== 'all' && currentUserId.value) {
       if (filterMeetings.value === 'my') {
         params.user_id = currentUserId.value
+      } else if (filterMeetings.value === 'subordinates') {
+        params.exclude_user_id = currentUserId.value
       }
-    } else if (!canGradeMeeting.value && currentUserId.value) {
+    } else if (isEmployee.value && currentUserId.value) {
       params.user_id = currentUserId.value
     }
 
@@ -279,7 +353,8 @@ const filteredMeetings = computed(() => {
     })
   }
 
-  if (canGradeMeeting.value && filterMeetings.value === 'subordinates' && currentUserId.value) {
+  // ✅ Клиентская фильтрация для "Встречи подчиненных"
+  if (showMeetingsFilter.value && filterMeetings.value === 'subordinates' && currentUserId.value) {
     result = result.filter((m) => !m.participants.some((p) => p.is_current_user))
   }
 
@@ -320,24 +395,20 @@ watch(dateRange, ([start, end]) => {
   }
 })
 
-// ✅ Обработчики событий — ТОЛЬКО реакция, без дублирования API-логики
 const handleViewResults = (meeting: Meeting) => {
   console.log('Просмотр результатов:', meeting)
-  // При необходимости: навигация или дополнительная логика
 }
 
 const handleOpenGrading = (meeting: Meeting) => {
   console.log('Открытие оценки:', meeting)
 }
 
-// ✅ После сохранения оценки — просто обновляем список
 const handleGradeSaved = async () => {
   await fetchMeetings()
 }
 
 const handleGradeError = (error: any) => {
   console.error('Ошибка от MeetingCard:', error)
-  // Дополнительная обработка ошибки при необходимости
 }
 
 // Быстрые даты
@@ -416,7 +487,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .filter-select {
-  width: 120px !important;
+  width: 180px !important;
   flex-shrink: 0;
 }
 .date-range-picker {

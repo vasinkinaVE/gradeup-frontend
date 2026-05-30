@@ -71,14 +71,14 @@
       @refresh="handleRefresh"
     />
 
+    <!-- ✅ Исправлено: убран @update:logs, fetchLogs вызывается только через @refresh -->
     <LogsSection
       v-if="activeTab === 'logs'"
       v-model:logs="logs"
       :loading="logsLoading"
       :api-filters="currentLogsFilters"
-      @refresh="() => fetchLogs(currentLogsFilters.value)"
+      @refresh="() => fetchLogs(currentLogsFilters)"
       @update:api-filters="handleLogsFiltersUpdate"
-      @update:logs="handleLogsUpdate"
     />
   </div>
 </template>
@@ -449,29 +449,22 @@ const fetchLogs = async (filters = {}) => {
   }
 }
 
-// ✅ ИСПРАВЛЕНА: Корректная обработка фильтров от LogsSection
+// ✅ ИСПРАВЛЕНО: Только обновляем фильтры, запрос выполняется через @refresh
 const handleLogsFiltersUpdate = (newFilters) => {
-  // ✅ МЕРДЖИМ новые фильтры с существующими
+  // МЕРДЖИМ новые фильтры с существующими
   currentLogsFilters.value = {
     ...currentLogsFilters.value,
     ...newFilters,
   }
 
-  // ✅ Удаляем ключи со значениями null/''/пустой массив — это сигнал "очистить фильтр"
+  // Удаляем ключи со значениями null/''/пустой массив — это сигнал "очистить фильтр"
   Object.keys(currentLogsFilters.value).forEach((key) => {
     const val = currentLogsFilters.value[key]
     if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) {
       delete currentLogsFilters.value[key]
     }
   })
-
-  fetchLogs(currentLogsFilters.value)
-}
-
-const handleLogsUpdate = (newLogs) => {
-  if (Array.isArray(newLogs)) {
-    logs.value = newLogs
-  }
+  // ✅ Запрос к API выполняется отдельно через событие @refresh
 }
 
 const handleRefresh = () => {}
@@ -516,9 +509,7 @@ const onTabChange = async (tabId) => {
   if (tabId === 'profiles' && !profiles.value.length) {
     await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
   }
-  if (tabId === 'logs') {
-    await fetchLogs(currentLogsFilters.value)
-  }
+  // ✅ Для logs не вызываем fetchLogs вручную — LogsSection сделает это сам при монтировании
 }
 
 const reloadDepartments = async () => {
