@@ -469,6 +469,7 @@ const props = defineProps<{
   isAdmin: boolean
   isSupervisor: boolean
   isSPOAndSupervisor?: boolean
+  isSPOAndDivisionSupervisor?: boolean
   canEditEmployeeInfo?: boolean
   canEditRole?: boolean
   canAssignProfile?: boolean

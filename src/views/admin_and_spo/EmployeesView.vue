@@ -4,7 +4,6 @@
     <header class="view-header">
       <div>
         <h1>Управление сотрудниками</h1>
-        <!-- ✅ ИСПРАВЛЕНО: единое вычисляемое свойство для названия орг. единицы -->
         <div v-if="isSupervisor && userOrgUnitName" class="department-subtitle">
           {{ userOrgUnitName }}
         </div>
@@ -30,7 +29,7 @@
       <el-select
         v-if="showDepartmentFilter"
         v-model="filterDepartmentId"
-        :placeholder="isSupervisorWithDivision ? 'Все отделы направления' : 'Все отделы'"
+        :placeholder="getDepartmentFilterPlaceholder"
         clearable
         class="department-filter"
         @change="applyFilters"
@@ -107,6 +106,7 @@
       :is-admin="isAdminOrSPO"
       :is-supervisor="isSupervisor"
       :is-spo-and-supervisor="isSPOAndSupervisor"
+      :is-spo-and-division-supervisor="isSPOAndDivisionSupervisor"
       :can-edit-employee-info="canEditEmployeeInfo"
       :can-edit-role="canEditRole"
       :departments="availableDepartments"
@@ -238,7 +238,14 @@ const isSupervisor = computed(() => {
   return hasSupervisorFlag || hasSupervisorRole
 })
 
-// ✅ НОВОЕ: Проверяем, является ли пользователь одновременно СПО и руководителем
+const isSPOAndDepartmentSupervisor = computed(() => {
+  return isSPO.value && isSupervisor.value && !isSupervisorWithDivision.value
+})
+
+const isSPOAndDivisionSupervisor = computed(() => {
+  return isSPO.value && isSupervisorWithDivision.value
+})
+
 const isSPOAndSupervisor = computed(() => isSPO.value && isSupervisor.value)
 
 const isSupervisorWithDivision = computed(() => {
@@ -272,41 +279,35 @@ const allProfilesData = ref<Profile[]>([])
 const divisionDepartmentIds = ref<number[]>([])
 const departmentProfilesCache = ref<Record<number, Profile[]>>({})
 
-// ✅ ИСПРАВЛЕНО: Для СПО+руководителя показываем колонку Отдел и фильтр
 const showDepartmentFilter = computed(() => {
-  // Для СПО+руководителя показываем фильтр
   if (isSPOAndSupervisor.value) return true
   return !isSupervisor.value || isSupervisorWithDivision.value
 })
 
 const showDepartmentColumn = computed(() => {
-  // Для СПО+руководителя показываем колонку
   if (isSPOAndSupervisor.value) return true
   return !isSupervisor.value || isSupervisorWithDivision.value
 })
 
-// ✅ ИСПРАВЛЕНО: СПО не может назначать профили, только СПО+руководитель (и то только своим)
+const getDepartmentFilterPlaceholder = computed(() => {
+  if (isSPOAndDivisionSupervisor.value) return 'Все отделы'
+  if (isSPOAndDepartmentSupervisor.value) return 'Все отделы'
+  if (isSupervisorWithDivision.value) return 'Все отделы направления'
+  return 'Все отделы'
+})
+
 const canAssignProfiles = computed(() => {
-  // СПО без роли руководителя НЕ может назначать профили
   if (isSPO.value && !isSupervisor.value) return false
-  // Админ может назначать профили всем
   if (isAdmin.value) return true
-  // СПО+руководитель может назначать (но только своим сотрудникам - проверка в handleAssignProfile)
   if (isSPOAndSupervisor.value) return true
-  // Руководитель может назначать (но только своим сотрудникам - проверка в handleAssignProfile)
   if (isSupervisor.value) return true
   return false
 })
 
-// ✅ ИСПРАВЛЕНО: СПО не может повышать, только СПО+руководитель (и то только своих)
 const canPromoteEmployees = computed(() => {
-  // СПО без роли руководителя НЕ может повышать
   if (isSPO.value && !isSupervisor.value) return false
-  // Админ может повышать всех
   if (isAdmin.value) return true
-  // СПО+руководитель может повышать (но только своих сотрудников - проверка в canManageSpecificEmployee)
   if (isSPOAndSupervisor.value) return true
-  // Руководитель может повышать (но только своих сотрудников - проверка в canManageSpecificEmployee)
   if (isSupervisor.value) return true
   return false
 })
@@ -315,11 +316,8 @@ const canManageProfiles = computed(() => canAssignProfiles.value || canPromoteEm
 const canEditEmployeeInfo = computed(() => isAdminOrSPO.value)
 const canEditRole = computed(() => isAdmin.value)
 
-// ✅ ИСПРАВЛЕНО: Для СПО+руководителя показываем все отделы
 const availableDepartments = computed(() => {
-  // Для СПО+руководителя показываем все отделы
   if (isSPOAndSupervisor.value) return departments.value
-
   if (!isSupervisorWithDivision.value) return departments.value
   return departments.value.filter((dept) => divisionDepartmentIds.value.includes(dept.id))
 })
@@ -331,35 +329,24 @@ const filteredRoles = computed(() => {
   })
 })
 
-// ✅ НОВОЕ: Проверяем, может ли текущий пользователь управлять конкретным сотрудником
 const canManageSpecificEmployee = (employee: Employee | null): boolean => {
   if (!employee) return false
-
-  // Админ может управлять всеми
   if (isAdmin.value) return true
-
-  // СПО без роли руководителя не может управлять (не может назначать/повышать)
   if (isSPO.value && !isSupervisor.value) return false
 
-  // Для руководителя (включая СПО+руководителя) проверяем отдел
   if (isSupervisor.value) {
-    // Если у руководителя есть направление, проверяем отделы направления
     if (isSupervisorWithDivision.value && supervisorDivisionId.value) {
       return divisionDepartmentIds.value.includes(employee.departmentId || -1)
     }
-
-    // Если руководитель отдела, проверяем конкретный отдел
     if (supervisorDepartmentId.value) {
       return employee.departmentId === supervisorDepartmentId.value
     }
   }
-
   return false
 }
 
 const filteredEmployees = computed(() => {
   let result = employees.value
-
   if (search.value) {
     const q = search.value.toLowerCase()
     result = result.filter(
@@ -368,30 +355,22 @@ const filteredEmployees = computed(() => {
         e.position.toLowerCase().includes(q),
     )
   }
-
   if (supervisorUserId.value) {
     result = result.filter((e) => e.userId !== supervisorUserId.value)
   }
-
   if (filterDepartmentId.value) {
     result = result.filter((e) => e.departmentId === filterDepartmentId.value)
   }
-
   return result
 })
 
-// ✅ ИСПРАВЛЕНО: единое вычисляемое свойство для названия орг. единицы
 const userOrgUnitName = computed(() => {
   if (!isSupervisor.value) return ''
-
-  // Для руководителя направления — показываем название направления
   if (isSupervisorWithDivision.value) {
     return (
       authStore.user?.managed_division_name || `Направление #${authStore.user?.managed_division_id}`
     )
   }
-
-  // Для руководителя отдела — показываем название отдела
   const deptId = authStore.user?.department_id
   return departments.value.find((d) => d.id === deptId)?.name || ''
 })
@@ -401,13 +380,11 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   }
-
   const res = await fetch(url, {
     ...options,
     headers,
     credentials: 'include',
   })
-
   if (res.status === 401) {
     authStore.logout()
     ElMessage.error('Сессия истекла. Пожалуйста, войдите снова.')
@@ -422,52 +399,44 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 
 const fetchDepartments = async () => {
   try {
-    // ✅ ИСПРАВЛЕНО: Для СПО+руководителя загружаем все отделы
-    if (isSPOAndSupervisor.value) {
-      const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
-      if (!res) throw new Error('Auth error')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-
-      departments.value = Array.isArray(data)
-        ? data.map((d: any) => ({
-            id: d.id,
-            name: d.department_name || d.name || '',
-            division_id: d.division_id || null,
-          }))
-        : []
-      return
-    }
-
-    if (isSupervisorWithDivision.value && supervisorDivisionId.value) {
+    // ✅ ИСПРАВЛЕНО: Для СПО+руководитель направления используем тот же эндпоинт, что и для обычного руководителя направления
+    if (isSPOAndDivisionSupervisor.value && supervisorDivisionId.value) {
+      // 1. Загружаем отделы направления (для divisionDepartmentIds)
       const res = await fetchWithAuth(`${API_BASE}/admin/divisions/${supervisorDivisionId.value}`)
       if (!res) throw new Error('Auth error')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: DivisionData = await res.json()
 
       divisionDepartmentIds.value = data.departments.map((d) => d.id)
-      departments.value = data.departments.map((d) => ({
-        id: d.id,
-        name: d.department_name || d.name || '',
-        division_id: data.id,
-      }))
-    } else if (isSupervisor.value) {
-      if (supervisorDepartmentId.value) {
-        departments.value = [
-          {
-            id: supervisorDepartmentId.value,
-            name: authStore.user?.department_name || 'Отдел',
-            division_id: null,
-          },
-        ]
-        divisionDepartmentIds.value = [supervisorDepartmentId.value]
+
+      // 2. Загружаем ВСЕ отделы (для отображения в фильтре)
+      const allDeptsRes = await fetchWithAuth(`${API_BASE}/admin/departments/`)
+      if (allDeptsRes && allDeptsRes.ok) {
+        const allDeptsData = await allDeptsRes.json()
+        departments.value = Array.isArray(allDeptsData)
+          ? allDeptsData.map((d: any) => ({
+              id: d.id,
+              name: d.department_name || d.name || '',
+              division_id: d.division_id || null,
+            }))
+          : []
+      } else {
+        // Фоллбэк: если не удалось загрузить все отделы, используем отделы направления
+        departments.value = data.departments.map((d) => ({
+          id: d.id,
+          name: d.department_name || d.name || '',
+          division_id: data.id,
+        }))
       }
-    } else {
+      return
+    }
+
+    // Для СПО+руководитель отдела
+    if (isSPOAndDepartmentSupervisor.value && supervisorDepartmentId.value) {
       const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
       if (!res) throw new Error('Auth error')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-
       departments.value = Array.isArray(data)
         ? data.map((d: any) => ({
             id: d.id,
@@ -475,7 +444,50 @@ const fetchDepartments = async () => {
             division_id: d.division_id || null,
           }))
         : []
+      divisionDepartmentIds.value = [supervisorDepartmentId.value]
+      return
     }
+
+    // Обычный руководитель направления
+    if (isSupervisorWithDivision.value && supervisorDivisionId.value) {
+      const res = await fetchWithAuth(`${API_BASE}/admin/divisions/${supervisorDivisionId.value}`)
+      if (!res) throw new Error('Auth error')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data: DivisionData = await res.json()
+      divisionDepartmentIds.value = data.departments.map((d) => d.id)
+      departments.value = data.departments.map((d) => ({
+        id: d.id,
+        name: d.department_name || d.name || '',
+        division_id: data.id,
+      }))
+      return
+    }
+
+    // Обычный руководитель отдела
+    if (isSupervisor.value && supervisorDepartmentId.value) {
+      departments.value = [
+        {
+          id: supervisorDepartmentId.value,
+          name: authStore.user?.department_name || 'Отдел',
+          division_id: null,
+        },
+      ]
+      divisionDepartmentIds.value = [supervisorDepartmentId.value]
+      return
+    }
+
+    // Админ или СПО без роли руководителя
+    const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
+    if (!res) throw new Error('Auth error')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    departments.value = Array.isArray(data)
+      ? data.map((d: any) => ({
+          id: d.id,
+          name: d.department_name || d.name || '',
+          division_id: d.division_id || null,
+        }))
+      : []
   } catch (err) {
     console.error('Error fetching departments:', err)
     departments.value = []
@@ -486,23 +498,18 @@ const fetchDepartments = async () => {
 const fetchAvailableProfiles = async (departmentIds?: number[]) => {
   try {
     let url = `${API_BASE}/profiles/levels`
-
-    // ✅ ИСПРАВЛЕНО: Для СПО+руководителя загружаем профили всех отделов
     if (isSPOAndSupervisor.value) {
       departmentIds = undefined
     }
-
     if (departmentIds && departmentIds.length > 0) {
       const params = new URLSearchParams()
       departmentIds.forEach((id) => params.append('departments_id', String(id)))
       url += `?${params.toString()}`
     }
-
     const res = await fetchWithAuth(url)
     if (!res) throw new Error('Auth error')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-
     const profiles: Profile[] = Array.isArray(data)
       ? data.map((p: any) => ({
           id: p.id,
@@ -511,7 +518,6 @@ const fetchAvailableProfiles = async (departmentIds?: number[]) => {
           levels: p.levels || [],
         }))
       : []
-
     availableProfiles.value = profiles
     allProfilesData.value = profiles
   } catch (err) {
@@ -526,12 +532,10 @@ const fetchDepartmentProfiles = async (deptId: number): Promise<Profile[]> => {
     if (departmentProfilesCache.value[deptId]) {
       return departmentProfilesCache.value[deptId]
     }
-
     const res = await fetchWithAuth(`${API_BASE}/profiles/levels?departments_id=${deptId}`)
     if (!res) throw new Error('Auth error')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-
     const profiles: Profile[] = Array.isArray(data)
       ? data.map((p: any) => ({
           id: p.id,
@@ -540,7 +544,6 @@ const fetchDepartmentProfiles = async (deptId: number): Promise<Profile[]> => {
           levels: p.levels || [],
         }))
       : []
-
     departmentProfilesCache.value[deptId] = profiles
     return profiles
   } catch (err) {
@@ -552,13 +555,12 @@ const fetchDepartmentProfiles = async (deptId: number): Promise<Profile[]> => {
 const fetchEmployees = async () => {
   try {
     loading.value = true
-
     let url = `${API_BASE}/users/profiles/`
     const params = new URLSearchParams()
 
-    // ✅ ИСПРАВЛЕНО: Для СПО+руководителя загружаем всех сотрудников
+    // ✅ ИСПРАВЛЕНО: Для СПО+руководитель направления загружаем ВСЕХ сотрудников (без фильтра)
     if (isSPOAndSupervisor.value) {
-      // Не добавляем фильтры по отделам
+      // Не добавляем фильтры - загружаем всех
     } else if (isSupervisorWithDivision.value) {
       if (divisionDepartmentIds.value.length > 0) {
         divisionDepartmentIds.value.forEach((id) => params.append('departments_id', String(id)))
@@ -583,20 +585,17 @@ const fetchEmployees = async () => {
       ? data.map((e: any): Employee => {
           const rawId = e.id || e.user_id
           const userId = rawId != null ? Number(rawId) : 0
-
           const roles = Array.isArray(e.roles)
             ? e.roles.map((r: string) => r?.trim()).filter(Boolean)
             : e.role_name
               ? [e.role_name.trim()]
               : []
-
           let roleId: number | null = e.role_id ?? null
           let roleName = 'Не назначена'
           if (roleId) {
             const role = availableRoles.value.find((r) => r.id === roleId)
             if (role) roleName = role.displayName
           }
-
           const profileId = e.profile_id ?? null
           let profileLevel: string | null = null
           if (profileId) {
@@ -605,7 +604,6 @@ const fetchEmployees = async () => {
               profileLevel = p.levels[0].level_name || p.levels[0].name || null
             }
           }
-
           return {
             id: userId,
             userId: userId,
@@ -664,7 +662,6 @@ const viewEmployee = async (row: Employee) => {
   selectedEmployee.value = { ...row }
   userFullProfile.value = null
   detailVisible.value = true
-
   if (selectedEmployee.value.profileId && selectedEmployee.value.userId) {
     const profileData = await fetchEmployeeProfile(selectedEmployee.value.userId)
     if (profileData && selectedEmployee.value) {
@@ -685,24 +682,20 @@ const resetUserFullProfile = () => {
 
 const handleEmployeeUpdate = async (updatedData: any) => {
   console.log('handleEmployeeUpdate called with:', updatedData)
-
   if (!canEditEmployeeInfo.value) {
     ElMessage.warning('У вас нет прав на редактирование данных сотрудника')
     return
   }
-
   if (updatedData.roleId !== selectedEmployee.value?.roleId && !canEditRole.value) {
     ElMessage.warning('У вас нет прав на изменение роли сотрудника')
     return
   }
-
   const userId = Number(updatedData.userId)
   if (!userId || isNaN(userId)) {
     console.error('Invalid userId:', updatedData.userId)
     ElMessage.error('Ошибка: некорректный ID сотрудника')
     return
   }
-
   try {
     const payload: any = {
       first_name: updatedData.firstName,
@@ -711,7 +704,6 @@ const handleEmployeeUpdate = async (updatedData: any) => {
       email: updatedData.email,
       position: updatedData.position || '',
     }
-
     if (
       updatedData.role_id !== undefined &&
       updatedData.role_id !== null &&
@@ -722,7 +714,6 @@ const handleEmployeeUpdate = async (updatedData: any) => {
         payload.role_id = roleIdNum
       }
     }
-
     if (
       updatedData.department_id !== undefined &&
       updatedData.department_id !== null &&
@@ -733,24 +724,19 @@ const handleEmployeeUpdate = async (updatedData: any) => {
         payload.department_id = deptIdNum
       }
     }
-
     console.log(`PATCH /users/${userId} with payload:`, payload)
-
     const res = await fetchWithAuth(`${API_BASE}/users/${userId}/`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     })
-
     if (!res) throw new Error('Auth error')
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       console.error('Server error:', err)
       throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
     }
-
     const responseData = await res.json()
     console.log('Server response:', responseData)
-
     const idx = employees.value.findIndex((e) => e.userId === userId)
     if (idx !== -1) {
       let roleName = 'Не назначена'
@@ -788,28 +774,21 @@ const handleEmployeeUpdate = async (updatedData: any) => {
 
 const handleAssignProfile = async (userId: number, profileId: number) => {
   console.log('Assigning profile:', { userId, profileId })
-
-  // ✅ ИСПРАВЛЕНО: Проверяем права на назначение профиля
   if (!canAssignProfiles.value) {
     ElMessage.warning('У вас нет прав на назначение профиля')
     return
   }
-
-  // Проверяем, может ли текущий пользователь управлять этим сотрудником
   const employee = employees.value.find((e) => e.userId === userId)
   if (employee && !canManageSpecificEmployee(employee)) {
-    ElMessage.warning('Вы можете назначать профили только сотрудникам своего отдела')
+    ElMessage.warning('Вы можете назначать профили только сотрудникам своего отдела/направления')
     return
   }
-
   try {
     const userIdNum = Number(userId)
     const profileIdNum = Number(profileId)
-
     if (isNaN(userIdNum) || isNaN(profileIdNum)) {
       throw new Error('Некорректные ID пользователя или профиля')
     }
-
     const res = await fetchWithAuth(`${API_BASE}/users/profiles/`, {
       method: 'POST',
       body: JSON.stringify({
@@ -817,7 +796,6 @@ const handleAssignProfile = async (userId: number, profileId: number) => {
         profile_id: profileIdNum,
       }),
     })
-
     if (!res) throw new Error('Auth error')
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
@@ -828,11 +806,8 @@ const handleAssignProfile = async (userId: number, profileId: number) => {
           : `HTTP ${res.status}`
       throw new Error(msg)
     }
-
     ElMessage.success('Профиль успешно назначен')
-
     await fetchEmployees()
-
     const updatedEmployee = employees.value.find((e) => e.userId === userIdNum)
     if (updatedEmployee && selectedEmployee.value?.userId === userIdNum) {
       if (updatedEmployee.profileId) {
@@ -858,18 +833,14 @@ const handleAssignProfile = async (userId: number, profileId: number) => {
 }
 
 const handlePromoteEmployee = async (employee: Employee, nextLevel: any) => {
-  // ✅ ИСПРАВЛЕНО: Проверяем права на повышение
   if (!canPromoteEmployees.value) {
     ElMessage.warning('У вас нет прав на повышение сотрудника')
     return
   }
-
-  // Проверяем, может ли текущий пользователь управлять этим сотрудником
   if (!canManageSpecificEmployee(employee)) {
-    ElMessage.warning('Вы можете повышать только сотрудников своего отдела')
+    ElMessage.warning('Вы можете повышать только сотрудников своего отдела/направления')
     return
   }
-
   try {
     const res = await fetchWithAuth(`${API_BASE}/users/${employee.userId}/profile/grade-up`, {
       method: 'POST',
@@ -899,15 +870,12 @@ const handleUnlinkProfile = async (userId: number) => {
     const res = await fetchWithAuth(`${API_BASE}/users/${userId}/profile`, {
       method: 'DELETE',
     })
-
     if (!res) throw new Error('Auth error')
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       throw new Error(err.detail || `HTTP ${res.status}`)
     }
-
     await fetchEmployees()
-
     if (selectedEmployee.value?.userId === userId) {
       selectedEmployee.value = {
         ...selectedEmployee.value,
@@ -919,7 +887,6 @@ const handleUnlinkProfile = async (userId: number) => {
       }
       userFullProfile.value = null
     }
-
     ElMessage.success('Профиль успешно отвязан')
   } catch (err: any) {
     console.error('Error unlinking profile:', err)
@@ -963,24 +930,19 @@ watch(
 onMounted(async () => {
   try {
     await fetchDepartments()
-
     if (isSPOAndSupervisor.value) {
-      // Для СПО+руководителя загружаем все профили
       await fetchAvailableProfiles()
     } else if (
       isSupervisorWithDivision.value &&
       supervisorDivisionId.value &&
       divisionDepartmentIds.value.length > 0
     ) {
-      console.log('Loading profiles for division departments:', divisionDepartmentIds.value)
       await fetchAvailableProfiles(divisionDepartmentIds.value)
-      console.log('Loaded profiles:', availableProfiles.value.length)
     } else if (isSupervisor.value && supervisorDepartmentId.value) {
       await fetchAvailableProfiles([supervisorDepartmentId.value])
     } else {
       await fetchAvailableProfiles()
     }
-
     await fetchEmployees()
   } catch (e) {
     console.error('Failed to load initial data:', e)
