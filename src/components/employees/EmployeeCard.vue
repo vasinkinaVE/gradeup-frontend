@@ -98,7 +98,7 @@
         </div>
 
         <div
-          v-if="(isSupervisor || isAdmin) && nextLevel && isPromotionAvailable"
+          v-if="canPromoteEmployees && nextLevel && isPromotionAvailable"
           class="promotion-actions"
         >
           <el-button type="success" @click="showPromoteDialog"> Повысить сотрудника </el-button>
@@ -108,6 +108,7 @@
       <div class="detail-section profile-section">
         <h3 class="section-title">Профиль</h3>
 
+        <!-- ✅ Показываем карточку профиля, если он назначен (для всех, только просмотр) -->
         <ProfileCard
           v-if="employee.profileId && (userFullProfile || selectedProfileData)"
           :profile="adaptProfileForCard(userFullProfile || selectedProfileData)"
@@ -118,7 +119,8 @@
           :use-questions-endpoint="true"
         />
 
-        <div v-if="employee.profileId && (isSupervisor || isAdmin)" class="unlink-profile-section">
+        <!-- ✅ Кнопка отвязки только для тех, кто может управлять профилями -->
+        <div v-if="employee.profileId && canAssignProfile" class="unlink-profile-section">
           <el-button
             type="danger"
             link
@@ -132,10 +134,12 @@
           <span class="unlink-hint">Профиль будет удалён, прогресс сброшен</span>
         </div>
 
-        <div v-else class="profile-unassigned">
+        <!-- ✅ ИСПРАВЛЕНО: сообщение "не назначен" только когда профиль ДЕЙСТВИТЕЛЬНО не назначен -->
+        <div v-if="!employee.profileId" class="profile-unassigned">
           <span class="unassigned-text">Профиль не назначен</span>
 
-          <div v-if="isSupervisor || isAdmin" class="assign-profile-section">
+          <!-- ✅ Секция назначения только для тех, кто может назначать профили -->
+          <div v-if="canAssignProfile" class="assign-profile-section">
             <div class="assign-profile-label">Назначить профиль:</div>
 
             <div v-if="showDepartmentFilterForProfiles" class="profile-department-filter">
@@ -461,6 +465,8 @@ const props = defineProps<{
   isSupervisor: boolean
   canEditEmployeeInfo?: boolean
   canEditRole?: boolean
+  canAssignProfile?: boolean
+  canPromoteEmployees?: boolean
   departments: any[]
   availableRoles: any[]
   availableProfiles: any[]
@@ -569,27 +575,21 @@ const availableDepartmentsForFilter = computed(() => {
   return props.departments
 })
 
-// ✅ ИСПРАВЛЕНО: для руководителя направления показываем ВСЕ профили направления
 const filteredAvailableProfiles = computed(() => {
-  // Если выбран конкретный отдел - загружаем профили этого отдела
   if (selectedDepartmentForProfiles.value && props.fetchDepartmentProfiles) {
     const cached = localDepartmentProfiles.value[selectedDepartmentForProfiles.value]
     if (cached) return cached
     return []
   }
 
-  // Если фильтр не выбран И это руководитель направления -
-  // возвращаем ВСЕ профили направления из props.availableProfiles
   if (!selectedDepartmentForProfiles.value && props.isSupervisor && props.supervisorDivisionId) {
     return props.availableProfiles || []
   }
 
-  // Если выбран отдел из departmentProfiles
   if (props.departmentProfiles && selectedDepartmentForProfiles.value) {
     return props.departmentProfiles[selectedDepartmentForProfiles.value] || props.availableProfiles
   }
 
-  // По умолчанию возвращаем все доступные профили
   return props.availableProfiles
 })
 
@@ -619,7 +619,6 @@ const fetchSkillQuestions = async (userId: number, skillId: number) => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: используем GET /skills/{skill_id} для получения полных данных навыка
 const fetchFullSkillData = async (skillId: number) => {
   if (skillsCache.has(skillId)) return skillsCache.get(skillId)
   try {
@@ -827,7 +826,6 @@ const enableEditMode = () => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: cancelEdit теперь корректно выходит из режима редактирования
 const cancelEdit = () => {
   isEditMode.value = false
 }
@@ -977,7 +975,6 @@ watch(
 </script>
 
 <style scoped>
-/* Стили без изменений */
 .employee-detail {
   display: flex;
   flex-direction: column;

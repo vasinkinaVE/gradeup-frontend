@@ -1,14 +1,12 @@
-<!-- src/views/EmployeesView.vue -->
+<!-- src/views/admin_and_spo/EmployeesView.vue -->
 <template>
   <div class="employees-view">
     <header class="view-header">
       <div>
         <h1>Управление сотрудниками</h1>
-        <div v-if="isSupervisor && userDepartmentName" class="department-subtitle">
-          {{ userDepartmentName }}
-          <span v-if="isSupervisorWithDivision" class="division-badge">
-            ({{ userDivisionName }})
-          </span>
+        <!-- ✅ ИСПРАВЛЕНО: единое вычисляемое свойство для названия орг. единицы -->
+        <div v-if="isSupervisor && userOrgUnitName" class="department-subtitle">
+          {{ userOrgUnitName }}
         </div>
       </div>
       <div class="header-actions">
@@ -88,7 +86,7 @@
           <span class="roles-cell">{{ getTranslatedRoles(row.roles) }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="canManageProfiles" label="Повышение" width="150">
+      <el-table-column v-if="canPromoteEmployees" label="Повышение" width="150">
         <template #default="{ row }">
           <el-tag :type="isPromotionAvailable(row) ? 'success' : 'info'" size="small">
             {{ isPromotionAvailable(row) ? 'Доступно' : 'Не доступно' }}
@@ -114,6 +112,8 @@
       :fetch-department-profiles="fetchDepartmentProfiles"
       :supervisor-division-id="supervisorDivisionId"
       :supervisor-department-id="supervisorDepartmentId"
+      :can-assign-profile="canAssignProfiles"
+      :can-promote-employees="canPromoteEmployees"
       @update="handleEmployeeUpdate"
       @assign-profile="handleAssignProfile"
       @promote="handlePromoteEmployee"
@@ -232,10 +232,10 @@ const isSupervisor = computed(() => {
 })
 
 const isSupervisorWithDivision = computed(() => {
-  return isSupervisor.value && authStore.user?.division_id != null
+  return isSupervisor.value && authStore.user?.managed_division_id != null
 })
 
-const supervisorDivisionId = computed(() => authStore.user?.division_id ?? null)
+const supervisorDivisionId = computed(() => authStore.user?.managed_division_id ?? null)
 const supervisorDepartmentId = computed(() => authStore.user?.department_id ?? null)
 const supervisorUserId = computed(() => authStore.user?.id ?? null)
 
@@ -264,7 +264,10 @@ const departmentProfilesCache = ref<Record<number, Profile[]>>({})
 
 const showDepartmentFilter = computed(() => !isSupervisor.value || isSupervisorWithDivision.value)
 const showDepartmentColumn = computed(() => !isSupervisor.value || isSupervisorWithDivision.value)
-const canManageProfiles = computed(() => isAdminOrSPO.value || isSupervisor.value)
+
+const canAssignProfiles = computed(() => isAdmin.value || isSupervisor.value)
+const canPromoteEmployees = computed(() => isAdmin.value || isSupervisor.value)
+const canManageProfiles = computed(() => canAssignProfiles.value || canPromoteEmployees.value)
 const canEditEmployeeInfo = computed(() => isAdminOrSPO.value)
 const canEditRole = computed(() => isAdmin.value)
 
@@ -303,15 +306,20 @@ const filteredEmployees = computed(() => {
   return result
 })
 
-const userDepartmentName = computed(() => {
+// ✅ ИСПРАВЛЕНО: единое вычисляемое свойство для названия орг. единицы
+const userOrgUnitName = computed(() => {
   if (!isSupervisor.value) return ''
+
+  // Для руководителя направления — показываем название направления
+  if (isSupervisorWithDivision.value) {
+    return (
+      authStore.user?.managed_division_name || `Направление #${authStore.user?.managed_division_id}`
+    )
+  }
+
+  // Для руководителя отдела — показываем название отдела
   const deptId = authStore.user?.department_id
   return departments.value.find((d) => d.id === deptId)?.name || ''
-})
-
-const userDivisionName = computed(() => {
-  if (!isSupervisorWithDivision.value) return ''
-  return authStore.user?.managed_division_name || `Направление #${authStore.user?.division_id}`
 })
 
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
@@ -340,7 +348,7 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 
 const fetchDepartments = async () => {
   try {
-    if (isSupervisorWithDivision.value) {
+    if (isSupervisorWithDivision.value && supervisorDivisionId.value) {
       const res = await fetchWithAuth(`${API_BASE}/admin/divisions/${supervisorDivisionId.value}`)
       if (!res) throw new Error('Auth error')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -384,12 +392,10 @@ const fetchDepartments = async () => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: используем /profiles/levels для получения полных данных профиля
 const fetchAvailableProfiles = async (departmentIds?: number[]) => {
   try {
     let url = `${API_BASE}/profiles/levels`
 
-    // ✅ ИСПРАВЛЕНО: передаем каждый departments_id как отдельный параметр
     if (departmentIds && departmentIds.length > 0) {
       const params = new URLSearchParams()
       departmentIds.forEach((id) => params.append('departments_id', String(id)))
@@ -419,7 +425,6 @@ const fetchAvailableProfiles = async (departmentIds?: number[]) => {
   }
 }
 
-// ✅ GET /profiles/levels?departments_id={deptId} для получения полных данных профиля отдела
 const fetchDepartmentProfiles = async (deptId: number): Promise<Profile[]> => {
   try {
     if (departmentProfilesCache.value[deptId]) {
@@ -567,7 +572,6 @@ const viewEmployee = async (row: Employee) => {
   userFullProfile.value = null
   detailVisible.value = true
 
-  // ✅ Если профиль назначен - загружаем его полные данные
   if (selectedEmployee.value.profileId && selectedEmployee.value.userId) {
     const profileData = await fetchEmployeeProfile(selectedEmployee.value.userId)
     if (profileData && selectedEmployee.value) {
@@ -689,9 +693,13 @@ const handleEmployeeUpdate = async (updatedData: any) => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: после назначения профиля сразу обновляем данные
 const handleAssignProfile = async (userId: number, profileId: number) => {
   console.log('Assigning profile:', { userId, profileId })
+
+  if (!canAssignProfiles.value) {
+    ElMessage.warning('У вас нет прав на назначение профиля')
+    return
+  }
 
   try {
     const userIdNum = Number(userId)
@@ -722,10 +730,8 @@ const handleAssignProfile = async (userId: number, profileId: number) => {
 
     ElMessage.success('Профиль успешно назначен')
 
-    // ✅ СНАЧАЛА перезагружаем список сотрудников
     await fetchEmployees()
 
-    // ✅ Затем обновляем выбранного сотрудника
     const updatedEmployee = employees.value.find((e) => e.userId === userIdNum)
     if (updatedEmployee && selectedEmployee.value?.userId === userIdNum) {
       if (updatedEmployee.profileId) {
@@ -751,6 +757,11 @@ const handleAssignProfile = async (userId: number, profileId: number) => {
 }
 
 const handlePromoteEmployee = async (employee: Employee, nextLevel: any) => {
+  if (!canPromoteEmployees.value) {
+    ElMessage.warning('У вас нет прав на повышение сотрудника')
+    return
+  }
+
   try {
     const res = await fetchWithAuth(`${API_BASE}/users/${employee.userId}/profile/grade-up`, {
       method: 'POST',
@@ -845,8 +856,11 @@ onMounted(async () => {
   try {
     await fetchDepartments()
 
-    // ✅ Загрузка профилей в зависимости от роли
-    if (isSupervisorWithDivision.value && divisionDepartmentIds.value.length > 0) {
+    if (
+      isSupervisorWithDivision.value &&
+      supervisorDivisionId.value &&
+      divisionDepartmentIds.value.length > 0
+    ) {
       console.log('Loading profiles for division departments:', divisionDepartmentIds.value)
       await fetchAvailableProfiles(divisionDepartmentIds.value)
       console.log('Loaded profiles:', availableProfiles.value.length)
@@ -869,7 +883,6 @@ defineExpose({
 </script>
 
 <style scoped>
-/* Стили без изменений */
 .employees-view {
   max-width: 1200px;
   margin: 0 auto;
