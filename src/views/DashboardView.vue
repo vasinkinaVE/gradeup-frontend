@@ -73,12 +73,12 @@
               @save-grade="handleGradeSaved"
               @grade-saved="handleGradeSaved"
               @grade-error="handleGradeError"
+              @meeting-completed="handleMeetingCompleted"
+              @meeting-status-updated="handleMeetingStatusUpdated"
             />
-            <!-- ✅ Если встреч нет — показываем сообщение -->
             <div v-else-if="meetingLoadError" class="meeting-placeholder">
               {{ meetingLoadError }}
             </div>
-            <!-- ✅ Пока идёт загрузка -->
             <div v-else class="meeting-placeholder">Загрузка...</div>
           </el-card>
         </div>
@@ -145,9 +145,10 @@ const userProfile = ref<{
   ready_gradeup: boolean
 } | null>(null)
 
+// ✅ Исправлено: проверка роли examiner
 const canGradeMeeting = computed(() => {
   if (!upcomingMeeting.value || !currentUser.value) return false
-  return upcomingMeeting.value.role === 'ATTESTOR' || currentUser.value.is_supervisor
+  return upcomingMeeting.value.role === 'examiner' || currentUser.value.is_supervisor
 })
 
 onMounted(async () => {
@@ -155,7 +156,7 @@ onMounted(async () => {
   await Promise.all([fetchUpcomingMeeting(), fetchUserProfile()])
 })
 
-// ✅ Маппер
+// ✅ Маппер с has_evaluation и исправленными ролями
 const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
   const participants: Meeting['participants'] = []
   let userRole: Meeting['role']
@@ -168,7 +169,7 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
       role: 'Аттестуемый',
       is_current_user: apiData.student.user_id === userId,
     })
-    if (apiData.student.user_id === userId) userRole = 'ATTESTED'
+    if (apiData.student.user_id === userId) userRole = 'student' // ✅ Исправлено
   }
   if (apiData.examiner) {
     participants.push({
@@ -178,14 +179,17 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
       role: 'Аттестующий',
       is_current_user: apiData.examiner.user_id === userId,
     })
-    if (apiData.examiner.user_id === userId) userRole = 'ATTESTOR'
+    if (apiData.examiner.user_id === userId) userRole = 'examiner' // ✅ Исправлено
   }
+
+  // ✅ Определяем наличие оценки
+  const hasEvaluation = !!(apiData.evaluation || apiData.result || apiData.has_evaluation)
 
   return {
     id: apiData.id,
     skill_name: apiData.title || apiData.skill_name || 'Без названия',
     confirmation_type: apiData.confirmation_type || '',
-    status: apiData.status,
+    status: apiData.status as 'planned' | 'completed',
     date_time: apiData.started_at || apiData.date_time,
     location: apiData.location || 'Не указано',
     duration: apiData.duration || 60,
@@ -196,10 +200,10 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
     stage_id: apiData.stage_id,
     stage_version_id: apiData.stage_version_id,
     skill_id: apiData.skill_id,
+    has_evaluation: hasEvaluation, // ✅ Новое поле
   }
 }
 
-// ✅ Загрузка ближайшей встречи
 const fetchUpcomingMeeting = async () => {
   meetingLoadError.value = null
   upcomingMeeting.value = null
@@ -233,7 +237,6 @@ const fetchUpcomingMeeting = async () => {
   }
 }
 
-// ✅ Загрузка профиля
 const fetchUserProfile = async () => {
   const userId = currentUserId.value
   if (!userId) return
@@ -252,7 +255,6 @@ const fetchUserProfile = async () => {
   }
 }
 
-// ✅ Загрузка деталей навыка
 const fetchSkillDetail = async (userId: number, skillId: number) => {
   const response = await axios.get(`${API_BASE}/users/${userId}/skills/${skillId}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -261,23 +263,24 @@ const fetchSkillDetail = async (userId: number, skillId: number) => {
   return response.data
 }
 
-// ✅ Обработчики — только реакция, без API-вызовов
-const handleViewResults = (meeting: Meeting) => {
-  console.log('Просмотр результатов:', meeting)
+// ✅ Обработчики событий от MeetingCard
+const handleMeetingCompleted = (updatedMeeting: Meeting) => {
+  upcomingMeeting.value = { ...upcomingMeeting.value!, ...updatedMeeting }
+  ElMessage.success('Встреча завершена')
 }
 
-const handleOpenGrading = (meeting: Meeting) => {
-  console.log('Открытие оценки:', meeting)
+const handleMeetingStatusUpdated = (updatedMeeting: Meeting) => {
+  upcomingMeeting.value = { ...upcomingMeeting.value!, ...updatedMeeting }
 }
 
-// ✅ После сохранения — просто перезагружаем встречу
+const handleViewResults = (meeting: Meeting) => console.log('Просмотр результатов:', meeting)
+const handleOpenGrading = (meeting: Meeting) => console.log('Открытие оценки:', meeting)
+
 const handleGradeSaved = async () => {
-  await fetchUpcomingMeeting()
+  await fetchUpcomingMeeting() // Перезагружаем встречу после оценки
 }
 
-const handleGradeError = (error: any) => {
-  console.error('Ошибка от MeetingCard:', error)
-}
+const handleGradeError = (error: any) => console.error('Ошибка от MeetingCard:', error)
 </script>
 
 <style scoped>

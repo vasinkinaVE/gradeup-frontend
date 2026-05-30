@@ -115,6 +115,8 @@
           @save-grade="handleGradeSaved"
           @grade-saved="handleGradeSaved"
           @grade-error="handleGradeError"
+          @meeting-completed="handleMeetingCompleted"
+          @meeting-status-updated="handleMeetingStatusUpdated"
         />
       </el-card>
     </div>
@@ -137,57 +139,39 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api'
 const authStore = useAuthStore()
 const currentUser = computed(() => authStore.user)
 
-// ✅ ИСПРАВЛЕНО: надёжная проверка, является ли пользователь ТОЛЬКО Сотрудником
+// ✅ Проверка: является ли пользователь ТОЛЬКО Сотрудником
 const isEmployee = computed(() => {
   const user = currentUser.value
   if (!user) return false
 
   const employeeRoles = ['employee', 'сотрудник']
 
-  // Проверяем role_name (строка)
   if (user.role_name) {
     const role = String(user.role_name).trim().toLowerCase()
-    // Считаем сотрудником только если role_name И ТОЛЬКО employee/сотрудник
     if (employeeRoles.includes(role)) {
-      // Дополнительно проверяем, нет ли других ролей в массиве
       if (Array.isArray(user.roles)) {
         const otherRoles = user.roles.filter((r: any) => {
           const normalized = String(r).trim().toLowerCase()
           return !employeeRoles.includes(normalized)
         })
-        // Если есть другие роли кроме employee - это не "чистый" сотрудник
         if (otherRoles.length > 0) return false
       }
       return true
     }
   }
 
-  // Проверяем roles (массив)
   if (Array.isArray(user.roles)) {
     const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
-
-    // Считаем сотрудником только если ВСЕ роли - это employee/сотрудник
-    // Если есть хоть одна другая роль (supervisor, admin, etc.) - не сотрудник
     const hasOnlyEmployeeRoles = roles.every((r) => employeeRoles.includes(r))
-
-    if (hasOnlyEmployeeRoles && roles.length > 0) {
-      return true
-    }
-
-    // Если есть другие роли - не считаем сотрудником
+    if (hasOnlyEmployeeRoles && roles.length > 0) return true
     return false
   }
 
   return false
 })
 
-// ✅ ИСПРАВЛЕНО: вычисляемое свойство для показа фильтра встреч
-const showMeetingsFilter = computed(() => {
-  // Показываем фильтр всем, кроме "чистого" Сотрудника
-  return !isEmployee.value
-})
+const showMeetingsFilter = computed(() => !isEmployee.value)
 
-// ✅ Проверка роли: может ли оценивать встречи (руководитель, СПО, админ)
 const canGradeMeeting = computed(() => {
   const user = currentUser.value
   if (!user) return false
@@ -202,13 +186,11 @@ const canGradeMeeting = computed(() => {
     'администратор',
   ]
 
-  // Проверяем role_name
   if (user.role_name) {
     const role = String(user.role_name).trim().toLowerCase()
     if (allowedRoles.includes(role)) return true
   }
 
-  // Проверяем roles (массив)
   if (Array.isArray(user.roles)) {
     const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
     if (roles.some((r) => allowedRoles.includes(r))) return true
@@ -229,10 +211,9 @@ const dateRange = ref<[string, string] | null>(null)
 const meetingsLoaded = ref(false)
 const allMeetings = ref<Meeting[]>([])
 const meetingCardRefs = ref<InstanceType<typeof MeetingCard>[]>([])
-
 const currentUserId = computed(() => currentUser.value?.id)
 
-// ✅ Маппер: конвертируем ответ API в формат Meeting
+// ✅ Маппер с полем has_evaluation
 const mapApiMeetingToMeeting = (apiData: any): Meeting => {
   const participants: Meeting['participants'] = []
   let userRole: Meeting['role']
@@ -266,6 +247,9 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
   const isToday = startTime.isSame(now, 'day')
   const isUpcoming = !isPast && !isToday
 
+  // ✅ Определяем, есть ли оценка (если бэкенд возвращает evaluation или result)
+  const hasEvaluation = !!(apiData.evaluation || apiData.result || apiData.has_evaluation)
+
   return {
     id: apiData.id,
     skill_name: apiData.title || 'Без названия',
@@ -283,10 +267,10 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
     stage_id: apiData.stage_id,
     stage_version_id: apiData.stage_version_id,
     skill_id: apiData.skill_id,
+    has_evaluation: hasEvaluation, // ✅ Новое поле
   }
 }
 
-// ✅ Загрузка встреч с сервера
 const fetchMeetings = async () => {
   try {
     const params: Record<string, any> = {}
@@ -313,7 +297,6 @@ const fetchMeetings = async () => {
       }
     }
 
-    // ✅ Логика фильтра встреч для не-Сотрудников
     if (showMeetingsFilter.value && filterMeetings.value !== 'all' && currentUserId.value) {
       if (filterMeetings.value === 'my') {
         params.user_id = currentUserId.value
@@ -353,7 +336,6 @@ const filteredMeetings = computed(() => {
     })
   }
 
-  // ✅ Клиентская фильтрация для "Встречи подчиненных"
   if (showMeetingsFilter.value && filterMeetings.value === 'subordinates' && currentUserId.value) {
     result = result.filter((m) => !m.participants.some((p) => p.is_current_user))
   }
@@ -365,11 +347,7 @@ const filteredMeetings = computed(() => {
   })
 })
 
-// Методы
-const applyFilters = () => {
-  fetchMeetings()
-}
-
+const applyFilters = () => fetchMeetings()
 const handleDateClear = () => {
   dateRange.value = null
   applyFilters()
@@ -395,23 +373,33 @@ watch(dateRange, ([start, end]) => {
   }
 })
 
-const handleViewResults = (meeting: Meeting) => {
-  console.log('Просмотр результатов:', meeting)
+// ✅ Обработчики событий от MeetingCard
+const handleMeetingCompleted = (updatedMeeting: Meeting) => {
+  // Обновляем встречу в локальном массиве
+  const idx = allMeetings.value.findIndex((m) => m.id === updatedMeeting.id)
+  if (idx !== -1) {
+    allMeetings.value[idx] = { ...allMeetings.value[idx], ...updatedMeeting }
+  }
+  ElMessage.success('Встреча завершена')
 }
 
-const handleOpenGrading = (meeting: Meeting) => {
-  console.log('Открытие оценки:', meeting)
+const handleMeetingStatusUpdated = (updatedMeeting: Meeting) => {
+  // Обновляем статус/оценку в локальном массиве
+  const idx = allMeetings.value.findIndex((m) => m.id === updatedMeeting.id)
+  if (idx !== -1) {
+    allMeetings.value[idx] = { ...allMeetings.value[idx], ...updatedMeeting }
+  }
 }
+
+const handleViewResults = (meeting: Meeting) => console.log('Просмотр результатов:', meeting)
+const handleOpenGrading = (meeting: Meeting) => console.log('Открытие оценки:', meeting)
 
 const handleGradeSaved = async () => {
-  await fetchMeetings()
+  await fetchMeetings() // Перезагружаем список после оценки
 }
 
-const handleGradeError = (error: any) => {
-  console.error('Ошибка от MeetingCard:', error)
-}
+const handleGradeError = (error: any) => console.error('Ошибка от MeetingCard:', error)
 
-// Быстрые даты
 const dateShortcuts = [
   {
     text: 'Ближайшие 7 дней',
@@ -437,9 +425,7 @@ const dateShortcuts = [
   },
 ]
 
-onMounted(() => {
-  fetchMeetings()
-})
+onMounted(() => fetchMeetings())
 </script>
 
 <style scoped>

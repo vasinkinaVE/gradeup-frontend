@@ -1,3 +1,4 @@
+<!-- src/components/common/MeetingCard.vue -->
 <template>
   <div class="meeting-card">
     <!-- Верхняя строка: тип (слева) + статус (справа) -->
@@ -73,9 +74,23 @@
 
     <!-- Футер с кнопками -->
     <div class="meeting-footer">
-      <!-- ✅ ИСПРАВЛЕНО: проверяем роль 'examiner' вместо 'ATTESTOR' -->
+      <!-- ✅ Кнопка "Завершить встречу" - только для Аттестующего, если встреча запланирована -->
       <el-button
         v-if="meeting.role === 'examiner' && meeting.status === 'planned'"
+        class="btn-complete"
+        size="small"
+        type="warning"
+        @click="confirmCompleteMeeting"
+      >
+        <el-icon><CircleCheck /></el-icon>
+        Завершить встречу
+      </el-button>
+
+      <!-- ✅ Кнопка "Оценить" - только для Аттестующего, если встреча завершена и ещё не оценена -->
+      <el-button
+        v-if="
+          meeting.role === 'examiner' && meeting.status === 'completed' && !meetingHasEvaluation
+        "
         class="btn-grade"
         size="small"
         @click="openGradingModal"
@@ -84,9 +99,9 @@
         Оценить
       </el-button>
 
-      <!-- ✅ ИСПРАВЛЕНО: проверяем роль 'student' вместо 'ATTESTED' -->
+      <!-- ✅ Кнопка "Результаты" - доступна всем, если встреча завершена и оценена -->
       <el-button
-        v-if="meeting.role === 'student' && meeting.status === 'completed'"
+        v-if="meeting.status === 'completed' && meetingHasEvaluation"
         class="btn-results"
         size="small"
         plain
@@ -137,7 +152,7 @@
             <div v-else class="placeholder-text">Материалы пока не добавлены</div>
           </div>
 
-          <!-- ✅ ИСПРАВЛЕНО: проверяем роль 'examiner' вместо 'ATTESTOR' -->
+          <!-- Вопросы и ответы (только для экзаменатора) -->
           <div
             v-if="meeting.role === 'examiner' && meetingDetails.questions?.length"
             class="modal-section"
@@ -290,10 +305,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Clock, Location, Timer, Edit, ArrowRight, Loading } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import {
+  Clock,
+  Location,
+  Timer,
+  Edit,
+  ArrowRight,
+  Loading,
+  CircleCheck,
+} from '@element-plus/icons-vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
@@ -330,7 +353,6 @@ export interface EvaluationData {
   confirmation_type: string
 }
 
-// ✅ ИСПРАВЛЕНО: роль теперь 'student' | 'examiner' (соответствует бэкенду)
 export interface Meeting {
   id: number | string
   skill_name: string
@@ -349,6 +371,7 @@ export interface Meeting {
   stage_id?: number
   stage_version_id?: number
   skill_id?: number
+  has_evaluation?: boolean // ✅ Флаг: есть ли уже оценка у встречи
 }
 
 interface Props {
@@ -366,6 +389,8 @@ const emit = defineEmits<{
   'save-grade': [meeting: Meeting, grade: 'зачтено' | 'незачтено', comment: string]
   'grade-saved': []
   'grade-error': [error: any]
+  'meeting-completed': [meeting: Meeting]
+  'meeting-status-updated': [meeting: Meeting]
 }>()
 
 const isModalVisible = ref(false)
@@ -387,6 +412,58 @@ const isResultsModalVisible = ref(false)
 const resultsMeeting = ref<Meeting | null>(null)
 const resultsLoading = ref(false)
 const resultsData = ref<EvaluationData | null>(null)
+
+// ✅ Улучшенная проверка: есть ли оценка (множественные источники)
+const meetingHasEvaluation = computed(() => {
+  // 1. Явный флаг от бэкенда
+  if (props.meeting.has_evaluation === true) return true
+
+  // 2. Если есть объект result с полем passed
+  if (props.meeting.result?.passed !== undefined) return true
+
+  // 3. Если уже загружены данные оценки в resultsData
+  if (resultsData.value !== null) return true
+
+  // 4. Если статус completed и есть stage_version_id - возможно, оценка есть (проверим асинхронно)
+  // Возвращаем false, чтобы не блокировать UI, но запустим проверку в onMounted
+  return false
+})
+
+// ✅ Асинхронная проверка наличия оценки через API
+const checkEvaluationStatus = async () => {
+  // Проверяем только если встреча завершена, но статус оценки неизвестен
+  if (
+    props.meeting.status === 'completed' &&
+    props.meeting.has_evaluation === undefined &&
+    props.meeting.result?.passed === undefined &&
+    props.meeting.stage_version_id
+  ) {
+    try {
+      const response = await axios.get(
+        `${API_BASE}/evaluations/${props.meeting.stage_version_id}`,
+        {
+          headers: { 'Content-Type': 'application/json' },
+          withCredentials: true,
+        },
+      )
+
+      if (response.data?.id) {
+        // Оценка найдена — обновляем локальное состояние
+        resultsData.value = response.data as EvaluationData
+        // Уведомляем родителя об обновлении статуса
+        emit('meeting-status-updated', {
+          ...props.meeting,
+          has_evaluation: true,
+        })
+      }
+    } catch (error) {
+      // Если 404 — оценки нет, это нормально, просто игнорируем
+      if (axios.isAxiosError(error) && error.response?.status !== 404) {
+        console.error('Ошибка проверки оценки:', error)
+      }
+    }
+  }
+}
 
 const openMeetingModal = () => {
   isModalVisible.value = true
@@ -443,6 +520,54 @@ const fetchEvaluationResult = async () => {
   }
 }
 
+// ✅ Новый метод: завершить встречу
+const completeMeeting = async () => {
+  try {
+    const response = await axios.patch(
+      `${API_BASE}/meetings/${props.meeting.id}/set-status`,
+      {},
+      {
+        params: { status: 'completed' },
+        headers: { 'Content-Type': 'application/json' },
+        withCredentials: true,
+      },
+    )
+
+    const updatedMeeting = { ...props.meeting, status: 'completed' as const }
+
+    ElMessage.success('Встреча завершена')
+    emit('meeting-completed', updatedMeeting)
+    emit('meeting-status-updated', updatedMeeting)
+
+    return response.data
+  } catch (error) {
+    console.error('Ошибка завершения встречи:', error)
+    ElMessage.error('Не удалось завершить встречу')
+    throw error
+  }
+}
+
+// ✅ Подтверждение завершения встречи
+const confirmCompleteMeeting = async () => {
+  try {
+    await ElMessageBox.confirm(
+      'Вы действительно хотите завершить встречу?',
+      'Подтверждение действия',
+      {
+        confirmButtonText: 'Да, завершить',
+        cancelButtonText: 'Отмена',
+        type: 'warning',
+        distinguishCancelAndClose: true,
+      },
+    )
+    await completeMeeting()
+  } catch (action) {
+    if (action === 'cancel') {
+      return
+    }
+  }
+}
+
 const submitGrade = async (
   attestedUserId: number | undefined,
   stageId: number | undefined,
@@ -469,7 +594,6 @@ const submitGrade = async (
   return response.data
 }
 
-// ✅ ИСПРАВЛЕНО: ищем участника с ролью 'Аттестуемый' или 'student'
 const getAttestedUserId = (): number | undefined => {
   const attested = props.meeting.participants.find(
     (p) => p.role === 'Аттестуемый' || p.role === 'student',
@@ -480,6 +604,11 @@ const getAttestedUserId = (): number | undefined => {
 const onModalOpen = async () => {
   expandedQuestions.value.clear()
   await fetchMeetingMaterials()
+
+  // ✅ Если встреча завершена, но оценка не известна — проверим асинхронно
+  if (props.meeting.status === 'completed' && !meetingHasEvaluation.value) {
+    await checkEvaluationStatus()
+  }
 }
 
 const toggleQuestion = (questionId: string | number) => {
@@ -519,6 +648,8 @@ const saveGrade = async () => {
     emit('save-grade', gradingMeeting.value, gradeValue.value, gradeComment.value)
     emit('grade-saved')
     closeGradingModal()
+
+    emit('meeting-status-updated', { ...props.meeting, has_evaluation: true })
   } catch (error) {
     console.error('Ошибка сохранения оценки:', error)
     ElMessage.error('Не удалось сохранить оценку')
@@ -550,7 +681,6 @@ const loadResultsData = async () => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: ищем участника с ролью 'Аттестуемый' или 'student'
 const getAttestedName = (participants: MeetingParticipant[]): string => {
   const attested = participants.find((p) => p.role === 'Аттестуемый' || p.role === 'student')
   return attested?.full_name || '—'
@@ -594,7 +724,6 @@ const getStatusText = (status: string) => {
   return status === 'planned' ? 'Запланирована' : 'Завершена'
 }
 
-// ✅ ИСПРАВЛЕНО: корректное отображение типов встреч (бэкенд → пользователь)
 const getMeetingTypeText = (type: string) => {
   if (!type) return ''
   const typeMap: Record<string, string> = {
@@ -605,7 +734,6 @@ const getMeetingTypeText = (type: string) => {
   return typeMap[type] || type
 }
 
-// ✅ ИСПРАВЛЕНО: цвета для типов встреч
 const getConfirmationColor = (type: string) => {
   const colorMap: Record<string, string> = {
     certification: '#ff9800',
@@ -629,17 +757,31 @@ const getAnswerLabel = (type: string): string => {
   return 'Эталонный ответ:'
 }
 
+// ✅ Проверяем наличие оценки при монтировании компонента
+onMounted(async () => {
+  await checkEvaluationStatus()
+})
+
 defineExpose({
   openGradingModal,
   openResultsModal,
   openMeetingModal,
   fetchMeetingMaterials,
   loadResultsData,
+  completeMeeting,
 })
 </script>
 
 <style scoped>
-/* Стили остаются без изменений */
+.btn-complete {
+  background-color: #ff9800 !important;
+  border-color: #ff9800 !important;
+  color: #fff !important;
+}
+.btn-complete:hover {
+  background-color: #f57c00 !important;
+  border-color: #f57c00 !important;
+}
 .meeting-card {
   position: relative;
   background: #fff;
