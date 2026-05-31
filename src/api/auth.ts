@@ -1,31 +1,22 @@
-// src/api/auth.ts
 import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
-// Создаем экземпляр axios с настройками
-const apiClient = axios.create({
+// ✅ Единый экземпляр axios для cookie-аутентификации
+export const apiClient = axios.create({
   baseURL: API_URL,
-  withCredentials: true, // ✅ Важно для отправки cookies
+  withCredentials: true, // 🔥 Обязательно: отправлять/получать cookies
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Interceptor для добавления токена (если используется localStorage)
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token && !config.headers.Authorization) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
+// ❌ Никаких интерцепторов с localStorage — токен в HttpOnly cookie
 
-// Interceptor для обработки ошибок авторизации
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 401 обрабатывается в authStore после неудачного fetchCurrentUser
+    // 401 обрабатываем в компоненте или store, не здесь
     return Promise.reject(error)
   },
 )

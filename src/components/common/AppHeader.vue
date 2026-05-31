@@ -128,7 +128,7 @@ const mobileMenuVisible = ref(false)
 
 const currentUser = computed(() => authStore.user)
 
-// ✅ ИСПРАВЛЕНО: проверка по массиву roles вместо role_name
+// ✅ Проверка по массиву roles вместо role_name
 const isManager = computed(() => {
   const roles = currentUser.value?.roles?.map((r) => r.toLowerCase()) || []
   return roles.some((r) => ['supervisor', 'руководитель', 'manager'].includes(r))
@@ -169,7 +169,14 @@ const handleLogout = async () => {
       icon: markRaw(WarningFilled),
     })
 
+    // 1. Выполняем логаут (очистка куки + состояния)
     await authStore.logout()
+
+    // 2. 🔥 Принудительный редирект на /login
+    // replace — чтобы нельзя было вернуться кнопкой "Назад"
+    await router.replace('/login')
+
+    // 3. Сообщение об успехе
     ElMessage.success('Вы успешно вышли из системы')
   } catch (err: any) {
     const isCancel =

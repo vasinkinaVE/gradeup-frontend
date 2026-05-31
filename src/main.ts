@@ -7,7 +7,6 @@ import ruLocale from 'element-plus/es/locale/lang/ru'
 
 import App from './App.vue'
 import router from './router'
-//import './plugins/validation'
 import { useAuthStore } from './stores/auth'
 import './assets/styles/variables.css'
 
@@ -21,10 +20,13 @@ app.use(pinia)
 app.use(router)
 app.use(ElementPlus, { locale: ruLocale })
 
-// 👇 Инициализация аутентификации (внутри async IIFE, так как top-level await требует настройки)
+// 👇 Инициализация аутентификации ПЕРЕД монтированием приложения
 ;(async () => {
   const authStore = useAuthStore()
+
+  // Ждём проверки куки и загрузки пользователя (если есть)
   await authStore.initAuth()
 
+  // Только после этого монтируем приложение
   app.mount('#app')
 })()

@@ -1,6 +1,5 @@
-// src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteRecordRaw, NavigationGuardNext } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const routes: RouteRecordRaw[] = [
@@ -101,8 +100,8 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-// 🔐 Guard для проверки авторизации и ролей
-router.beforeEach(async (to, from): ReturnType<NavigationGuardNext> | undefined => {
+// 🔐 Guard с современным синтаксисом (возврат значений вместо next())
+router.beforeEach(async (to, from) => {
   const authStore = useAuthStore()
 
   // Установка заголовка страницы
@@ -112,32 +111,25 @@ router.beforeEach(async (to, from): ReturnType<NavigationGuardNext> | undefined 
 
   // 🔹 Пропускаем публичные маршруты
   if (to.meta.public) {
-    return
+    return true // ✅ Вместо next()
   }
 
-  // 🔹 Если есть токен, но пользователь ещё не загружен — загружаем
-  const token = localStorage.getItem('access_token')
-  if (token && !authStore.user) {
-    try {
-      await authStore.fetchCurrentUser()
-    } catch {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      return '/login'
-    }
+  // 🔹 Ждём завершения инициализации аутентификации
+  if (!authStore.isInitialized) {
+    return true // ✅ Guard перезапустится автоматически
   }
 
   // 🔹 Проверка авторизации
   if (to.meta.requiresAuth && !authStore.user) {
-    return '/login'
+    return { name: 'login' } // ✅ Вместо next('/login') или next({ name: 'login' })
   }
 
-  // 🔹 Если уже авторизован и пытается зайти на /login — редирект на дашборд
+  // 🔹 Если авторизован и идёт на /login — редирект на дашборд
   if (to.path === '/login' && authStore.user) {
-    return '/dashboard'
+    return { path: '/dashboard' } // ✅ Вместо next('/dashboard')
   }
 
-  // 🔹 Проверка ролей по массиву roles
+  // 🔹 Проверка ролей
   const allowedRoles = to.meta.roles as string[] | undefined
   if (allowedRoles && allowedRoles.length > 0) {
     const userRoles = authStore.user?.roles?.map((r) => r.toLowerCase()) || []
@@ -149,11 +141,12 @@ router.beforeEach(async (to, from): ReturnType<NavigationGuardNext> | undefined 
       console.warn(
         `Доступ запрещён. Нужны роли: ${allowedRoles.join(', ')}, у пользователя: ${authStore.user?.roles?.join(', ')}`,
       )
-      return '/dashboard'
+      return { path: '/dashboard' } // ✅ Вместо next('/dashboard')
     }
   }
 
-  // Всё ок — разрешаем переход
+  // ✅ Все проверки пройдены
+  return true // ✅ Вместо next()
 })
 
 export default router
