@@ -3,13 +3,7 @@
   <div class="meeting-card">
     <!-- Верхняя строка: тип (слева) + статус (справа) -->
     <div class="meeting-header-top">
-      <span
-        class="confirmation-badge"
-        :style="{
-          borderColor: getConfirmationColor(meeting.confirmation_type),
-          color: getConfirmationColor(meeting.confirmation_type),
-        }"
-      >
+      <span class="confirmation-badge" :class="getTypeBadgeClass(meeting.confirmation_type)">
         {{ getMeetingTypeText(meeting.confirmation_type) }}
       </span>
 
@@ -86,9 +80,14 @@
         Завершить встречу
       </el-button>
 
-      <!-- ✅ Кнопка "Оценить" - только для руководителя, если встреча завершена и не одобрена -->
+      <!-- ✅ Кнопка "Оценить" - для руководителя, если встреча завершена, не одобрена, и пользователь НЕ аттестуемый -->
       <el-button
-        v-if="meeting.status === 'completed' && meeting.is_approved === false && canGrade"
+        v-if="
+          meeting.status === 'completed' &&
+          meeting.is_approved === false &&
+          canGrade &&
+          !isCurrentUserAttested
+        "
         class="btn-grade"
         size="small"
         @click="openGradingModal"
@@ -150,11 +149,8 @@
             <div v-else class="placeholder-text">Материалы пока не добавлены</div>
           </div>
 
-          <!-- Вопросы и ответы (только для экзаменатора) -->
-          <div
-            v-if="meeting.role === 'examiner' && meetingDetails.questions?.length"
-            class="modal-section"
-          >
+          <!-- ✅ Вопросы и ответы - без проверки роли, сервер сам фильтрует контент -->
+          <div v-if="meetingDetails.questions?.length" class="modal-section">
             <h4 class="section-title">{{ getQuestionsTitle(meeting.confirmation_type) }}</h4>
             <div class="questions-list">
               <div
@@ -202,10 +198,7 @@
           <h4 class="grading-meeting-title">{{ gradingMeeting.skill_name }}</h4>
           <span
             class="grading-stage-badge"
-            :style="{
-              borderColor: getConfirmationColor(gradingMeeting.confirmation_type),
-              color: getConfirmationColor(gradingMeeting.confirmation_type),
-            }"
+            :class="getTypeBadgeClass(gradingMeeting.confirmation_type)"
           >
             {{ getMeetingTypeText(gradingMeeting.confirmation_type) }}
           </span>
@@ -269,10 +262,7 @@
             <h4 class="result-title">{{ resultsMeeting.skill_name }}</h4>
             <span
               class="result-stage-badge"
-              :style="{
-                borderColor: getConfirmationColor(resultsMeeting.confirmation_type),
-                color: getConfirmationColor(resultsMeeting.confirmation_type),
-              }"
+              :class="getTypeBadgeClass(resultsMeeting.confirmation_type)"
             >
               {{ getMeetingTypeText(resultsMeeting.confirmation_type) }}
             </span>
@@ -303,7 +293,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import {
   Clock,
   Location,
@@ -368,15 +358,16 @@ export interface Meeting {
   result?: MeetingResult
   stage_id?: number
   stage_version_id?: number
-  user_stage_id?: number // ✅ Новое поле
+  user_stage_id?: number
   skill_id?: number
-  is_approved?: boolean // ✅ Новое поле
-  ended_at?: string | Date // ✅ Новое поле
+  is_approved?: boolean
+  ended_at?: string | Date
+  department_id?: number
 }
 
 interface Props {
   meeting: Meeting
-  canGrade?: boolean // ✅ Проверяет, является ли текущий пользователь руководителем
+  canGrade?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -413,6 +404,13 @@ const resultsMeeting = ref<Meeting | null>(null)
 const resultsLoading = ref(false)
 const resultsData = ref<EvaluationData | null>(null)
 
+// ✅ Проверка: является ли текущий пользователь Аттестуемым в этой встрече
+const isCurrentUserAttested = computed(() => {
+  return props.meeting.participants.some(
+    (p) => p.is_current_user && (p.role === 'Аттестуемый' || p.role === 'student'),
+  )
+})
+
 const openMeetingModal = () => {
   isModalVisible.value = true
 }
@@ -422,6 +420,7 @@ const fetchMeetingMaterials = async () => {
   meetingDetails.value = { description: undefined, materials: [], questions: [] }
 
   try {
+    // ✅ Просто вызываем эндпоинт — авторизация и фильтрация на сервере
     const response = await axios.get(`${API_BASE}/meetings/${props.meeting.id}/materials`, {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
@@ -453,7 +452,6 @@ const fetchMeetingMaterials = async () => {
 }
 
 const fetchEvaluationResult = async () => {
-  // ✅ Используем user_stage_id вместо stage_version_id
   const userStageId = props.meeting.user_stage_id
   if (!userStageId) return null
 
@@ -469,7 +467,6 @@ const fetchEvaluationResult = async () => {
   }
 }
 
-// ✅ Метод завершения встречи
 const completeMeeting = async () => {
   try {
     const response = await axios.patch(
@@ -496,7 +493,6 @@ const completeMeeting = async () => {
   }
 }
 
-// ✅ Подтверждение завершения встречи
 const confirmCompleteMeeting = async () => {
   try {
     await ElMessageBox.confirm(
@@ -593,7 +589,6 @@ const saveGrade = async () => {
     emit('grade-saved')
     closeGradingModal()
 
-    // ✅ Уведомляем об обновлении статуса
     emit('meeting-status-updated', { ...props.meeting, is_approved: true })
   } catch (error) {
     console.error('Ошибка сохранения оценки:', error)
@@ -679,13 +674,14 @@ const getMeetingTypeText = (type: string) => {
   return typeMap[type] || type
 }
 
-const getConfirmationColor = (type: string) => {
-  const colorMap: Record<string, string> = {
-    certification: '#ff9800',
-    practice: '#4caf50',
-    performance_review: '#f44336',
+// ✅ Возвращает класс для типа встречи
+const getTypeBadgeClass = (type: string): string => {
+  const classMap: Record<string, string> = {
+    certification: 'type-certification',
+    practice: 'type-practice',
+    performance_review: 'type-performance_review',
   }
-  return colorMap[type] || 'var(--gray)'
+  return classMap[type] || ''
 }
 
 const getQuestionsTitle = (type: string): string => {
@@ -713,6 +709,53 @@ defineExpose({
 </script>
 
 <style scoped>
+/* ✅ Базовый стиль для бейджа типа встречи */
+.confirmation-badge {
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  line-height: 1.4;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+/* ✅ Аттестация - оранжевый */
+.confirmation-badge.type-certification {
+  color: #ff9800 !important;
+  border-color: #ff9800 !important;
+  background-color: rgba(255, 152, 0, 0.1) !important;
+}
+
+/* ✅ Практическое задание - зеленый */
+.confirmation-badge.type-practice {
+  color: #4caf50 !important;
+  border-color: #4caf50 !important;
+  background-color: rgba(76, 175, 80, 0.1) !important;
+}
+
+/* ✅ Performance review - красный */
+.confirmation-badge.type-performance_review {
+  color: #f44336 !important;
+  border-color: #f44336 !important;
+  background-color: rgba(244, 67, 54, 0.1) !important;
+}
+
+.status-badge {
+  border: 1px solid #909399;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: #909399;
+  background: transparent;
+  white-space: nowrap;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
 .btn-complete {
   background-color: #ff9800 !important;
   border-color: #ff9800 !important;
@@ -722,6 +765,7 @@ defineExpose({
   background-color: #f57c00 !important;
   border-color: #f57c00 !important;
 }
+
 .meeting-card {
   position: relative;
   background: #fff;
@@ -732,6 +776,7 @@ defineExpose({
   overflow-x: hidden;
   min-width: 0;
 }
+
 .meeting-header-top {
   display: flex;
   justify-content: space-between;
@@ -739,33 +784,12 @@ defineExpose({
   margin-bottom: var(--spacing-xs);
   min-width: 0;
 }
-.confirmation-badge {
-  border: 1px solid;
-  border-radius: 4px;
-  padding: 2px 10px;
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  white-space: nowrap;
-  line-height: 1.4;
-  background: transparent;
-  flex-shrink: 0;
-}
-.status-badge {
-  border: 1px solid var(--gray);
-  border-radius: 4px;
-  padding: 2px 10px;
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  color: var(--gray);
-  background: transparent;
-  white-space: nowrap;
-  line-height: 1.4;
-  flex-shrink: 0;
-}
+
 .meeting-header-bottom {
   margin-bottom: var(--spacing-md);
   min-width: 0;
 }
+
 .meeting-title {
   margin: 0;
   font-size: 16px;
@@ -776,14 +800,17 @@ defineExpose({
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
+
 .meeting-title-clickable {
   cursor: pointer;
   transition: color 0.2s;
 }
+
 .meeting-title-clickable:hover {
   color: var(--primary);
   text-decoration: underline;
 }
+
 .meeting-info {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -791,18 +818,21 @@ defineExpose({
   margin-bottom: var(--spacing-md);
   min-width: 0;
 }
+
 .info-item {
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-sm);
   min-width: 0;
 }
+
 .info-icon {
   font-size: 18px;
   color: var(--primary);
   flex-shrink: 0;
   margin-top: 2px;
 }
+
 .info-content {
   display: flex;
   flex-direction: column;
@@ -810,6 +840,7 @@ defineExpose({
   min-width: 0;
   width: 100%;
 }
+
 .info-label {
   font-size: 13px;
   color: var(--gray);
@@ -817,6 +848,7 @@ defineExpose({
   white-space: nowrap;
   flex-shrink: 0;
 }
+
 .info-value {
   font-size: 14px;
   color: var(--text);
@@ -829,6 +861,7 @@ defineExpose({
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
 .participants-section {
   display: flex;
   flex-direction: column;
@@ -837,6 +870,7 @@ defineExpose({
   min-width: 0;
   width: 100%;
 }
+
 .participants-title {
   font-size: 14px;
   color: var(--gray);
@@ -844,6 +878,7 @@ defineExpose({
   white-space: nowrap;
   flex-shrink: 0;
 }
+
 .participants-list {
   display: flex;
   flex-direction: column;
@@ -851,6 +886,7 @@ defineExpose({
   width: 100%;
   min-width: 0;
 }
+
 .participant-item {
   display: flex;
   align-items: center;
@@ -863,10 +899,12 @@ defineExpose({
   box-sizing: border-box;
   min-width: 0;
 }
+
 .participant-item.is-current-user {
   background: #e8e0f0;
   border: 1px solid #d0c0e0;
 }
+
 .participant-name {
   flex: 1;
   font-size: 14px;
@@ -877,6 +915,7 @@ defineExpose({
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
+
 .participant-role {
   font-size: 13px;
   color: #000000;
@@ -884,6 +923,7 @@ defineExpose({
   flex-shrink: 0;
   white-space: nowrap;
 }
+
 .meeting-footer {
   display: flex;
   justify-content: flex-end;
@@ -894,26 +934,32 @@ defineExpose({
   border-top: 1px solid #f0f0f0;
   flex-shrink: 0;
 }
+
 .btn-grade {
   background-color: var(--secondary) !important;
   border-color: var(--secondary) !important;
   color: #fff !important;
 }
+
 .btn-grade:hover {
   background-color: #5a3c7d !important;
   border-color: #5a3c7d !important;
 }
+
 .btn-results {
   color: var(--gray) !important;
   border-color: var(--gray) !important;
 }
+
 .btn-results:hover {
   background-color: var(--gray) !important;
   color: #fff !important;
 }
+
 .meeting-modal-content {
   padding: var(--spacing-sm) 0;
 }
+
 .loading-materials {
   display: flex;
   align-items: center;
@@ -923,9 +969,11 @@ defineExpose({
   color: var(--gray);
   font-size: 14px;
 }
+
 .loading-materials .is-loading {
   animation: rotating 1s linear infinite;
 }
+
 @keyframes rotating {
   from {
     transform: rotate(0deg);
@@ -934,18 +982,21 @@ defineExpose({
     transform: rotate(360deg);
   }
 }
+
 .modal-section {
   margin-bottom: var(--spacing-lg);
 }
 .modal-section:last-child {
   margin-bottom: 0;
 }
+
 .section-title {
   font-size: 14px;
   font-weight: var(--font-weight-semibold);
   color: var(--text);
   margin: 0 0 var(--spacing-sm) 0;
 }
+
 .section-text {
   font-size: 14px;
   line-height: 1.6;
@@ -953,6 +1004,7 @@ defineExpose({
   margin: 0;
   word-wrap: break-word;
 }
+
 .placeholder-text {
   color: var(--gray);
   font-style: italic;
@@ -963,11 +1015,13 @@ defineExpose({
   display: block;
   font-size: 14px;
 }
+
 .materials-text {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
 }
+
 .material-text {
   font-size: 14px;
   line-height: 1.6;
@@ -976,17 +1030,20 @@ defineExpose({
   padding: 0;
   word-wrap: break-word;
 }
+
 .questions-list {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
 }
+
 .question-item {
   padding: var(--spacing-sm) var(--spacing-md);
   background: rgba(240, 240, 240, 0.5);
   border-radius: var(--radius-sm);
   border: 1px solid rgba(228, 231, 237, 0.5);
 }
+
 .question-header {
   display: flex;
   align-items: center;
@@ -994,26 +1051,31 @@ defineExpose({
   cursor: pointer;
   padding: var(--spacing-xs) 0;
 }
+
 .question-toggle-icon {
   font-size: 14px;
   color: var(--gray);
   transition: transform 0.2s;
   flex-shrink: 0;
 }
+
 .question-toggle-icon.is-expanded {
   transform: rotate(90deg);
 }
+
 .question-text {
   font-size: 14px;
   font-weight: var(--font-weight-medium);
   color: var(--text);
   line-height: 1.5;
 }
+
 .expand-enter-active,
 .expand-leave-active {
   transition: all 0.2s ease;
   overflow: hidden;
 }
+
 .expand-enter-from,
 .expand-leave-to {
   opacity: 0;
@@ -1022,11 +1084,13 @@ defineExpose({
   padding-bottom: 0;
   border-top-width: 0;
 }
+
 .answer-block {
   padding-top: var(--spacing-sm);
   border-top: 1px solid rgba(228, 231, 237, 0.5);
   margin-top: var(--spacing-xs);
 }
+
 .answer-label {
   display: block;
   font-size: 13px;
@@ -1034,148 +1098,16 @@ defineExpose({
   color: var(--gray);
   margin-bottom: var(--spacing-xs);
 }
+
 .answer-text {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text);
   margin: 0;
 }
-.grading-modal-content {
-  padding: var(--spacing-sm) 0;
-}
-.grading-meeting-info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-  flex-wrap: wrap;
-}
-.grading-meeting-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text);
-}
-.grading-stage-badge {
-  border: 1px solid;
-  border-radius: 4px;
-  padding: 2px 10px;
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  white-space: nowrap;
-  background: transparent;
-}
-.grading-divider {
-  height: 1px;
-  background: #f0f0f0;
-  margin: var(--spacing-md) 0;
-}
-.grading-participants {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-md);
-  flex-wrap: wrap;
-}
-.grading-participant-label {
-  font-size: 14px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
-}
-.grading-participant-name {
-  font-size: 14px;
-  font-weight: var(--font-weight-normal);
-  color: var(--text);
-}
-.grading-evaluation {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
-  flex-wrap: wrap;
-}
-.grading-evaluation-label {
-  font-size: 14px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
-}
-.grade-radio-group {
-  display: flex;
-  gap: var(--spacing-md);
-}
-.grade-radio :deep(.el-radio__label) {
-  color: var(--text);
-  font-size: 14px;
-}
-.grade-radio.passed :deep(.el-radio__input.is-checked .el-radio__inner) {
-  background-color: #4caf50 !important;
-  border-color: #4caf50 !important;
-}
-.grade-radio.failed :deep(.el-radio__input.is-checked .el-radio__inner) {
-  background-color: #f44336 !important;
-  border-color: #f44336 !important;
-}
-.grading-comment-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-md);
-}
-.grading-comment-label {
-  font-size: 14px;
-  font-weight: var(--font-weight-medium);
-  color: var(--text);
-}
-.grading-comment-input :deep(.el-textarea__inner) {
-  color: var(--text);
-  background: transparent;
-  border: 1px solid #dcdfe6;
-  border-radius: var(--radius-sm);
-}
-.grading-comment-input :deep(.el-textarea__inner:focus) {
-  border-color: #909399 !important;
-}
-.grading-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-}
-.btn-save {
-  background-color: var(--secondary) !important;
-  border-color: var(--secondary) !important;
-  color: #fff !important;
-}
-.btn-save:hover {
-  background-color: #5a3c7d !important;
-  border-color: #5a3c7d !important;
-}
-.btn-cancel {
-  color: var(--gray) !important;
-  border-color: var(--gray) !important;
-}
-.btn-cancel:hover {
-  background-color: #909399 !important;
-  border-color: #909399 !important;
-  color: #fff !important;
-}
-.results-modal-content {
-  padding: var(--spacing-sm) 0;
-}
-.result-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-  flex-wrap: wrap;
-  padding-bottom: var(--spacing-sm);
-  border-bottom: 1px solid #f0f0f0;
-}
-.result-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text);
-}
+
+/* Стили для бейджей в модальных окнах */
+.grading-stage-badge,
 .result-stage-badge {
   border: 1px solid;
   border-radius: 4px;
@@ -1185,6 +1117,181 @@ defineExpose({
   white-space: nowrap;
   background: transparent;
 }
+
+.grading-stage-badge.type-certification,
+.result-stage-badge.type-certification {
+  color: #ff9800 !important;
+  border-color: #ff9800 !important;
+  background-color: rgba(255, 152, 0, 0.1) !important;
+}
+
+.grading-stage-badge.type-practice,
+.result-stage-badge.type-practice {
+  color: #4caf50 !important;
+  border-color: #4caf50 !important;
+  background-color: rgba(76, 175, 80, 0.1) !important;
+}
+
+.grading-stage-badge.type-performance_review,
+.result-stage-badge.type-performance_review {
+  color: #f44336 !important;
+  border-color: #f44336 !important;
+  background-color: rgba(244, 67, 54, 0.1) !important;
+}
+
+/* Остальные стили модальных окон */
+.grading-modal-content {
+  padding: var(--spacing-sm) 0;
+}
+
+.grading-meeting-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.grading-meeting-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+}
+
+.grading-divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: var(--spacing-md) 0;
+}
+
+.grading-participants {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.grading-participant-label {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+}
+
+.grading-participant-name {
+  font-size: 14px;
+  font-weight: var(--font-weight-normal);
+  color: var(--text);
+}
+
+.grading-evaluation {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.grading-evaluation-label {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+}
+
+.grade-radio-group {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.grade-radio :deep(.el-radio__label) {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.grade-radio.passed :deep(.el-radio__input.is-checked .el-radio__inner) {
+  background-color: #4caf50 !important;
+  border-color: #4caf50 !important;
+}
+
+.grade-radio.failed :deep(.el-radio__input.is-checked .el-radio__inner) {
+  background-color: #f44336 !important;
+  border-color: #f44336 !important;
+}
+
+.grading-comment-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+}
+
+.grading-comment-label {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+}
+
+.grading-comment-input :deep(.el-textarea__inner) {
+  color: var(--text);
+  background: transparent;
+  border: 1px solid #dcdfe6;
+  border-radius: var(--radius-sm);
+}
+
+.grading-comment-input :deep(.el-textarea__inner:focus) {
+  border-color: #909399 !important;
+}
+
+.grading-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.btn-save {
+  background-color: var(--secondary) !important;
+  border-color: var(--secondary) !important;
+  color: #fff !important;
+}
+
+.btn-save:hover {
+  background-color: #5a3c7d !important;
+  border-color: #5a3c7d !important;
+}
+
+.btn-cancel {
+  color: var(--gray) !important;
+  border-color: var(--gray) !important;
+}
+
+.btn-cancel:hover {
+  background-color: #909399 !important;
+  border-color: #909399 !important;
+  color: #fff !important;
+}
+
+.results-modal-content {
+  padding: var(--spacing-sm) 0;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.result-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+}
+
 .result-grade {
   display: flex;
   align-items: center;
@@ -1192,43 +1299,52 @@ defineExpose({
   margin-bottom: var(--spacing-md);
   flex-wrap: wrap;
 }
+
 .grade-label {
   font-size: 14px;
   font-weight: var(--font-weight-medium);
   color: var(--text);
 }
+
 .grade-value {
   font-size: 14px;
   font-weight: var(--font-weight-semibold);
   color: var(--text);
 }
+
 .grade-value.passed {
   color: #4caf50;
 }
+
 .grade-value.failed {
   color: #f44336;
 }
+
 .grade-date {
   font-size: 14px;
   color: var(--text);
 }
+
 .result-comment {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
   margin-bottom: var(--spacing-md);
 }
+
 .comment-label {
   font-size: 14px;
   font-weight: var(--font-weight-medium);
   color: var(--text);
 }
+
 .comment-text {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text);
   margin: 0;
 }
+
 .no-results {
   font-size: 14px;
   color: var(--gray);
@@ -1236,6 +1352,7 @@ defineExpose({
   text-align: center;
   padding: var(--spacing-lg) 0;
 }
+
 @media (max-width: 700px) {
   .meeting-info {
     grid-template-columns: repeat(2, 1fr);
@@ -1245,6 +1362,7 @@ defineExpose({
     gap: var(--spacing-xs);
   }
 }
+
 @media (max-width: 480px) {
   .meeting-info {
     grid-template-columns: 1fr;
@@ -1254,11 +1372,13 @@ defineExpose({
     padding: var(--spacing-sm);
   }
 }
+
 :deep(.meeting-modal),
 :deep(.grading-modal),
 :deep(.results-modal) {
   border-radius: 12px;
 }
+
 :deep(.meeting-modal .el-overlay),
 :deep(.grading-modal .el-overlay),
 :deep(.results-modal .el-overlay) {
@@ -1267,6 +1387,7 @@ defineExpose({
   justify-content: center;
   position: fixed;
 }
+
 :deep(.meeting-modal .el-dialog),
 :deep(.grading-modal .el-dialog),
 :deep(.results-modal .el-dialog) {
@@ -1276,6 +1397,7 @@ defineExpose({
   flex-direction: column;
   max-height: 90vh;
 }
+
 :deep(.meeting-modal .el-dialog__header),
 :deep(.grading-modal .el-dialog__header),
 :deep(.results-modal .el-dialog__header) {
@@ -1283,6 +1405,7 @@ defineExpose({
   margin-right: 0;
   border-bottom: 1px solid #eee;
 }
+
 :deep(.meeting-modal .el-dialog__title),
 :deep(.grading-modal .el-dialog__title),
 :deep(.results-modal .el-dialog__title) {
@@ -1290,6 +1413,7 @@ defineExpose({
   font-weight: var(--font-weight-semibold);
   word-wrap: break-word;
 }
+
 :deep(.meeting-modal .el-dialog__body),
 :deep(.grading-modal .el-dialog__body),
 :deep(.results-modal .el-dialog__body) {
@@ -1297,16 +1421,19 @@ defineExpose({
   flex: 1;
   overflow-y: auto;
 }
+
 :deep(.meeting-modal .el-dialog__footer),
 :deep(.grading-modal .el-dialog__footer),
 :deep(.results-modal .el-dialog__footer) {
   padding: var(--spacing-md) var(--spacing-lg);
   border-top: 1px solid #eee;
 }
+
 :global(body.el-popup-parent--hidden) {
   padding-right: 0 !important;
   overflow-y: scroll !important;
 }
+
 :deep(.meeting-modal .el-dialog__headerbtn),
 :deep(.meeting-modal .el-dialog__close),
 :deep(.grading-modal .el-dialog__headerbtn),
@@ -1316,6 +1443,7 @@ defineExpose({
   color: var(--gray);
   transition: color 0.2s;
 }
+
 :deep(.meeting-modal .el-dialog__headerbtn:hover),
 :deep(.meeting-modal .el-dialog__headerbtn:hover .el-icon),
 :deep(.meeting-modal .el-dialog__close:hover),
@@ -1327,6 +1455,7 @@ defineExpose({
 :deep(.results-modal .el-dialog__close:hover) {
   color: #f44336 !important;
 }
+
 @media (max-width: 1024px) {
   :deep(.meeting-modal .el-dialog__header),
   :deep(.meeting-modal .el-dialog__body),
@@ -1340,6 +1469,7 @@ defineExpose({
     padding: var(--spacing-md);
   }
 }
+
 @media (max-width: 768px) {
   :deep(.meeting-modal),
   :deep(.grading-modal),
@@ -1403,6 +1533,7 @@ defineExpose({
     font-size: 12px;
   }
 }
+
 @media (max-width: 480px) {
   :deep(.meeting-modal),
   :deep(.grading-modal),

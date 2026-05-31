@@ -1,12 +1,7 @@
 <!-- src/views/CalendarView.vue -->
 <template>
   <div class="calendar-page">
-    <!-- Заголовок -->
-    <div class="page-header">
-      <h1 class="page-title">Календарь</h1>
-    </div>
-
-    <!-- Фильтры -->
+    <div class="page-header"><h1 class="page-title">Календарь</h1></div>
     <div class="filters-bar">
       <div class="search-row">
         <el-input
@@ -18,7 +13,6 @@
           @input="applyFilters"
         />
       </div>
-
       <div class="filters-row">
         <div class="radio-group-wrapper">
           <el-radio-group v-model="filterStatus" @change="applyFilters" class="custom-radio-group">
@@ -27,8 +21,6 @@
             <el-radio-button value="past">Прошедшие</el-radio-button>
           </el-radio-group>
         </div>
-
-        <!-- ✅ Фильтр по встречам: показывается для всех, кроме Сотрудника -->
         <el-select
           v-if="showMeetingsFilter"
           v-model="filterMeetings"
@@ -38,11 +30,11 @@
           @change="applyFilters"
           popper-class="custom-select-popper"
         >
-          <el-option label="Все встречи" value="all" />
-          <el-option label="Мои встречи" value="my" />
-          <el-option label="Встречи подчиненных" value="subordinates" />
+          <el-option label="Все встречи" value="all" /><el-option
+            label="Мои встречи"
+            value="my"
+          /><el-option label="Встречи подчиненных" value="subordinates" />
         </el-select>
-
         <el-select
           v-model="filterRole"
           placeholder="Все роли"
@@ -51,11 +43,11 @@
           @change="applyFilters"
           popper-class="custom-select-popper"
         >
-          <el-option label="Все роли" value="all" />
-          <el-option label="Аттестуемый" value="Аттестуемый" />
-          <el-option label="Аттестующий" value="Аттестующий" />
+          <el-option label="Все роли" value="all" /><el-option
+            label="Аттестуемый"
+            value="Аттестуемый"
+          /><el-option label="Аттестующий" value="Аттестующий" />
         </el-select>
-
         <el-select
           v-model="filterType"
           placeholder="Все типы"
@@ -64,12 +56,14 @@
           @change="applyFilters"
           popper-class="custom-select-popper"
         >
-          <el-option label="Все типы" value="all" />
-          <el-option label="Аттестация" value="Аттестация" />
-          <el-option label="Практическое задание" value="Практическое задание" />
-          <el-option label="Performance review" value="Performance review" />
+          <el-option label="Все типы" value="all" /><el-option
+            label="Аттестация"
+            value="Аттестация"
+          /><el-option label="Практическое задание" value="Практическое задание" /><el-option
+            label="Performance review"
+            value="Performance review"
+          />
         </el-select>
-
         <el-date-picker
           v-model="dateRange"
           type="daterange"
@@ -90,7 +84,6 @@
       </div>
     </div>
 
-    <!-- Список встреч через MeetingCard -->
     <div class="attestations-list">
       <el-empty v-if="!meetingsLoaded" description="Загрузка встреч..." :image-size="80" />
       <el-empty
@@ -98,7 +91,6 @@
         description="Нет встреч по выбранным фильтрам"
         :image-size="80"
       />
-
       <el-card
         v-for="meeting in filteredMeetings"
         :key="meeting.id"
@@ -109,7 +101,7 @@
         <MeetingCard
           ref="meetingCardRefs"
           :meeting="meeting"
-          :can-grade="canGradeMeeting"
+          :can-grade="canUserGradeMeeting(meeting)"
           @view-results="handleViewResults"
           @open-grading="handleOpenGrading"
           @save-grade="handleGradeSaved"
@@ -134,65 +126,99 @@ import MeetingCard, { type Meeting } from '@/components/common/MeetingCard.vue'
 import axios from 'axios'
 
 dayjs.locale('ru')
-
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 const authStore = useAuthStore()
 const currentUser = computed(() => authStore.user)
 
-// ✅ Проверка: является ли пользователь ТОЛЬКО Сотрудником
 const isEmployee = computed(() => {
-  const user = currentUser.value
-  if (!user) return false
-
-  const employeeRoles = ['employee', 'сотрудник']
-
-  if (user.role_name) {
-    const role = String(user.role_name).trim().toLowerCase()
-    if (employeeRoles.includes(role)) {
-      if (Array.isArray(user.roles)) {
-        const otherRoles = user.roles.filter((r: any) => {
-          const normalized = String(r).trim().toLowerCase()
-          return !employeeRoles.includes(normalized)
-        })
-        if (otherRoles.length > 0) return false
-      }
-      return true
-    }
-  }
-
-  if (Array.isArray(user.roles)) {
-    const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
-    const hasOnlyEmployeeRoles = roles.every((r) => employeeRoles.includes(r))
-    if (hasOnlyEmployeeRoles && roles.length > 0) return true
-    return false
-  }
-
+  const u = currentUser.value
+  if (!u) return false
+  const roles = ['employee', 'сотрудник']
+  const check = (r: string) => roles.includes(r.trim().toLowerCase())
+  if (
+    u.role_name &&
+    check(u.role_name) &&
+    (!Array.isArray(u.roles) || !u.roles.some((x: any) => !check(String(x))))
+  )
+    return true
+  if (Array.isArray(u.roles)) return u.roles.every((x: any) => check(String(x)))
   return false
 })
-
 const showMeetingsFilter = computed(() => !isEmployee.value)
 
-// ✅ Проверка: является ли текущий пользователь руководителем (supervisor в roles)
-const canGradeMeeting = computed(() => {
-  const user = currentUser.value
-  if (!user) return false
-
-  // Проверяем поле role_name
-  if (user.role_name) {
-    const role = String(user.role_name).trim().toLowerCase()
-    if (role === 'supervisor' || role === 'руководитель') return true
+// ✅ Кэш отделов пользователей
+const userDepartmentCache = ref<Record<number, number | undefined>>({})
+const fetchUserDepartment = async (userId: number): Promise<number | undefined> => {
+  if (userDepartmentCache.value[userId] !== undefined) return userDepartmentCache.value[userId]
+  try {
+    const res = await axios.get(`${API_BASE}/users/${userId}/`, {
+      headers: { 'Content-Type': 'application/json' },
+      withCredentials: true,
+    })
+    userDepartmentCache.value[userId] = res.data?.department_id
+    return res.data?.department_id
+  } catch (e) {
+    console.error(e)
+    return undefined
   }
+}
 
-  // Проверяем массив roles
-  if (Array.isArray(user.roles)) {
-    const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
-    if (roles.includes('supervisor') || roles.includes('руководитель')) return true
+// ✅ Кэш отделов направления
+const divisionDepartmentsCache = ref<Record<number, number[]>>({})
+const fetchDivisionDepartments = async (divisionId: number): Promise<number[]> => {
+  if (divisionDepartmentsCache.value[divisionId]) return divisionDepartmentsCache.value[divisionId]
+  try {
+    const res = await axios.get(`${API_BASE}/admin/divisions/${divisionId}`, {
+      headers: { 'Content-Type': 'application/json' },
+      withCredentials: true,
+    })
+    const depts = res.data?.departments || []
+    divisionDepartmentsCache.value[divisionId] = depts
+      .map((d: any) => d.id)
+      .filter((id: number) => id != null)
+    return divisionDepartmentsCache.value[divisionId]
+  } catch (e) {
+    console.error(e)
+    return []
   }
+}
 
+const checkSupervisorRole = (u: any): boolean => {
+  if (!u) return false
+  if (
+    u.role_name &&
+    ['supervisor', 'руководитель'].includes(u.role_name.toString().trim().toLowerCase())
+  )
+    return true
+  if (Array.isArray(u.roles))
+    return u.roles.some((r: any) =>
+      ['supervisor', 'руководитель'].includes(r.toString().trim().toLowerCase()),
+    )
   return false
-})
+}
 
-// Фильтры
+// ✅ Проверка прав на оценку для КОНКРЕТНОЙ встречи
+const canUserGradeMeeting = (meeting: Meeting): boolean => {
+  const user = currentUser.value
+  if (!user || !meeting || meeting.status !== 'completed' || meeting.is_approved !== false)
+    return false
+  if (
+    meeting.participants.some(
+      (p) => p.is_current_user && (p.role === 'Аттестуемый' || p.role === 'student'),
+    )
+  )
+    return false
+  if (!checkSupervisorRole(user)) return false
+
+  if (user.managed_division_id === null && user.department_id)
+    return meeting.department_id === user.department_id
+  if (user.managed_division_id != null) {
+    const allowed = divisionDepartmentsCache.value[user.managed_division_id] || []
+    return allowed.includes(meeting.department_id)
+  }
+  return false
+}
+
 const searchQuery = ref('')
 const filterStatus = ref<'all' | 'upcoming' | 'past'>('all')
 const filterMeetings = ref<'all' | 'my' | 'subordinates'>('all')
@@ -200,46 +226,38 @@ const filterRole = ref<'all' | 'Аттестуемый' | 'Аттестующи�
 const filterType = ref<'all' | 'Аттестация' | 'Практическое задание' | 'Performance review'>('all')
 const dateRange = ref<[string, string] | null>(null)
 
-// Данные
 const meetingsLoaded = ref(false)
 const allMeetings = ref<Meeting[]>([])
 const meetingCardRefs = ref<InstanceType<typeof MeetingCard>[]>([])
 const currentUserId = computed(() => currentUser.value?.id)
 
-// ✅ Маппер с новыми полями: user_stage_id, is_approved, ended_at
 const mapApiMeetingToMeeting = (apiData: any): Meeting => {
-  const participants: Meeting['participants'] = []
-  let userRole: Meeting['role']
-  const isCurrentUserStudent = apiData.student?.user_id === currentUserId.value
-  const isCurrentUserExaminer = apiData.examiner?.user_id === currentUserId.value
-
+  const parts: Meeting['participants'] = []
+  let role: Meeting['role']
+  const isSt = apiData.student?.user_id === currentUserId.value
+  const isEx = apiData.examiner?.user_id === currentUserId.value
   if (apiData.student) {
-    participants.push({
+    parts.push({
       id: apiData.student.id,
       user_id: apiData.student.user_id,
       full_name: apiData.student.full_name,
       role: 'Аттестуемый',
-      is_current_user: isCurrentUserStudent,
+      is_current_user: isSt,
     })
-    if (isCurrentUserStudent) userRole = 'student'
+    if (isSt) role = 'student'
   }
   if (apiData.examiner) {
-    participants.push({
+    parts.push({
       id: apiData.examiner.id,
       user_id: apiData.examiner.user_id,
       full_name: apiData.examiner.full_name,
       role: 'Аттестующий',
-      is_current_user: isCurrentUserExaminer,
+      is_current_user: isEx,
     })
-    if (isCurrentUserExaminer) userRole = 'examiner'
+    if (isEx) role = 'examiner'
   }
-
-  const startTime = dayjs(apiData.started_at)
+  const st = dayjs(apiData.started_at)
   const now = dayjs()
-  const isPast = apiData.status === 'completed' || startTime.isBefore(now, 'day')
-  const isToday = startTime.isSame(now, 'day')
-  const isUpcoming = !isPast && !isToday
-
   return {
     id: apiData.id,
     skill_name: apiData.title || 'Без названия',
@@ -249,90 +267,96 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
     location: apiData.location || 'Не указано',
     duration: apiData.duration || 60,
     description: apiData.description || undefined,
-    participants,
-    role: userRole,
-    isPast,
-    isToday,
-    isUpcoming,
+    participants: parts,
+    role,
+    isPast: apiData.status === 'completed' || st.isBefore(now, 'day'),
+    isToday: st.isSame(now, 'day'),
+    isUpcoming: false,
     stage_id: apiData.stage_id,
     stage_version_id: apiData.stage_version_id,
-    user_stage_id: apiData.user_stage_id, // ✅ Новое поле
+    user_stage_id: apiData.user_stage_id,
     skill_id: apiData.skill_id,
-    is_approved: apiData.is_approved, // ✅ Новое поле
-    ended_at: apiData.ended_at, // ✅ Новое поле
+    is_approved: apiData.is_approved,
+    ended_at: apiData.ended_at,
   }
 }
 
 const fetchMeetings = async () => {
   try {
     const params: Record<string, any> = {}
+    const user = currentUser.value
+    if (user?.managed_division_id === null && user?.department_id)
+      params.department_id = user.department_id
+    else if (user?.managed_division_id != null) {
+      const ids = await fetchDivisionDepartments(user.managed_division_id)
+      if (ids.length) params.department_id = ids // Axios преобразует массив в ?department_id=1&department_id=2...
+    }
 
     if (dateRange.value?.[0] && dateRange.value?.[1]) {
       params.start_date = dayjs(dateRange.value[0]).startOf('day').format('YYYY-MM-DDTHH:mm:ss')
       params.end_date = dayjs(dateRange.value[1]).endOf('day').format('YYYY-MM-DDTHH:mm:ss')
     }
-
-    if (filterStatus.value === 'upcoming') {
-      params.status = 'planned'
-    } else if (filterStatus.value === 'past') {
-      params.status = 'completed'
-    }
-
-    if (filterType.value !== 'all') {
-      params.confirmation_type = filterType.value
-    }
-
+    if (filterStatus.value === 'upcoming') params.status = 'planned'
+    else if (filterStatus.value === 'past') params.status = 'completed'
+    if (filterType.value !== 'all') params.confirmation_type = filterType.value
     if (filterRole.value !== 'all' && currentUserId.value) {
       params.user_id = currentUserId.value
-      if (filterRole.value === 'Аттестуемый' || filterRole.value === 'Аттестующий') {
+      if (['Аттестуемый', 'Аттестующий'].includes(filterRole.value))
         params.user_role = filterRole.value
-      }
     }
-
     if (showMeetingsFilter.value && filterMeetings.value !== 'all' && currentUserId.value) {
-      if (filterMeetings.value === 'my') {
-        params.user_id = currentUserId.value
-      } else if (filterMeetings.value === 'subordinates') {
-        params.exclude_user_id = currentUserId.value
-      }
-    } else if (isEmployee.value && currentUserId.value) {
-      params.user_id = currentUserId.value
-    }
+      if (filterMeetings.value === 'my') params.user_id = currentUserId.value
+      else if (filterMeetings.value === 'subordinates') params.exclude_user_id = currentUserId.value
+    } else if (isEmployee.value && currentUserId.value) params.user_id = currentUserId.value
 
-    const response = await axios.get(`${API_BASE}/meetings/`, {
+    const res = await axios.get(`${API_BASE}/meetings/`, {
       params,
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
     })
+    const mapped = (res.data || []).map(mapApiMeetingToMeeting)
 
-    const mapped = (response.data || []).map(mapApiMeetingToMeeting)
-    allMeetings.value = mapped
+    // ✅ Пакетно загружаем отделы аттестуемых
+    const attestedIds = [
+      ...new Set(
+        mapped
+          .map(
+            (m) =>
+              m.participants.find((p) => p.role === 'Аттестуемый' || p.role === 'student')?.user_id,
+          )
+          .filter((id): id is number => id != null),
+      ),
+    ]
+    await Promise.all(attestedIds.map((id) => fetchUserDepartment(id)))
+
+    // ✅ Присваиваем department_id встречам
+    mapped.forEach((m) => {
+      const att = m.participants.find((p) => p.role === 'Аттестуемый' || p.role === 'student')
+      if (att) m.department_id = userDepartmentCache.value[att.user_id]
+    })
+
+    allMeetings.value = Array.from(new Map(mapped.map((m) => [m.id, m])).values())
     meetingsLoaded.value = true
-  } catch (error) {
-    console.error('Ошибка загрузки встреч:', error)
+  } catch (e) {
+    console.error(e)
     ElMessage.error('Не удалось загрузить встречи')
     meetingsLoaded.value = true
   }
 }
 
-// ✅ Клиентская фильтрация
 const filteredMeetings = computed(() => {
-  let result = [...allMeetings.value]
-
+  let res = [...allMeetings.value]
   if (searchQuery.value.trim()) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter((m) => {
-      const topicMatch = m.skill_name.toLowerCase().includes(query)
-      const participantMatch = m.participants.some((p) => p.full_name.toLowerCase().includes(query))
-      return topicMatch || participantMatch
-    })
+    const q = searchQuery.value.toLowerCase()
+    res = res.filter(
+      (m) =>
+        m.skill_name.toLowerCase().includes(q) ||
+        m.participants.some((p) => p.full_name.toLowerCase().includes(q)),
+    )
   }
-
-  if (showMeetingsFilter.value && filterMeetings.value === 'subordinates' && currentUserId.value) {
-    result = result.filter((m) => !m.participants.some((p) => p.is_current_user))
-  }
-
-  return result.sort((a, b) => {
+  if (showMeetingsFilter.value && filterMeetings.value === 'subordinates' && currentUserId.value)
+    res = res.filter((m) => !m.participants.some((p) => p.is_current_user))
+  return res.sort((a, b) => {
     if (a.isUpcoming && !b.isUpcoming) return -1
     if (!a.isUpcoming && b.isUpcoming) return 1
     return new Date(b.date_time).getTime() - new Date(a.date_time).getTime()
@@ -344,62 +368,44 @@ const handleDateClear = () => {
   dateRange.value = null
   applyFilters()
 }
-
 const disabledDate = (date: Date) => {
   if (dateRange.value?.[1]) {
-    const endDate = dayjs(dateRange.value[1])
-    if (!dateRange.value[0]) return date > endDate.toDate()
+    const end = dayjs(dateRange.value[1])
+    if (!dateRange.value[0]) return date > end.toDate()
   }
-  if (dateRange.value?.[0]) {
-    const startDate = dayjs(dateRange.value[0])
-    return date < startDate.startOf('day').toDate()
-  }
+  if (dateRange.value?.[0]) return date < dayjs(dateRange.value[0]).startOf('day').toDate()
   return false
 }
-
-watch(dateRange, ([start, end]) => {
-  if (!start && !end) return
-  if (start && end && dayjs(start).isAfter(dayjs(end))) {
+watch(dateRange, ([s, e]) => {
+  if (s && e && dayjs(s).isAfter(dayjs(e))) {
     ElMessage.warning('Дата начала не может быть позже даты окончания')
     dateRange.value = null
   }
 })
 
-// ✅ Обработчики событий от MeetingCard
-const handleMeetingCompleted = (updatedMeeting: Meeting) => {
-  // Обновляем встречу в локальном массиве
-  const idx = allMeetings.value.findIndex((m) => m.id === updatedMeeting.id)
-  if (idx !== -1) {
-    allMeetings.value[idx] = { ...allMeetings.value[idx], ...updatedMeeting }
-  }
+const handleMeetingCompleted = (m: Meeting) => {
+  const i = allMeetings.value.findIndex((x) => x.id === m.id)
+  if (i !== -1) allMeetings.value[i] = { ...allMeetings.value[i], ...m }
   ElMessage.success('Встреча завершена')
 }
-
-const handleMeetingStatusUpdated = (updatedMeeting: Meeting) => {
-  // Обновляем статус/оценку в локальном массиве
-  const idx = allMeetings.value.findIndex((m) => m.id === updatedMeeting.id)
-  if (idx !== -1) {
-    allMeetings.value[idx] = { ...allMeetings.value[idx], ...updatedMeeting }
-  }
+const handleMeetingStatusUpdated = (m: Meeting) => {
+  const i = allMeetings.value.findIndex((x) => x.id === m.id)
+  if (i !== -1) allMeetings.value[i] = { ...allMeetings.value[i], ...m }
 }
-
-const handleViewResults = (meeting: Meeting) => console.log('Просмотр результатов:', meeting)
-const handleOpenGrading = (meeting: Meeting) => console.log('Открытие оценки:', meeting)
-
+const handleViewResults = (m: Meeting) => console.log('Просмотр результатов:', m)
+const handleOpenGrading = (m: Meeting) => console.log('Открытие оценки:', m)
 const handleGradeSaved = async () => {
-  await fetchMeetings() // Перезагружаем список после оценки
+  await fetchMeetings()
 }
-
-const handleGradeError = (error: any) => console.error('Ошибка от MeetingCard:', error)
+const handleGradeError = (e: any) => console.error('Ошибка:', e)
 
 const dateShortcuts = [
   {
     text: 'Ближайшие 7 дней',
-    value: () => {
-      const start = dayjs().startOf('day')
-      const end = dayjs().add(7, 'day').endOf('day')
-      return [start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')]
-    },
+    value: () => [
+      dayjs().startOf('day').format('YYYY-MM-DD'),
+      dayjs().add(7, 'day').endOf('day').format('YYYY-MM-DD'),
+    ],
   },
   {
     text: 'Этот месяц',
@@ -416,11 +422,11 @@ const dateShortcuts = [
     ],
   },
 ]
-
 onMounted(() => fetchMeetings())
 </script>
 
 <style scoped>
+/* Стили идентичны предыдущей версии */
 .calendar-page {
   padding: var(--spacing-lg);
   max-width: 1200px;
