@@ -71,15 +71,7 @@
             :icon="Delete"
             circle
             @click="confirmDeleteCategory(cat)"
-            :disabled="isCategoryInUse(cat.id)"
           />
-          <el-tooltip
-            v-if="isCategoryInUse(cat.id)"
-            content="Категория используется в навыках"
-            placement="top"
-          >
-            <el-icon class="info-icon"><Warning /></el-icon>
-          </el-tooltip>
         </div>
       </div>
 
@@ -608,7 +600,6 @@ const addCategory = async () => {
 }
 
 const confirmDeleteCategory = async (cat) => {
-  if (isCategoryInUse(cat.id)) return ElMessage.warning('Категория используется в навыках')
   try {
     await ElMessageBox.confirm('Удалить категорию?', 'Подтверждение', { type: 'warning' })
     categoriesLoading.value = true
