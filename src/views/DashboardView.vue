@@ -145,10 +145,24 @@ const userProfile = ref<{
   ready_gradeup: boolean
 } | null>(null)
 
-// ✅ Исправлено: проверка роли examiner
+// ✅ Проверка: является ли текущий пользователь руководителем (supervisor в roles)
 const canGradeMeeting = computed(() => {
-  if (!upcomingMeeting.value || !currentUser.value) return false
-  return upcomingMeeting.value.role === 'examiner' || currentUser.value.is_supervisor
+  const user = currentUser.value
+  if (!user) return false
+
+  // Проверяем поле role_name
+  if (user.role_name) {
+    const role = String(user.role_name).trim().toLowerCase()
+    if (role === 'supervisor' || role === 'руководитель') return true
+  }
+
+  // Проверяем массив roles
+  if (Array.isArray(user.roles)) {
+    const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
+    if (roles.includes('supervisor') || roles.includes('руководитель')) return true
+  }
+
+  return false
 })
 
 onMounted(async () => {
@@ -156,7 +170,7 @@ onMounted(async () => {
   await Promise.all([fetchUpcomingMeeting(), fetchUserProfile()])
 })
 
-// ✅ Маппер с has_evaluation и исправленными ролями
+// ✅ Маппер с новыми полями: user_stage_id, is_approved, ended_at
 const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
   const participants: Meeting['participants'] = []
   let userRole: Meeting['role']
@@ -169,7 +183,7 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
       role: 'Аттестуемый',
       is_current_user: apiData.student.user_id === userId,
     })
-    if (apiData.student.user_id === userId) userRole = 'student' // ✅ Исправлено
+    if (apiData.student.user_id === userId) userRole = 'student'
   }
   if (apiData.examiner) {
     participants.push({
@@ -179,11 +193,8 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
       role: 'Аттестующий',
       is_current_user: apiData.examiner.user_id === userId,
     })
-    if (apiData.examiner.user_id === userId) userRole = 'examiner' // ✅ Исправлено
+    if (apiData.examiner.user_id === userId) userRole = 'examiner'
   }
-
-  // ✅ Определяем наличие оценки
-  const hasEvaluation = !!(apiData.evaluation || apiData.result || apiData.has_evaluation)
 
   return {
     id: apiData.id,
@@ -199,8 +210,10 @@ const mapMeetingData = (apiData: any, userId: number | undefined): Meeting => {
     isUpcoming: true,
     stage_id: apiData.stage_id,
     stage_version_id: apiData.stage_version_id,
+    user_stage_id: apiData.user_stage_id, // ✅ Новое поле
     skill_id: apiData.skill_id,
-    has_evaluation: hasEvaluation, // ✅ Новое поле
+    is_approved: apiData.is_approved, // ✅ Новое поле
+    ended_at: apiData.ended_at, // ✅ Новое поле
   }
 }
 

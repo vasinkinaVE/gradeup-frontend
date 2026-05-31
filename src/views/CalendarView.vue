@@ -172,28 +172,21 @@ const isEmployee = computed(() => {
 
 const showMeetingsFilter = computed(() => !isEmployee.value)
 
+// ✅ Проверка: является ли текущий пользователь руководителем (supervisor в roles)
 const canGradeMeeting = computed(() => {
   const user = currentUser.value
   if (!user) return false
 
-  const allowedRoles = [
-    'supervisor',
-    'manager',
-    'admin',
-    'spo',
-    'руководитель',
-    'специалист',
-    'администратор',
-  ]
-
+  // Проверяем поле role_name
   if (user.role_name) {
     const role = String(user.role_name).trim().toLowerCase()
-    if (allowedRoles.includes(role)) return true
+    if (role === 'supervisor' || role === 'руководитель') return true
   }
 
+  // Проверяем массив roles
   if (Array.isArray(user.roles)) {
     const roles = user.roles.map((r: any) => String(r).trim().toLowerCase())
-    if (roles.some((r) => allowedRoles.includes(r))) return true
+    if (roles.includes('supervisor') || roles.includes('руководитель')) return true
   }
 
   return false
@@ -213,7 +206,7 @@ const allMeetings = ref<Meeting[]>([])
 const meetingCardRefs = ref<InstanceType<typeof MeetingCard>[]>([])
 const currentUserId = computed(() => currentUser.value?.id)
 
-// ✅ Маппер с полем has_evaluation
+// ✅ Маппер с новыми полями: user_stage_id, is_approved, ended_at
 const mapApiMeetingToMeeting = (apiData: any): Meeting => {
   const participants: Meeting['participants'] = []
   let userRole: Meeting['role']
@@ -247,9 +240,6 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
   const isToday = startTime.isSame(now, 'day')
   const isUpcoming = !isPast && !isToday
 
-  // ✅ Определяем, есть ли оценка (если бэкенд возвращает evaluation или result)
-  const hasEvaluation = !!(apiData.evaluation || apiData.result || apiData.has_evaluation)
-
   return {
     id: apiData.id,
     skill_name: apiData.title || 'Без названия',
@@ -266,8 +256,10 @@ const mapApiMeetingToMeeting = (apiData: any): Meeting => {
     isUpcoming,
     stage_id: apiData.stage_id,
     stage_version_id: apiData.stage_version_id,
+    user_stage_id: apiData.user_stage_id, // ✅ Новое поле
     skill_id: apiData.skill_id,
-    has_evaluation: hasEvaluation, // ✅ Новое поле
+    is_approved: apiData.is_approved, // ✅ Новое поле
+    ended_at: apiData.ended_at, // ✅ Новое поле
   }
 }
 

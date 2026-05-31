@@ -86,11 +86,9 @@
         Завершить встречу
       </el-button>
 
-      <!-- ✅ Кнопка "Оценить" - только для Аттестующего, если встреча завершена и ещё не оценена -->
+      <!-- ✅ Кнопка "Оценить" - только для руководителя, если встреча завершена и не одобрена -->
       <el-button
-        v-if="
-          meeting.role === 'examiner' && meeting.status === 'completed' && !meetingHasEvaluation
-        "
+        v-if="meeting.status === 'completed' && meeting.is_approved === false && canGrade"
         class="btn-grade"
         size="small"
         @click="openGradingModal"
@@ -99,9 +97,9 @@
         Оценить
       </el-button>
 
-      <!-- ✅ Кнопка "Результаты" - доступна всем, если встреча завершена и оценена -->
+      <!-- ✅ Кнопка "Результаты" - доступна, если встреча завершена и одобрена -->
       <el-button
-        v-if="meeting.status === 'completed' && meetingHasEvaluation"
+        v-if="meeting.status === 'completed' && meeting.is_approved === true"
         class="btn-results"
         size="small"
         plain
@@ -370,13 +368,15 @@ export interface Meeting {
   result?: MeetingResult
   stage_id?: number
   stage_version_id?: number
+  user_stage_id?: number // ✅ Новое поле
   skill_id?: number
-  has_evaluation?: boolean // ✅ Флаг: есть ли уже оценка у встречи
+  is_approved?: boolean // ✅ Новое поле
+  ended_at?: string | Date // ✅ Новое поле
 }
 
 interface Props {
   meeting: Meeting
-  canGrade?: boolean
+  canGrade?: boolean // ✅ Проверяет, является ли текущий пользователь руководителем
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -412,58 +412,6 @@ const isResultsModalVisible = ref(false)
 const resultsMeeting = ref<Meeting | null>(null)
 const resultsLoading = ref(false)
 const resultsData = ref<EvaluationData | null>(null)
-
-// ✅ Улучшенная проверка: есть ли оценка (множественные источники)
-const meetingHasEvaluation = computed(() => {
-  // 1. Явный флаг от бэкенда
-  if (props.meeting.has_evaluation === true) return true
-
-  // 2. Если есть объект result с полем passed
-  if (props.meeting.result?.passed !== undefined) return true
-
-  // 3. Если уже загружены данные оценки в resultsData
-  if (resultsData.value !== null) return true
-
-  // 4. Если статус completed и есть stage_version_id - возможно, оценка есть (проверим асинхронно)
-  // Возвращаем false, чтобы не блокировать UI, но запустим проверку в onMounted
-  return false
-})
-
-// ✅ Асинхронная проверка наличия оценки через API
-const checkEvaluationStatus = async () => {
-  // Проверяем только если встреча завершена, но статус оценки неизвестен
-  if (
-    props.meeting.status === 'completed' &&
-    props.meeting.has_evaluation === undefined &&
-    props.meeting.result?.passed === undefined &&
-    props.meeting.stage_version_id
-  ) {
-    try {
-      const response = await axios.get(
-        `${API_BASE}/evaluations/${props.meeting.stage_version_id}`,
-        {
-          headers: { 'Content-Type': 'application/json' },
-          withCredentials: true,
-        },
-      )
-
-      if (response.data?.id) {
-        // Оценка найдена — обновляем локальное состояние
-        resultsData.value = response.data as EvaluationData
-        // Уведомляем родителя об обновлении статуса
-        emit('meeting-status-updated', {
-          ...props.meeting,
-          has_evaluation: true,
-        })
-      }
-    } catch (error) {
-      // Если 404 — оценки нет, это нормально, просто игнорируем
-      if (axios.isAxiosError(error) && error.response?.status !== 404) {
-        console.error('Ошибка проверки оценки:', error)
-      }
-    }
-  }
-}
 
 const openMeetingModal = () => {
   isModalVisible.value = true
@@ -505,11 +453,12 @@ const fetchMeetingMaterials = async () => {
 }
 
 const fetchEvaluationResult = async () => {
-  const stageVersionId = props.meeting.stage_version_id
-  if (!stageVersionId) return null
+  // ✅ Используем user_stage_id вместо stage_version_id
+  const userStageId = props.meeting.user_stage_id
+  if (!userStageId) return null
 
   try {
-    const response = await axios.get(`${API_BASE}/evaluations/${stageVersionId}`, {
+    const response = await axios.get(`${API_BASE}/evaluations/${userStageId}`, {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
     })
@@ -520,7 +469,7 @@ const fetchEvaluationResult = async () => {
   }
 }
 
-// ✅ Новый метод: завершить встречу
+// ✅ Метод завершения встречи
 const completeMeeting = async () => {
   try {
     const response = await axios.patch(
@@ -604,11 +553,6 @@ const getAttestedUserId = (): number | undefined => {
 const onModalOpen = async () => {
   expandedQuestions.value.clear()
   await fetchMeetingMaterials()
-
-  // ✅ Если встреча завершена, но оценка не известна — проверим асинхронно
-  if (props.meeting.status === 'completed' && !meetingHasEvaluation.value) {
-    await checkEvaluationStatus()
-  }
 }
 
 const toggleQuestion = (questionId: string | number) => {
@@ -649,7 +593,8 @@ const saveGrade = async () => {
     emit('grade-saved')
     closeGradingModal()
 
-    emit('meeting-status-updated', { ...props.meeting, has_evaluation: true })
+    // ✅ Уведомляем об обновлении статуса
+    emit('meeting-status-updated', { ...props.meeting, is_approved: true })
   } catch (error) {
     console.error('Ошибка сохранения оценки:', error)
     ElMessage.error('Не удалось сохранить оценку')
@@ -756,11 +701,6 @@ const getAnswerLabel = (type: string): string => {
   }
   return 'Эталонный ответ:'
 }
-
-// ✅ Проверяем наличие оценки при монтировании компонента
-onMounted(async () => {
-  await checkEvaluationStatus()
-})
 
 defineExpose({
   openGradingModal,
