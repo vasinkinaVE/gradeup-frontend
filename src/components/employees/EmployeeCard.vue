@@ -76,9 +76,10 @@
               placeholder="Не назначена"
               clearable
               class="edit-select-full"
+              :loading="rolesLoading"
             >
               <el-option
-                v-for="role in filteredEditableRoles"
+                v-for="role in editableRoles"
                 :key="role.id"
                 :label="role.displayName"
                 :value="role.id"
@@ -519,6 +520,18 @@ const stageTypes = [
   { key: 'Performance review', label: 'Performance review' },
 ]
 
+// 🔧 Роли для редактирования - загружаются с бэкенда
+const editableRoles = ref<any[]>([])
+const rolesLoading = ref(false)
+
+// 🔧 Словарь для перевода названий ролей
+const ROLE_TRANSLATIONS: Record<string, string> = {
+  Employee: 'Сотрудник',
+  Supervisor: 'Руководитель',
+  Specialist: 'СПО',
+  Admin: 'Администратор',
+}
+
 const visible = computed({ get: () => props.visible, set: (v) => emit('update:visible', v) })
 
 const selectedProfileData = computed(() => {
@@ -563,13 +576,6 @@ const isPromotionAvailable = computed(() => {
   return props.employee?.progress >= 100 && !!nextLevel.value
 })
 
-const filteredEditableRoles = computed(() => {
-  return props.availableRoles.filter((role) => {
-    if (role.isSupervisorRole || role.name === 'Supervisor') return false
-    return true
-  })
-})
-
 const showDepartmentFilterForProfiles = computed(() => {
   if (props.isAdmin) return true
   if (props.isSupervisor && props.supervisorDivisionId) return true
@@ -605,6 +611,55 @@ const filteredAvailableProfiles = computed(() => {
 const canManageSpecificEmployee = computed(() => {
   return props.canManageSpecificEmployee ?? false
 })
+
+// 🔧 Вспомогательная функция для нормализации роли (добавление displayName)
+const normalizeRole = (role: any): any => {
+  if (!role) return null
+  const roleName = role.name || role.role_name || ''
+  return {
+    ...role,
+    id: role.id,
+    displayName: role.displayName || ROLE_TRANSLATIONS[roleName] || roleName || 'Неизвестная роль',
+  }
+}
+
+// 🔧 Проверка: является ли роль руководителем (исключаем из выбора)
+const isSupervisorRole = (role: any): boolean => {
+  const name = (role.name || role.role_name || role.displayName || '').toLowerCase().trim()
+  const displayName = (role.displayName || '').toLowerCase().trim()
+  return (
+    name === 'supervisor' ||
+    name === 'руководитель' ||
+    displayName === 'руководитель' ||
+    role.isSupervisorRole === true
+  )
+}
+
+// 🔧 Загрузка ролей с бэкенда (исключая Руководитель/Supervisor)
+const fetchEditableRoles = async () => {
+  try {
+    rolesLoading.value = true
+    const res = await fetch(`${API_BASE}/admin/roles`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    // 🔧 Исключаем роль Руководитель/Supervisor и нормализуем роли
+    editableRoles.value = (Array.isArray(data) ? data : [])
+      .filter((role: any) => !isSupervisorRole(role))
+      .map((role: any) => normalizeRole(role))
+  } catch (err) {
+    console.error('Error fetching roles:', err)
+    ElMessage.error('Не удалось загрузить список ролей')
+    // Фоллбэк: использовать props.availableRoles с фильтрацией и нормализацией
+    editableRoles.value = props.availableRoles
+      .filter((role) => !isSupervisorRole(role))
+      .map((role: any) => normalizeRole(role))
+  } finally {
+    rolesLoading.value = false
+  }
+}
 
 const fetchSkillDetail = async (userId: number, skillId: number) => {
   try {
@@ -803,7 +858,7 @@ const toggleTaskExpand = (sId: number, stId: number | string, idx: number) => {
 
 const getRoleNameById = (rId: number | null) => {
   if (!rId) return 'Не назначена'
-  const r = props.availableRoles.find((r) => r.id === rId)
+  const r = editableRoles.value.find((r) => r.id === rId)
   return r?.displayName || r?.name || 'Не назначена'
 }
 
@@ -972,6 +1027,10 @@ watch(
     if (v && props.employee) {
       enableEditMode()
       isEditMode.value = false
+      // 🔧 Загружаем роли при открытии диалога в режиме редактирования
+      if (props.canEditRole) {
+        fetchEditableRoles()
+      }
     }
   },
   { immediate: true },
