@@ -17,18 +17,18 @@ export default defineConfig({
     proxy: {
       // Проксируем все запросы к API
       '/api': {
-        target: 'http://localhost:5442',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''), // убираем /api
       },
       '/auth': {
-        target: 'http://localhost:5442',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
       '/users': {
-        target: 'http://localhost:5442',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       },
