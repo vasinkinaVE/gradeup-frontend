@@ -324,7 +324,7 @@
                   <div class="question-header">
                     <span class="question-number">
                       {{ isPracticeOrPerformance(stage.type) ? 'Задание' : 'Вопрос' }}
-                      {{ qIdx + 1 }}
+                      {{ q.num }}
                     </span>
                     <el-button
                       size="small"
@@ -573,6 +573,14 @@ const extractCategoryIds = (categoriesData) => {
     .filter((id) => id != null)
 }
 
+// 🔧 Вспомогательная функция для перенумерации вопросов в этапе (1, 2, 3...)
+const renumberQuestions = (stage) => {
+  if (!stage.questions || !Array.isArray(stage.questions)) return
+  stage.questions.forEach((q, idx) => {
+    q.num = idx + 1
+  })
+}
+
 // === Категории: API ===
 const addCategory = async () => {
   const name = newCategoryName.value.trim()
@@ -631,6 +639,12 @@ const saveSkill = async () => {
   if (!skillForm.value.name?.trim()) return ElMessage.warning('Введите название навыка')
   try {
     skillsLoading.value = true
+
+    // 🔧 Принудительно перенумеровываем все вопросы перед отправкой на сервер
+    skillForm.value.stages.forEach((stage) => {
+      renumberQuestions(stage)
+    })
+
     const payload = {
       skill: {
         title: skillForm.value.name.trim(),
@@ -641,7 +655,7 @@ const saveSkill = async () => {
       stages: (skillForm.value.stages || []).map((st) => {
         const questionsPayload = (st.questions || []).map((q) => ({
           ...(q?.id ? { id: q.id } : {}),
-          num: q?.num || 1,
+          num: q.num || 1,
           question: q?.text || '',
           answer: q?.answer || '',
         }))
@@ -805,6 +819,10 @@ const openSkillDialog = (skill = null) => {
           questions: s.questions?.map((q) => ({ ...q, text: q.text || q.question || '' })) || [],
         })) || [],
     }
+    // 🔧 Перенумеровываем вопросы при открытии формы редактирования
+    skillForm.value.stages.forEach((stage) => {
+      renumberQuestions(stage)
+    })
   } else {
     editingSkill.value = null
     skillForm.value = {
@@ -837,13 +855,18 @@ const addQuestion = (idx) => {
     if (!skillForm.value.stages[idx].questions) {
       skillForm.value.stages[idx].questions = []
     }
+    // Добавляем пустой вопрос
     skillForm.value.stages[idx].questions.push({ text: '', answer: '' })
+    // 🔧 Сразу перенумеровываем, чтобы новый вопрос получил правильный порядковый номер
+    renumberQuestions(skillForm.value.stages[idx])
   }
 }
 
 const removeQuestion = (sIdx, qIdx) => {
   if (skillForm.value.stages?.[sIdx]?.questions?.[qIdx]) {
     skillForm.value.stages[sIdx].questions.splice(qIdx, 1)
+    // 🔧 Перенумеровываем оставшиеся вопросы после удаления
+    renumberQuestions(skillForm.value.stages[sIdx])
   }
 }
 
