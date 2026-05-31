@@ -15,6 +15,7 @@
         @submit.prevent="handleSubmit"
         class="auth-form"
         size="large"
+        autocomplete="on"
       >
         <el-form-item prop="email">
           <el-input
@@ -22,7 +23,8 @@
             type="email"
             placeholder="ivanov@dns-shop.ru"
             prefix-icon="Message"
-            autocomplete="email"
+            autocomplete="username"
+            name="username"
             clearable
           />
         </el-form-item>
@@ -35,6 +37,7 @@
             prefix-icon="Lock"
             show-password
             autocomplete="current-password"
+            name="current-password"
           />
         </el-form-item>
 
@@ -60,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -72,6 +75,14 @@ const formRef = ref<FormInstance>()
 const formValues = reactive({
   email: '',
   password: '',
+})
+
+// 🔹 При загрузке: восстанавливаем сохранённый email (если есть)
+onMounted(() => {
+  const savedEmail = localStorage.getItem('saved_login_email')
+  if (savedEmail) {
+    formValues.email = savedEmail
+  }
 })
 
 const rules = reactive<FormRules>({
@@ -95,6 +106,9 @@ const handleSubmit = async () => {
   // 2️ Попытка входа на сервер
   try {
     await authStore.login(formValues.email, formValues.password)
+
+    // 🔹 При успешном входе: сохраняем email для удобства (но НЕ пароль!)
+    localStorage.setItem('saved_login_email', formValues.email)
 
     // Если код дошёл сюда — логин успешен
     ElMessage.success('Добро пожаловать!')
