@@ -74,7 +74,7 @@
                 }}
               </span>
               <el-button
-                v-if="isAdmin"
+                v-if="canManageSupervisor"
                 type="danger"
                 link
                 size="small"
@@ -142,7 +142,11 @@
           />
         </el-form-item>
 
-        <el-form-item v-if="editingDepartment" label="Руководитель" prop="supervisor_id">
+        <el-form-item
+          v-if="editingDepartment && canManageSupervisor"
+          label="Руководитель"
+          prop="supervisor_id"
+        >
           <el-select
             v-model="departmentForm.supervisor_id"
             placeholder="Выберите руководителя"
@@ -239,6 +243,12 @@ const isAdmin = computed(() => {
   return role.includes('admin') || role.includes('администратор')
 })
 
+// ✅ Только администраторы могут управлять руководителем отдела
+const canManageSupervisor = computed(() => {
+  const role = authStore.user?.role_name?.toLowerCase() || ''
+  return role.includes('admin') || role.includes('администратор')
+})
+
 const departmentSearch = ref('')
 
 const filteredDepartments = computed(() => {
@@ -258,7 +268,6 @@ const supervisorsLoading = ref(false)
 const editingDepartment = ref(null)
 const viewingDepartment = ref(null)
 
-// ✅ Список сотрудников КОНКРЕТНОГО отдела
 const departmentEmployees = ref([])
 
 const departmentForm = ref({
@@ -268,12 +277,10 @@ const departmentForm = ref({
   profiles: [],
 })
 
-// ✅ Используем сотрудников текущего отдела
 const availableSupervisors = computed(() => {
   return departmentEmployees.value.filter((emp) => emp.id && emp.first_name && emp.last_name)
 })
 
-// ✅ Загружаем сотрудников конкретного отдела
 const fetchDepartmentEmployees = async (departmentId) => {
   if (!departmentId) {
     departmentEmployees.value = []
@@ -282,7 +289,6 @@ const fetchDepartmentEmployees = async (departmentId) => {
 
   try {
     supervisorsLoading.value = true
-    // ✅ Передаем departments_id для фильтрации по отделу
     const params = new URLSearchParams()
     params.append('departments_id', departmentId)
 
@@ -293,7 +299,6 @@ const fetchDepartmentEmployees = async (departmentId) => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
 
-    // ✅ Извлекаем ТОЛЬКО нужные поля (без email и position)
     departmentEmployees.value = data.map((emp) => ({
       id: emp.id,
       first_name: emp.first_name || '',
@@ -339,18 +344,30 @@ const normalizeDepartmentFromBackend = (backendDept) => {
   }
 }
 
-const prepareDepartmentForBackend = (frontendDept, isUpdate = false) => {
-  const payload = {
+// ✅ Для создания: отправляем всё в одном запросе
+const prepareDepartmentForCreate = (frontendDept) => {
+  return {
     department_name: frontendDept.name || frontendDept.department_name || '',
     description: frontendDept.description || '',
+    supervisor_id: frontendDept.supervisor_id || null,
     profiles: frontendDept.profiles || [],
   }
+}
 
-  if (isUpdate) {
-    payload.supervisor_id = frontendDept.supervisor_id || null
+// ✅ Для обновления отдела: только основные поля (без profiles)
+const prepareDepartmentForUpdate = (frontendDept) => {
+  return {
+    department_name: frontendDept.name || frontendDept.department_name || '',
+    description: frontendDept.description || '',
+    supervisor_id: frontendDept.supervisor_id || null,
   }
+}
 
-  return payload
+// ✅ Для обновления профилей отдела: отдельный запрос
+const prepareProfilesForUpdate = (profileIds) => {
+  return {
+    profiles: Array.isArray(profileIds) ? profileIds : [],
+  }
 }
 
 const fetchDepartments = async () => {
@@ -393,7 +410,7 @@ const fetchDepartmentById = async (departmentId) => {
 
 const createDepartment = async (departmentData) => {
   try {
-    const payload = prepareDepartmentForBackend(departmentData, false)
+    const payload = prepareDepartmentForCreate(departmentData)
 
     const res = await fetch(`${API_BASE}/admin/departments/`, {
       method: 'POST',
@@ -414,9 +431,10 @@ const createDepartment = async (departmentData) => {
   }
 }
 
+// ✅ Обновление основных данных отдела (без профилей)
 const updateDepartment = async (departmentId, departmentData) => {
   try {
-    const payload = prepareDepartmentForBackend(departmentData, true)
+    const payload = prepareDepartmentForUpdate(departmentData)
 
     const res = await fetch(`${API_BASE}/admin/departments/${departmentId}`, {
       method: 'PUT',
@@ -433,6 +451,30 @@ const updateDepartment = async (departmentId, departmentData) => {
     return await res.json()
   } catch (error) {
     console.error('Error updating department:', error)
+    throw error
+  }
+}
+
+// ✅ Обновление списка профилей отдела (отдельный эндпоинт)
+const updateDepartmentProfiles = async (departmentId, profileIds) => {
+  try {
+    const payload = prepareProfilesForUpdate(profileIds)
+
+    const res = await fetch(`${API_BASE}/admin/departments/${departmentId}/profiles`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail?.[0]?.msg || err.detail || `HTTP ${res.status}`)
+    }
+
+    return await res.json()
+  } catch (error) {
+    console.error('Error updating department profiles:', error)
     throw error
   }
 }
@@ -568,11 +610,9 @@ const confirmUnlinkSupervisor = async () => {
 }
 
 const onDialogOpen = () => {
-  // ✅ При открытии диалога редактирования загружаем сотрудников отдела
   if (editingDepartment.value?.id) {
     fetchDepartmentEmployees(editingDepartment.value.id)
   } else {
-    // При создании отдела список сотрудников пуст
     departmentEmployees.value = []
   }
 }
@@ -609,13 +649,17 @@ const saveDepartment = async () => {
     emit('refresh')
 
     const isUpdate = !!editingDepartment.value?.id
-    const payload = prepareDepartmentForBackend(departmentForm.value, isUpdate)
 
     if (isUpdate) {
-      await updateDepartment(editingDepartment.value.id, payload)
+      // ✅ При обновлении: два отдельных запроса
+      // 1. Обновляем основные данные отдела
+      await updateDepartment(editingDepartment.value.id, departmentForm.value)
+      // 2. Обновляем список профилей
+      await updateDepartmentProfiles(editingDepartment.value.id, departmentForm.value.profiles)
       ElMessage.success('Отдел обновлён')
     } else {
-      await createDepartment(payload)
+      // ✅ При создании: один запрос с данными и профилями
+      await createDepartment(departmentForm.value)
       ElMessage.success('Отдел создан')
     }
 
