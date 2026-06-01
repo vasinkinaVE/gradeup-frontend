@@ -84,10 +84,16 @@
       </div>
     </el-form>
     <template #footer>
-      <el-button @click="handleCancel">Отмена</el-button>
-      <el-button type="primary" :loading="isRegistering" @click="submitRegistration"
-        >Зарегистрировать</el-button
+      <!-- ✅ Добавлены кастомные классы -->
+      <el-button class="btn-cancel" @click="handleCancel">Отмена</el-button>
+      <el-button
+        class="btn-register"
+        type="primary"
+        :loading="isRegistering"
+        @click="submitRegistration"
       >
+        Зарегистрировать
+      </el-button>
     </template>
   </el-dialog>
 </template>
@@ -362,6 +368,9 @@ const submitRegistration = async () => {
 :deep(.registration-dialog .el-dialog__footer) {
   padding: var(--spacing-md) var(--spacing-lg);
   flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 @media (max-width: 480px) {
@@ -373,5 +382,31 @@ const submitRegistration = async () => {
   :deep(.registration-dialog .el-dialog__title) {
     font-size: 16px;
   }
+}
+</style>
+<style>
+.registration-dialog .btn-register.el-button--primary {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  color: #fff !important;
+}
+.registration-dialog .btn-register.el-button--primary:hover {
+  background-color: #5daf34 !important;
+  border-color: #5daf34 !important;
+}
+.registration-dialog .btn-register.el-button--primary:active {
+  background-color: #53a32f !important;
+  border-color: #53a32f !important;
+}
+
+.registration-dialog .btn-cancel.el-button {
+  background-color: #fff !important;
+  border-color: #dcdfe6 !important;
+  color: #606266 !important;
+}
+.registration-dialog .btn-cancel.el-button:hover {
+  background-color: #c5c5c5 !important;
+  border-color: #909399 !important;
+  color: #fff !important;
 }
 </style>
