@@ -3,9 +3,12 @@
   <el-dialog
     v-model="visible"
     title="Регистрация нового сотрудника"
-    width="650px"
+    width="90%"
+    :style="{ maxWidth: '650px' }"
     destroy-on-close
     :close-on-click-modal="false"
+    class="registration-dialog"
+    align-center
   >
     <el-form
       :model="form"
@@ -16,20 +19,10 @@
       autocomplete="off"
     >
       <div class="form-row">
-        <el-form-item label="Email *" prop="email">
-          <el-input
-            v-model="form.email"
-            type="email"
-            autocomplete="email"
-            placeholder="user@example.com"
-          />
-        </el-form-item>
-      </div>
-      <div class="form-row">
-        <el-form-item label="Фамилия *" prop="lastName">
+        <el-form-item label="Фамилия" prop="lastName">
           <el-input v-model="form.lastName" autocomplete="family-name" placeholder="Иванов" />
         </el-form-item>
-        <el-form-item label="Имя *" prop="firstName">
+        <el-form-item label="Имя" prop="firstName">
           <el-input v-model="form.firstName" autocomplete="given-name" placeholder="Иван" />
         </el-form-item>
       </div>
@@ -41,9 +34,17 @@
             placeholder="Иванович"
           />
         </el-form-item>
+        <el-form-item label="Email" prop="email">
+          <el-input
+            v-model="form.email"
+            type="email"
+            autocomplete="email"
+            placeholder="user@example.com"
+          />
+        </el-form-item>
       </div>
       <div class="form-row">
-        <el-form-item label="Должность *" prop="position">
+        <el-form-item label="Должность" prop="position">
           <el-input
             v-model="form.position"
             autocomplete="organization-title"
@@ -62,7 +63,7 @@
         </el-form-item>
       </div>
       <div class="form-row">
-        <el-form-item label="Пароль *" prop="password">
+        <el-form-item label="Пароль" prop="password">
           <el-input
             v-model="form.password"
             type="password"
@@ -71,7 +72,7 @@
             placeholder="Минимум 6 символов"
           />
         </el-form-item>
-        <el-form-item label="Повторите пароль *" prop="confirmPassword">
+        <el-form-item label="Повторите пароль" prop="confirmPassword">
           <el-input
             v-model="form.confirmPassword"
             type="password"
@@ -330,10 +331,47 @@ const submitRegistration = async () => {
   margin-bottom: 0;
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
+/* Адаптивность формы */
+@media (max-width: 650px) {
   .form-row {
     flex-direction: column;
+  }
+}
+
+/* ✅ Центрирование диалога по вертикали и горизонтали */
+:deep(.registration-dialog) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+:deep(.registration-dialog .el-dialog) {
+  margin: 0 auto !important;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+:deep(.registration-dialog .el-dialog__body) {
+  padding: var(--spacing-md);
+  overflow-y: auto;
+  flex: 1;
+}
+:deep(.registration-dialog .el-dialog__header) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  flex-shrink: 0;
+}
+:deep(.registration-dialog .el-dialog__footer) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  :deep(.registration-dialog .el-dialog__header),
+  :deep(.registration-dialog .el-dialog__body),
+  :deep(.registration-dialog .el-dialog__footer) {
+    padding: var(--spacing-sm);
+  }
+  :deep(.registration-dialog .el-dialog__title) {
+    font-size: 16px;
   }
 }
 </style>

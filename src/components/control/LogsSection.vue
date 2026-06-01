@@ -421,6 +421,67 @@ defineExpose({
   margin-bottom: var(--spacing-md);
 }
 
+/* ✅ Горизонтальная прокрутка таблицы */
+:deep(.data-table.el-table),
+:deep(.data-table .el-table__body-wrapper) {
+  overflow-x: auto;
+}
+
+/* ✅ Фиксация первого столбца (Дата и время) */
+:deep(.data-table .el-table__body tr > td:first-child),
+:deep(.data-table .el-table__header tr > th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
+:deep(.data-table .el-table__body tr:hover > td:first-child) {
+  background: #f5f7fa !important;
+}
+:deep(.data-table .el-table__body tr.el-table__row--striped:hover > td:first-child) {
+  background: #fafafa !important;
+}
+
+/* ✅ Фон заголовка фиксированного столбца */
+:deep(.data-table .el-table__header tr > th:first-child) {
+  background: #fafafa;
+}
+
+/* ✅ Адаптивность: при ≤ 1180px — два ряда фильтров */
+@media (max-width: 1180px) {
+  .filters-row {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  /* Поиск всегда первый */
+  .search-input {
+    order: 0;
+    flex: 1 1 45%;
+    max-width: 48%;
+    min-width: 160px;
+  }
+
+  /* Даты сразу после поиска (в том же ряду) */
+  .filter-select.date-range {
+    order: 1;
+    flex: 1 1 45%;
+    max-width: 48%;
+    min-width: 200px;
+  }
+
+  /* Фильтры на втором ряду */
+  .filter-select:not(.date-range) {
+    order: 2;
+    flex: 1 1 45%;
+    max-width: 48%;
+    min-width: 130px;
+  }
+}
+
 /* Адаптивность */
 @media (max-width: 1024px) {
   .filter-select {
@@ -431,6 +492,7 @@ defineExpose({
   }
 }
 
+/* ✅ При ≤ 768px: чёткое разделение на две строки */
 @media (max-width: 768px) {
   .section-header {
     flex-direction: column;
@@ -438,6 +500,37 @@ defineExpose({
     gap: var(--spacing-sm);
   }
 
+  .filters-row {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  /* Строка 1: Поиск + Даты */
+  .search-input {
+    order: 0;
+    flex: 1 1 48%;
+    max-width: 48%;
+    min-width: 140px;
+  }
+
+  .filter-select.date-range {
+    order: 1;
+    flex: 1 1 48%;
+    max-width: 48%;
+    min-width: 160px;
+  }
+
+  /* Строка 2: Тип события + Доступ */
+  .filter-select:not(.date-range) {
+    order: 2;
+    flex: 1 1 48%;
+    max-width: 48%;
+    min-width: 130px;
+  }
+}
+
+/* ✅ При ≤ 480px: всё в одну колонку для удобства */
+@media (max-width: 480px) {
   .filters-row {
     flex-direction: column;
     align-items: stretch;
@@ -447,6 +540,7 @@ defineExpose({
   .filter-select {
     width: 100%;
     max-width: none;
+    order: unset;
   }
 
   .filter-select.date-range {

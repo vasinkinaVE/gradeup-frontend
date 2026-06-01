@@ -3,7 +3,8 @@
   <el-dialog
     v-model="visible"
     title="Карточка сотрудника"
-    width="750px"
+    width="90%"
+    :style="{ maxWidth: '800px' }"
     destroy-on-close
     @close="handleClose"
   >
@@ -137,7 +138,6 @@
             <el-icon style="margin-right: 4px"><Remove /></el-icon>
             Отвязать профиль
           </el-button>
-          <span class="unlink-hint">Профиль будет удалён, прогресс сброшен</span>
         </div>
 
         <!-- ✅ ИСПРАВЛЕНО: сообщение "не назначен" только когда профиль ДЕЙСТВИТЕЛЬНО не назначен -->
@@ -994,7 +994,7 @@ const unlinkProfile = async () => {
 
   try {
     await ElMessageBox.confirm(
-      `Вы уверены, что хотите отвязать профиль от сотрудника ${props.employee.fullName}? Прогресс и история этапов будут сброшены.`,
+      `Вы уверены, что хотите отвязать профиль от сотрудника ${props.employee.fullName}?`,
       'Отвязать профиль',
       {
         confirmButtonText: 'Отвязать',
@@ -1072,26 +1072,33 @@ watch(
   display: flex;
   gap: var(--spacing-sm);
   padding: var(--spacing-xs) 0;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 .info-label {
   font-weight: var(--font-weight-medium);
   color: #000;
   min-width: 100px;
+  flex-shrink: 0;
 }
 .info-value {
   color: #000;
   flex: 1;
   font-size: 14px;
+  min-width: 0;
+  word-break: break-word;
 }
 .info-edit-row {
   display: flex;
   gap: var(--spacing-xs);
   flex: 1;
+  flex-wrap: wrap;
+  width: 100%;
 }
 .edit-input {
   flex: 1;
   min-width: 0;
+  width: 100%;
 }
 .edit-input-full,
 .edit-select-full {
@@ -1109,6 +1116,7 @@ watch(
   gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 .promotion-actions {
   padding-top: var(--spacing-md);
@@ -1140,9 +1148,11 @@ watch(
   padding: var(--spacing-xs) var(--spacing-sm);
   background: #f9f9f9;
   border-radius: var(--radius-sm);
+  flex-wrap: wrap;
 }
 .dept-filter-select {
   width: 200px;
+  max-width: 100%;
 }
 .filter-hint {
   font-size: 12px;
@@ -1166,6 +1176,7 @@ watch(
   padding: var(--spacing-xs) var(--spacing-sm);
   background: #f9f9f9;
   cursor: pointer;
+  flex-wrap: wrap;
 }
 .profile-collapse-header:hover {
   background: #f0f0f0;
@@ -1181,11 +1192,13 @@ watch(
   font-weight: var(--font-weight-medium);
   color: #000;
   font-size: 14px;
+  min-width: 0;
 }
 .collapse-icon {
   transition: transform 0.2s;
   color: var(--gray);
   font-size: 14px;
+  flex-shrink: 0;
 }
 .collapse-icon.expanded {
   transform: rotate(90deg);
@@ -1232,6 +1245,8 @@ watch(
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 13px;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
 }
 .level-collapse-header:hover,
 .skill-collapse-header:hover {
@@ -1274,6 +1289,7 @@ watch(
   gap: var(--spacing-xs);
   margin-bottom: var(--spacing-sm);
   border-bottom: 2px solid #e0e0e0;
+  flex-wrap: wrap;
 }
 .stage-tab {
   padding: var(--spacing-xs) var(--spacing-md);
@@ -1283,6 +1299,7 @@ watch(
   color: #999;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
+  white-space: nowrap;
 }
 .stage-tab.active {
   color: var(--primary);
@@ -1326,6 +1343,7 @@ watch(
   background: #f5f5f5;
   cursor: pointer;
   font-size: 13px;
+  flex-wrap: wrap;
 }
 .qa-question:hover,
 .task-title:hover {
@@ -1334,6 +1352,8 @@ watch(
 .qa-question-text,
 .task-text {
   flex: 1;
+  min-width: 0;
+  word-break: break-word;
 }
 .qa-answer,
 .task-criteria {
@@ -1345,6 +1365,7 @@ watch(
 }
 .task-criteria p {
   margin: var(--spacing-xs) 0 0 0;
+  word-break: break-word;
 }
 .unlink-profile-section {
   display: flex;
@@ -1353,10 +1374,202 @@ watch(
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-sm);
   border-top: 1px dashed #f56c6c;
+  flex-wrap: wrap;
 }
 .unlink-hint {
   font-size: 12px;
   color: var(--gray);
   font-style: italic;
+}
+
+/* ✅ АДАПТИВНОСТЬ МОДАЛЬНОГО ОКНА (только диалог, внутренние компоненты не трогаем) */
+
+/* Базовые стили для центрирования и ограничения высоты */
+:deep(.el-dialog) {
+  margin: 0 auto !important;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+}
+
+:deep(.el-dialog__header) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid #eee;
+}
+
+:deep(.el-dialog__body) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  overflow-y: auto;
+  flex: 1;
+}
+
+:deep(.el-dialog__footer) {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid #eee;
+}
+
+:deep(.el-dialog__title) {
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ✅ Адаптивность ширины диалога */
+/* ≤ 1024px: уменьшаем ширину */
+:deep(.el-dialog) {
+  width: 90% !important;
+  max-width: 750px !important;
+}
+
+@media (max-width: 1024px) {
+  :deep(.el-dialog) {
+    width: 92% !important;
+    max-width: 95vw !important;
+  }
+}
+
+/* ≤ 768px: ещё больше сжимаем */
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    width: 95% !important;
+    max-width: 95vw !important;
+  }
+  :deep(.el-dialog__header),
+  :deep(.el-dialog__body),
+  :deep(.el-dialog__footer) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  :deep(.el-dialog__title) {
+    font-size: 16px;
+  }
+}
+
+/* ≤ 480px: минимальные отступы */
+@media (max-width: 480px) {
+  :deep(.el-dialog) {
+    width: 98% !important;
+    max-width: 98vw !important;
+  }
+  :deep(.el-dialog__header),
+  :deep(.el-dialog__body),
+  :deep(.el-dialog__footer) {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  :deep(.el-dialog__title) {
+    font-size: 15px;
+  }
+}
+
+/* ✅ Корректное отображение скролла внутри диалога */
+:deep(.el-dialog__body) {
+  scrollbar-width: thin;
+  scrollbar-color: #c0c4cc #f0f2f5;
+}
+:deep(.el-dialog__body::-webkit-scrollbar) {
+  width: 6px;
+}
+:deep(.el-dialog__body::-webkit-scrollbar-track) {
+  background: #f0f2f5;
+  border-radius: 3px;
+}
+:deep(.el-dialog__body::-webkit-scrollbar-thumb) {
+  background: #c0c4cc;
+  border-radius: 3px;
+}
+:deep(.el-dialog__body::-webkit-scrollbar-thumb:hover) {
+  background: #909399;
+}
+
+/* ✅ КАСТОМИЗАЦИЯ КНОПОК */
+
+/* Кнопка "Редактировать" — цвет #4a2c6d (только когда она одна в detail-actions) */
+:deep(.detail-actions .el-button--primary:not(:last-child)),
+:deep(.detail-actions .el-button--primary:only-child) {
+  --el-button-bg-color: #4a2c6d !important;
+  --el-button-border-color: #4a2c6d !important;
+  --el-button-hover-bg-color: #3a2356 !important;
+  --el-button-hover-border-color: #3a2356 !important;
+  --el-button-active-bg-color: #2a1a40 !important;
+  --el-button-active-border-color: #2a1a40 !important;
+  --el-button-text-color: #fff !important;
+  --el-button-hover-text-color: #fff !important;
+  --el-button-active-text-color: #fff !important;
+}
+:deep(.detail-actions .el-button--primary:not(:last-child).el-button),
+:deep(.detail-actions .el-button--primary:only-child.el-button) {
+  background-color: #4a2c6d !important;
+  border-color: #4a2c6d !important;
+  color: #fff !important;
+}
+:deep(.detail-actions .el-button--primary:not(:last-child).el-button:hover),
+:deep(.detail-actions .el-button--primary:only-child.el-button:hover) {
+  background-color: #3a2356 !important;
+  border-color: #3a2356 !important;
+}
+
+/* Кнопка "Сохранить" (в режиме редактирования) — зелёная, как "Повысить" */
+:deep(.detail-actions .el-button--primary:last-child:not(:only-child)) {
+  --el-button-bg-color: #67c23a !important;
+  --el-button-border-color: #67c23a !important;
+  --el-button-hover-bg-color: #5daf34 !important;
+  --el-button-hover-border-color: #5daf34 !important;
+  --el-button-active-bg-color: #53a32f !important;
+  --el-button-active-border-color: #53a32f !important;
+  --el-button-text-color: #fff !important;
+  --el-button-hover-text-color: #fff !important;
+  --el-button-active-text-color: #fff !important;
+}
+:deep(.detail-actions .el-button--primary:last-child:not(:only-child).el-button) {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  color: #fff !important;
+}
+:deep(.detail-actions .el-button--primary:last-child:not(:only-child).el-button:hover) {
+  background-color: #5daf34 !important;
+  border-color: #5daf34 !important;
+}
+
+/* Кнопка "Назначить профиль" — зелёная, как "Повысить" */
+:deep(.assign-profile-actions .el-button--primary) {
+  --el-button-bg-color: #67c23a !important;
+  --el-button-border-color: #67c23a !important;
+  --el-button-hover-bg-color: #5daf34 !important;
+  --el-button-hover-border-color: #5daf34 !important;
+  --el-button-active-bg-color: #53a32f !important;
+  --el-button-active-border-color: #53a32f !important;
+  --el-button-text-color: #fff !important;
+  --el-button-hover-text-color: #fff !important;
+  --el-button-active-text-color: #fff !important;
+}
+:deep(.assign-profile-actions .el-button--primary.el-button) {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  color: #fff !important;
+}
+:deep(.assign-profile-actions .el-button--primary.el-button:hover) {
+  background-color: #5daf34 !important;
+  border-color: #5daf34 !important;
+}
+
+/* Кнопка "Отмена" — серый при наведении (как в окне подтверждения) */
+:deep(.detail-actions .el-button:not(.el-button--primary):hover) {
+  background-color: #c5c5c5 !important;
+  border-color: #909399 !important;
+  color: #fff !important;
+}
+
+/* ✅ КАСТОМИЗАЦИЯ РАДИО-КНОПОК (выбор профиля) — цвет #6a4c8d */
+:deep(.profile-radio .el-radio__input .el-radio__inner) {
+  border-color: #6a4c8d !important;
+}
+:deep(.profile-radio .el-radio__input.is-checked .el-radio__inner) {
+  background-color: #6a4c8d !important;
+  border-color: #6a4c8d !important;
+}
+:deep(.profile-radio .el-radio__input.is-checked .el-radio__inner::after) {
+  background-color: #fff !important;
+}
+:deep(.profile-radio .el-radio__input:hover .el-radio__inner) {
+  border-color: #6a4c8d !important;
 }
 </style>

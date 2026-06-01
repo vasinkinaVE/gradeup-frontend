@@ -60,7 +60,9 @@
     <el-dialog
       v-model="viewProfileVisible"
       title="Просмотр профиля"
-      :width="700"
+      width="95%"
+      :style="{ maxWidth: '700px' }"
+      align-center
       class="admin-dialog"
       destroy-on-close
     >
@@ -282,7 +284,9 @@
     <el-dialog
       v-model="profileDialogVisible"
       :title="editingProfile ? 'Редактирование профиля' : 'Новый профиль'"
-      :width="700"
+      width="95%"
+      :style="{ maxWidth: '700px' }"
+      align-center
       class="admin-dialog"
       destroy-on-close
     >
@@ -884,7 +888,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
 </script>
 
 <style scoped>
-/* Стили без изменений — сокращено для экономии места */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -924,6 +927,36 @@ defineExpose({ reload, fetchProfilesWithLevels })
 .data-table :deep(.el-table__row:hover) {
   background-color: var(--background);
 }
+
+/* ✅ Горизонтальная прокрутка таблицы */
+:deep(.data-table.el-table),
+:deep(.data-table .el-table__body-wrapper) {
+  overflow-x: auto;
+}
+
+/* ✅ Фиксация первого столбца (Название профиля) */
+:deep(.data-table .el-table__body tr > td:first-child),
+:deep(.data-table .el-table__header tr > th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
+:deep(.data-table .el-table__body tr:hover > td:first-child) {
+  background: #f5f7fa !important;
+}
+:deep(.data-table .el-table__body tr.el-table__row--striped:hover > td:first-child) {
+  background: #fafafa !important;
+}
+
+/* ✅ Фон заголовка фиксированного столбца */
+:deep(.data-table .el-table__header tr > th:first-child) {
+  background: #fafafa;
+}
+
 .profile-form {
   max-height: 65vh;
   overflow-y: auto;
@@ -1189,14 +1222,34 @@ defineExpose({ reload, fetchProfilesWithLevels })
   font-style: italic;
   padding: var(--spacing-sm) 0;
 }
-@media (max-width: 768px) {
+
+/* ✅ Адаптивность: кнопка под заголовком при ширине <= 460px */
+@media (max-width: 460px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+  .section-header h2 {
+    font-size: 18px;
+  }
+  .section-header .el-button {
+    align-self: flex-end;
+    width: auto;
+  }
+}
+
+@media (max-width: 668px) {
   .filters-row {
     flex-direction: column;
     align-items: stretch;
   }
-  .search-input,
   .department-filter-select,
   .category-filter-select {
+    width: 30%;
+    max-width: none;
+  }
+  .search-input {
     width: 100%;
     max-width: none;
   }
@@ -1211,6 +1264,7 @@ defineExpose({ reload, fetchProfilesWithLevels })
     text-align: center;
   }
 }
+
 :deep(.admin-dialog .el-dialog__body) {
   padding: var(--spacing-md) var(--spacing-lg);
 }
@@ -1227,5 +1281,49 @@ defineExpose({ reload, fetchProfilesWithLevels })
   border-bottom: 1px solid #e0e0e0;
   padding-bottom: 4px;
   margin-bottom: 4px;
+}
+
+/* ✅ Адаптивность модального окна */
+:deep(.admin-dialog .el-dialog) {
+  margin: 0 auto !important;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+:deep(.admin-dialog .el-dialog__body) {
+  overflow-y: auto;
+  flex: 1;
+}
+
+@media (max-width: 768px) {
+  :deep(.admin-dialog .el-dialog) {
+    width: 95% !important;
+    max-width: 95vw !important;
+  }
+  :deep(.admin-dialog .el-dialog__header),
+  :deep(.admin-dialog .el-dialog__body),
+  :deep(.admin-dialog .el-dialog__footer) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  :deep(.admin-dialog .el-dialog__title) {
+    font-size: 16px;
+  }
+  .view-content {
+    max-height: 70vh;
+  }
+}
+
+@media (max-width: 480px) {
+  :deep(.admin-dialog .el-dialog) {
+    width: 98% !important;
+  }
+  :deep(.admin-dialog .el-dialog__header),
+  :deep(.admin-dialog .el-dialog__body),
+  :deep(.admin-dialog .el-dialog__footer) {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  :deep(.admin-dialog .el-dialog__title) {
+    font-size: 15px;
+  }
 }
 </style>

@@ -316,7 +316,6 @@ const handleGradeError = (e: any) => console.error('Ошибка:', e)
 </script>
 
 <style scoped>
-/* Стили идентичны предыдущей версии */
 .employee-dashboard {
   min-height: 100vh;
   background-color: var(--background);
@@ -437,13 +436,9 @@ const handleGradeError = (e: any) => console.error('Ошибка:', e)
   color: var(--gray);
   font-size: 14px;
   line-height: 1.5;
-  padding: var(--spacing-lg) 0;
+  padding: var(--spacing-md) 0;
   text-align: center;
   width: 100%;
-  min-height: 220px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 :deep(.el-card__header) {
   padding: var(--spacing-md) var(--spacing-lg);

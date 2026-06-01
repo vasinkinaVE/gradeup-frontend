@@ -3,14 +3,16 @@
   <el-dialog
     v-model="dialogVisible"
     :title="isEditing ? 'Редактирование встречи' : 'Новая встреча'"
-    :width="550"
+    width="95%"
+    :style="{ maxWidth: '550px' }"
     class="admin-dialog meeting-dialog"
     destroy-on-close
     @close="handleClose"
+    align-center
   >
     <el-form :model="form" :rules="rules" ref="formRef" label-position="top" class="meeting-form">
       <!-- ✅ Участники -->
-      <el-form-item label="Участники *" prop="participants">
+      <el-form-item label="Участники" prop="participants">
         <div class="participants-section">
           <!-- Аттестуемый -->
           <div class="participant-row">
@@ -74,7 +76,7 @@
       </el-form-item>
 
       <!-- ✅ Навык -->
-      <el-form-item label="Навык *">
+      <el-form-item label="Навык">
         <el-select
           v-model="selectedSkillId"
           placeholder="Сначала выберите аттестуемого"
@@ -94,7 +96,7 @@
       </el-form-item>
 
       <!-- ✅ Тип этапа -->
-      <el-form-item label="Тип этапа *" prop="stage_id">
+      <el-form-item label="Тип этапа" prop="stage_id">
         <el-select
           v-model="form.stage_id"
           placeholder="Сначала выберите навык"
@@ -112,7 +114,7 @@
 
       <!-- ✅ Дата/время и Длительность -->
       <div class="form-row with-top-margin">
-        <el-form-item label="Дата и время *" prop="started_at" class="form-col">
+        <el-form-item label="Дата и время" prop="started_at" class="form-col">
           <el-date-picker
             v-model="form.started_at"
             type="datetime"
@@ -122,7 +124,7 @@
             :disabled-date="disablePastDates"
           />
         </el-form-item>
-        <el-form-item label="Длительность (мин) *" prop="duration" class="form-col">
+        <el-form-item label="Длительность (мин)" prop="duration" class="form-col">
           <el-input-number
             v-model="form.duration"
             :min="15"
@@ -135,7 +137,7 @@
       </div>
 
       <!-- ✅ Место -->
-      <el-form-item label="Место *" prop="location" class="with-top-margin">
+      <el-form-item label="Место" prop="location" class="with-top-margin">
         <el-input v-model="form.location" placeholder="Например: Переговорная 305, Zoom" />
       </el-form-item>
 
@@ -585,10 +587,9 @@ onMounted(async () => {
 .participant-row {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 .participant-label {
-  min-width: 140px;
+  min-width: 110px;
   flex-shrink: 0;
   font-weight: 500;
   color: #303133;
@@ -626,22 +627,38 @@ onMounted(async () => {
   font-weight: 600;
   color: #303133;
 }
-@media (max-width: 768px) {
+@media (max-width: 375px) {
   .participant-row {
     flex-direction: column;
     align-items: flex-start;
   }
   .participant-label {
     min-width: auto;
-    margin-bottom: 4px;
+    margin-bottom: 2px; /* Уменьшен отступ */
   }
   .participant-select {
     width: 100%;
     min-width: auto;
   }
+  .meeting-form {
+    max-height: 60vh;
+  }
+}
+@media (max-width: 446px) {
   .form-row {
     flex-direction: column;
     gap: 8px;
+  }
+  .form-row .el-form-item {
+    width: 100%;
+    flex: none;
+  }
+  .full-width-input {
+    width: 40%;
+  }
+  .full-width-select {
+    width: 100%;
+    max-width: 100%;
   }
   .meeting-form {
     max-height: 60vh;

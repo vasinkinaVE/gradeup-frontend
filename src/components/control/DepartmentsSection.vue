@@ -49,9 +49,11 @@
     <el-dialog
       v-model="viewDepartmentVisible"
       title="Просмотр отдела"
-      :width="600"
+      width="90%"
+      :style="{ maxWidth: '700px' }"
       class="admin-dialog"
       destroy-on-close
+      align-center
     >
       <div v-if="viewingDepartment" class="view-content" v-loading="viewLoading">
         <div class="view-row">
@@ -123,10 +125,12 @@
     <el-dialog
       v-model="departmentDialogVisible"
       :title="editingDepartment ? 'Редактирование отдела' : 'Новый отдел'"
-      :width="600"
+      width="95%"
+      :style="{ maxWidth: '700px' }"
       class="admin-dialog"
       destroy-on-close
       @open="onDialogOpen"
+      align-center
     >
       <el-form :model="departmentForm" label-position="top" v-loading="actionLoading">
         <el-form-item label="Название отдела *" prop="name">
@@ -684,7 +688,6 @@ defineExpose({
 </script>
 
 <style scoped>
-/* Стили без изменений */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -724,6 +727,35 @@ defineExpose({
 
 .data-table :deep(.el-table__row:hover) {
   background-color: var(--background);
+}
+
+/* ✅ Горизонтальная прокрутка таблицы */
+:deep(.data-table.el-table),
+:deep(.data-table .el-table__body-wrapper) {
+  overflow-x: auto;
+}
+
+/* ✅ Фиксация первого столбца (Название отдела) */
+:deep(.data-table .el-table__body tr > td:first-child),
+:deep(.data-table .el-table__header tr > th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
+:deep(.data-table .el-table__body tr:hover > td:first-child) {
+  background: #f5f7fa !important;
+}
+:deep(.data-table .el-table__body tr.el-table__row--striped:hover > td:first-child) {
+  background: #fafafa !important;
+}
+
+/* ✅ Фон заголовка фиксированного столбца */
+:deep(.data-table .el-table__header tr > th:first-child) {
+  background: #fafafa;
 }
 
 :deep(.admin-dialog .el-dialog__body) {
@@ -790,6 +822,19 @@ defineExpose({
   margin: 2px 0;
 }
 
+/* ✅ Адаптивность модального окна */
+:deep(.admin-dialog .el-dialog) {
+  margin: 0 auto !important;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.admin-dialog .el-dialog__body) {
+  overflow-y: auto;
+  flex: 1;
+}
+
 @media (max-width: 768px) {
   .filters-row {
     flex-direction: column;
@@ -802,6 +847,59 @@ defineExpose({
   .supervisor-info {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  :deep(.admin-dialog .el-dialog) {
+    width: 95% !important;
+    max-width: 95vw !important;
+  }
+
+  :deep(.admin-dialog .el-dialog__header),
+  :deep(.admin-dialog .el-dialog__body),
+  :deep(.admin-dialog .el-dialog__footer) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  :deep(.admin-dialog .el-dialog__title) {
+    font-size: 16px;
+  }
+
+  .view-content {
+    max-height: 70vh;
+  }
+}
+
+@media (max-width: 480px) {
+  :deep(.admin-dialog .el-dialog) {
+    width: 98% !important;
+  }
+
+  :deep(.admin-dialog .el-dialog__header),
+  :deep(.admin-dialog .el-dialog__body),
+  :deep(.admin-dialog .el-dialog__footer) {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  :deep(.admin-dialog .el-dialog__title) {
+    font-size: 15px;
+  }
+}
+
+/* ✅ Адаптивность: кнопка под заголовком при ширине <= 420px */
+@media (max-width: 420px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+
+  .section-header h2 {
+    font-size: 18px;
+  }
+
+  .section-header .el-button {
+    align-self: flex-end;
+    width: auto;
   }
 }
 </style>

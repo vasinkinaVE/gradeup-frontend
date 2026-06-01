@@ -993,6 +993,33 @@ defineExpose({
   display: flex;
   gap: var(--spacing-sm);
 }
+
+:deep(.header-actions .el-button--primary) {
+  --el-button-bg-color: #4a2c6d !important;
+  --el-button-border-color: #4a2c6d !important;
+  --el-button-hover-bg-color: #3a2356 !important;
+  --el-button-hover-border-color: #3a2356 !important;
+  --el-button-active-bg-color: #2a1a40 !important;
+  --el-button-active-border-color: #2a1a40 !important;
+  --el-button-text-color: #fff !important;
+  --el-button-hover-text-color: #fff !important;
+  --el-button-active-text-color: #fff !important;
+}
+
+/* ✅ Фоллбэк для старых версий Element Plus */
+:deep(.header-actions .el-button--primary.el-button) {
+  background-color: #4a2c6d !important;
+  border-color: #4a2c6d !important;
+  color: #fff !important;
+}
+:deep(.header-actions .el-button--primary.el-button:hover) {
+  background-color: #3a2356 !important;
+  border-color: #3a2356 !important;
+}
+:deep(.header-actions .el-button--primary.el-button:active) {
+  background-color: #2a1a40 !important;
+  border-color: #2a1a40 !important;
+}
 .filters-row {
   display: flex;
   gap: var(--spacing-md);
@@ -1011,6 +1038,33 @@ defineExpose({
 .data-table {
   width: 100%;
   margin-bottom: var(--spacing-md);
+}
+/* ✅ Горизонтальная прокрутка таблицы */
+:deep(.el-table) {
+  overflow-x: auto;
+}
+:deep(.el-table__body-wrapper) {
+  overflow-x: auto;
+}
+/* ✅ Фиксация первого столбца (ФИО) */
+:deep(.el-table__body tr > td:first-child),
+:deep(.el-table__header tr > th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
+:deep(.el-table__body tr:hover > td:first-child) {
+  background: #f5f7fa !important;
+}
+:deep(.el-table__body tr.el-table__row--striped:hover > td:first-child) {
+  background: #fafafa !important;
+}
+/* ✅ Фон заголовка фиксированного столбца */
+:deep(.el-table__header tr > th:first-child) {
+  background: #fafafa;
 }
 :deep(.el-table .cell) {
   font-weight: 400 !important;
@@ -1072,21 +1126,54 @@ defineExpose({
 .no-rights-text {
   color: #999;
 }
-@media (max-width: 768px) {
+/* ✅ Адаптивность фильтров */
+/* 630px – 768px: фильтр рядом с поиском */
+@media (max-width: 768px) and (min-width: 630px) {
   .view-header {
     flex-direction: column;
     align-items: flex-start;
   }
   .header-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
+  }
+  .filters-row {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .search-input {
+    flex: 1;
+    min-width: 120px;
+    max-width: none;
+  }
+  .department-filter {
+    width: 180px;
+    flex-shrink: 0;
+  }
+}
+/* < 630px: фильтр под поиском, но не на всю ширину */
+@media (max-width: 629px) {
+  .view-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
   .filters-row {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+  .search-input {
+    width: 100%;
+    max-width: 100%;
   }
   .department-filter {
-    width: 100%;
+    width: 180px;
+    max-width: 100%;
+    margin-top: var(--spacing-xs);
   }
 }
 </style>

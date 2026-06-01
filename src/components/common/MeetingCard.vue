@@ -112,7 +112,7 @@
     <el-dialog
       v-model="isModalVisible"
       :title="meeting.skill_name"
-      width="90%"
+      width="80%"
       :style="{ maxWidth: '800px' }"
       :close-on-click-modal="true"
       class="meeting-modal"

@@ -29,8 +29,8 @@
       @row-click="openViewDialog"
       style="cursor: pointer"
     >
-      <el-table-column prop="title" label="Навык" min-width="180" />
-      <el-table-column prop="confirmation_type" label="Тип этапа" width="140">
+      <el-table-column prop="title" label="Навык" width="170" />
+      <el-table-column prop="confirmation_type" label="Тип этапа" min-width="140">
         <template #default="{ row }">
           <el-tag size="small" :type="getStageTypeTag(row.confirmation_type)">
             {{ getStageTypeLabel(row.confirmation_type) }}
@@ -74,7 +74,7 @@
       v-model="viewDialogVisible"
       title="Просмотр встречи"
       width="90%"
-      :style="{ maxWidth: '600px' }"
+      :style="{ maxWidth: '500px' }"
       :close-on-click-modal="true"
       class="view-dialog"
       align-center
@@ -310,6 +310,49 @@ onMounted(() => {
 .data-table :deep(.el-table__row) {
   cursor: pointer;
 }
+
+/* ✅ Горизонтальная прокрутка таблицы */
+:deep(.data-table.el-table),
+:deep(.data-table .el-table__body-wrapper) {
+  overflow-x: auto;
+}
+
+/* ✅ Фиксация первого столбца (Навык) */
+:deep(.data-table .el-table__body tr > td:first-child),
+:deep(.data-table .el-table__header tr > th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+
+/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
+:deep(.data-table .el-table__body tr:hover > td:first-child) {
+  background: #f5f7fa !important;
+}
+:deep(.data-table .el-table__body tr.el-table__row--striped:hover > td:first-child) {
+  background: #fafafa !important;
+}
+
+/* ✅ Фон заголовка фиксированного столбца */
+:deep(.data-table .el-table__header tr > th:first-child) {
+  background: #fafafa;
+}
+
+/* ✅ Ячейки таблицы: контент не обрезается, ячейка расширяется */
+:deep(.data-table .el-table__cell) {
+  padding: 8px 0;
+}
+:deep(.data-table .el-table__cell .cell) {
+  white-space: nowrap;
+  padding: 0 12px;
+  line-height: 1.4;
+}
+:deep(.data-table .el-table__body tr) {
+  height: auto !important;
+}
+
 .participants-display {
   display: flex;
   flex-direction: column;
@@ -338,7 +381,24 @@ onMounted(() => {
   justify-content: flex-end;
   gap: var(--spacing-sm);
 }
-@media (max-width: 768px) {
+
+/* ✅ Адаптивность: кнопка под заголовком при ширине <= 440px */
+@media (max-width: 440px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+  .section-header h2 {
+    font-size: 18px;
+  }
+  .section-header .el-button {
+    align-self: flex-end;
+    width: auto;
+  }
+}
+
+@media (max-width: 350px) {
   .view-row {
     grid-template-columns: 1fr;
     gap: var(--spacing-xs);

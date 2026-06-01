@@ -56,9 +56,11 @@
     <el-dialog
       v-model="categoriesDialogVisible"
       title="Управление категориями"
-      :width="500"
+      width="80%"
+      :style="{ maxWidth: '500px' }"
       class="admin-dialog"
       destroy-on-close
+      align-center
     >
       <div class="categories-list" v-loading="categoriesLoading">
         <el-empty v-if="!categories.length" description="Нет категорий" :image-size="60" />
@@ -102,7 +104,8 @@
     <el-dialog
       v-model="viewSkillVisible"
       title="Просмотр навыка"
-      :width="700"
+      width="95%"
+      :style="{ maxWidth: '900px' }"
       class="admin-dialog"
       destroy-on-close
     >
@@ -238,7 +241,8 @@
     <el-dialog
       v-model="skillDialogVisible"
       :title="editingSkill ? 'Редактирование навыка' : 'Новый навык'"
-      :width="700"
+      width="95%"
+      :style="{ maxWidth: '1000px' }"
       class="admin-dialog"
       destroy-on-close
       :close-on-click-modal="false"
@@ -912,6 +916,31 @@ watch(
 .data-table :deep(.el-table__row:hover) {
   background-color: var(--background);
 }
+/* ✅ Горизонтальная прокрутка таблицы */
+:deep(.data-table.el-table),
+:deep(.data-table .el-table__body-wrapper) {
+  overflow-x: auto;
+}
+/* ✅ Фиксация первого столбца (Название навыка) */
+:deep(.data-table .el-table__body tr > td:first-child),
+:deep(.data-table .el-table__header tr > th:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #fff;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+}
+/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
+:deep(.data-table .el-table__body tr:hover > td:first-child) {
+  background: #f5f7fa !important;
+}
+:deep(.data-table .el-table__body tr.el-table__row--striped:hover > td:first-child) {
+  background: #fafafa !important;
+}
+/* ✅ Фон заголовка фиксированного столбца */
+:deep(.data-table .el-table__header tr > th:first-child) {
+  background: #fafafa;
+}
 .skill-form {
   max-height: 65vh;
   overflow-y: auto;
@@ -1125,6 +1154,7 @@ watch(
   font-style: italic;
 }
 
+/* ✅ АДАПТИВНОСТЬ: кнопки под заголовком выравниваем вправо */
 @media (max-width: 768px) {
   .section-header {
     flex-direction: column;
@@ -1132,7 +1162,7 @@ watch(
   }
   .header-actions {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end; /* ✅ Выравнивание кнопок по правому краю */
   }
   .filters-row {
     flex-direction: column;
@@ -1144,9 +1174,55 @@ watch(
     max-height: 60vh;
   }
 }
-:deep(.admin-dialog .el-dialog__body) {
-  padding: var(--spacing-md) var(--spacing-lg);
+
+/* ✅ АДАПТИВНОСТЬ МОДАЛЬНЫХ ОКОН: только ширина, без изменения содержимого */
+@media (max-width: 1200px) {
+  :deep(.admin-dialog .el-dialog) {
+    width: 85% !important;
+  }
 }
+
+@media (max-width: 992px) {
+  :deep(.admin-dialog .el-dialog) {
+    width: 90% !important;
+  }
+}
+
+@media (max-width: 768px) {
+  :deep(.admin-dialog .el-dialog) {
+    width: 95% !important;
+    max-width: 95vw !important;
+  }
+  :deep(.admin-dialog .el-dialog__header),
+  :deep(.admin-dialog .el-dialog__body),
+  :deep(.admin-dialog .el-dialog__footer) {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  :deep(.admin-dialog .el-dialog__title) {
+    font-size: 16px;
+  }
+  .view-content {
+    max-height: 70vh;
+  }
+  .skill-form {
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 480px) {
+  :deep(.admin-dialog .el-dialog) {
+    width: 98% !important;
+  }
+  :deep(.admin-dialog .el-dialog__header),
+  :deep(.admin-dialog .el-dialog__body),
+  :deep(.admin-dialog .el-dialog__footer) {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  :deep(.admin-dialog .el-dialog__title) {
+    font-size: 15px;
+  }
+}
+
 :deep(.admin-dialog .el-form-item__label) {
   font-weight: var(--font-weight-medium);
 }
