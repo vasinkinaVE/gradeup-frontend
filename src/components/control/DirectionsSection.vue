@@ -1,4 +1,3 @@
-<!-- src/components/control/DirectionsSection.vue -->
 <template>
   <section class="tab-content">
     <div class="section-header">
@@ -9,7 +8,6 @@
       </el-button>
     </div>
 
-    <!-- Поиск -->
     <div class="filters-row">
       <el-input
         v-model="directionSearch"
@@ -20,7 +18,6 @@
       />
     </div>
 
-    <!-- Таблица направлений -->
     <el-table
       :data="filteredDirections"
       stripe
@@ -42,7 +39,6 @@
       </el-table-column>
     </el-table>
 
-    <!-- 🔹 Модальное окно: ПРОСМОТР НАПРАВЛЕНИЯ -->
     <el-dialog
       v-model="viewDirectionVisible"
       title="Просмотр направления"
@@ -93,7 +89,6 @@
       </template>
     </el-dialog>
 
-    <!-- 🔹 Модальное окно: Направление (создание/редактирование) -->
     <el-dialog
       v-model="directionDialogVisible"
       :title="editingDirection ? 'Редактирование направления' : 'Новое направление'"
@@ -117,7 +112,6 @@
           />
         </el-form-item>
 
-        <!-- Руководитель показываем только при редактировании -->
         <el-form-item v-if="editingDirection" label="Руководитель направления" prop="supervisor_id">
           <el-select
             v-model="directionForm.supervisor_id"
@@ -133,9 +127,7 @@
               :value="emp.id"
             />
           </el-select>
-          <div class="form-hint">Выберите сотрудника, который будет руководить направлением</div>
 
-          <!-- Кнопка открепления: показываем ТОЛЬКО при редактировании, если руководитель уже назначен -->
           <el-button
             v-if="editingDirection && directionForm.supervisor_id"
             type="danger"
@@ -202,7 +194,6 @@ const emit = defineEmits(['update:directions', 'refresh'])
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-// === Поиск ===
 const directionSearch = ref('')
 
 const filteredDirections = computed(() => {
@@ -213,14 +204,10 @@ const filteredDirections = computed(() => {
   )
 })
 
-// === Список доступных руководителей (фильтруем из allEmployees) ===
 const availableSupervisors = computed(() => {
-  // Показываем только тех, у кого is_supervisor === false
-  // (те, кто ещё не является руководителем отдела/направления)
   return (props.allEmployees || []).filter((emp) => emp.is_supervisor === false)
 })
 
-// === Модальные окна ===
 const directionDialogVisible = ref(false)
 const viewDirectionVisible = ref(false)
 
@@ -228,7 +215,6 @@ const editingDirection = ref(null)
 const viewingDirection = ref(null)
 const saving = ref(false)
 
-// === Форма направления ===
 const directionForm = ref({
   division_name: '',
   description: '',
@@ -236,7 +222,6 @@ const directionForm = ref({
   departments: [],
 })
 
-// === Хелперы ===
 const formatEmployeeName = (emp) => {
   if (!emp) return ''
   const parts = [emp.last_name, emp.first_name, emp.patronymic].filter(Boolean)
@@ -249,7 +234,6 @@ const formatSupervisorName = (supervisor) => {
   return parts.join(' ') || supervisor.fullName || ''
 }
 
-// === API методы ===
 const fetchDirections = async () => {
   try {
     const res = await fetch(`${API_BASE}/admin/divisions/departments`, {
@@ -284,7 +268,6 @@ const fetchDirectionById = async (id) => {
 
 const fetchAvailableSupervisors = async () => {
   try {
-    // GET /users/ без параметров - получаем всех пользователей
     const res = await fetch(`${API_BASE}/users/`, {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -292,8 +275,6 @@ const fetchAvailableSupervisors = async () => {
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     const data = await res.json()
 
-    // Фильтруем: оставляем только тех, у кого is_supervisor === false
-    // Берём только нужные поля: id, last_name, first_name, patronymic
     return data
       .filter((user) => user.is_supervisor === false)
       .map((user) => ({
@@ -377,7 +358,6 @@ const unassignSupervisorFromDirection = async (id) => {
   }
 }
 
-// === Направления: действия ===
 const viewDirection = async (direction) => {
   try {
     const data = await fetchDirectionById(direction.id)
@@ -385,9 +365,7 @@ const viewDirection = async (direction) => {
       viewingDirection.value = data
       viewDirectionVisible.value = true
     }
-  } catch (err) {
-    // Error already handled in fetchDirectionById
-  }
+  } catch (err) {}
 }
 
 const handleEditDirection = () => {
@@ -416,7 +394,6 @@ const confirmDeleteDirection = async () => {
     if (err?.message !== 'cancel' && err !== 'cancel') {
       ElMessage.error('Ошибка при удалении направления')
     }
-    // отменено
   }
 }
 
@@ -453,7 +430,6 @@ const unassignSupervisor = async () => {
     directionForm.value.supervisor_id = null
     ElMessage.success('Руководитель откреплён')
 
-    // Обновляем данные в списке
     await fetchDirections()
   } catch (err) {
     if (err?.message !== 'cancel' && err !== 'cancel') {
@@ -471,7 +447,6 @@ const saveDirection = async () => {
   saving.value = true
   try {
     if (editingDirection.value) {
-      // Редактирование - отправляем supervisor_id (может быть null)
       const payload = {
         division_name: directionForm.value.division_name,
         description: directionForm.value.description || '',
@@ -481,7 +456,6 @@ const saveDirection = async () => {
       await updateDirection(editingDirection.value.id, payload)
       ElMessage.success('Направление обновлено')
     } else {
-      // Создание - НЕ отправляем supervisor_id (только при редактировании)
       const payload = {
         division_name: directionForm.value.division_name,
         description: directionForm.value.description || '',
@@ -501,12 +475,9 @@ const saveDirection = async () => {
 }
 
 onMounted(async () => {
-  // Загружаем направления при монтировании, если массив пуст
   if (!props.directions?.length) {
     await fetchDirections()
   }
-  // Загружаем список доступных руководителей
-  // (можно кэшировать в родительском компоненте, если нужно)
 })
 
 defineExpose({
@@ -516,7 +487,6 @@ defineExpose({
 </script>
 
 <style scoped>
-/* === Секция === */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -558,13 +528,11 @@ defineExpose({
   background-color: var(--background);
 }
 
-/* ✅ Горизонтальная прокрутка таблицы */
 :deep(.data-table.el-table),
 :deep(.data-table .el-table__body-wrapper) {
   overflow-x: auto;
 }
 
-/* ✅ Фиксация первого столбца (Название направления) */
 :deep(.data-table .el-table__body tr > td:first-child),
 :deep(.data-table .el-table__header tr > th:first-child) {
   position: sticky;
@@ -574,7 +542,6 @@ defineExpose({
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
 }
 
-/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
 :deep(.data-table .el-table__body tr:hover > td:first-child) {
   background: #f5f7fa !important;
 }
@@ -582,12 +549,10 @@ defineExpose({
   background: #fafafa !important;
 }
 
-/* ✅ Фон заголовка фиксированного столбца */
 :deep(.data-table .el-table__header tr > th:first-child) {
   background: #fafafa;
 }
 
-/* Формы */
 :deep(.admin-dialog .el-dialog__body) {
   padding: var(--spacing-md) var(--spacing-lg);
 }
@@ -607,7 +572,6 @@ defineExpose({
   font-size: 12px;
 }
 
-/* === Модальные окна просмотра === */
 .view-content {
   max-height: 60vh;
   overflow-y: auto;
@@ -641,7 +605,6 @@ defineExpose({
   margin: 2px 0;
 }
 
-/* ✅ Адаптивность модального окна */
 :deep(.admin-dialog .el-dialog) {
   margin: 0 auto !important;
   max-height: 90vh;
@@ -654,7 +617,6 @@ defineExpose({
   flex: 1;
 }
 
-/* ✅ Адаптивность: кнопка под заголовком при ширине <= 500px */
 @media (max-width: 500px) {
   .section-header {
     flex-direction: column;
@@ -716,5 +678,49 @@ defineExpose({
   :deep(.admin-dialog .el-dialog__title) {
     font-size: 15px;
   }
+}
+</style>
+
+<style>
+.section-header .el-button--primary {
+  background-color: #4a2c6d !important;
+  border-color: #4a2c6d !important;
+  color: #fff !important;
+}
+.section-header .el-button--primary:hover {
+  background-color: #3a2255 !important;
+  border-color: #3a2255 !important;
+  color: #fff !important;
+}
+.section-header .el-button--primary:active {
+  background-color: #2d1a42 !important;
+  border-color: #2d1a42 !important;
+}
+
+.admin-dialog .el-dialog__footer .el-button--primary:last-child {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  color: #fff !important;
+}
+.admin-dialog .el-dialog__footer .el-button--primary:last-child:hover {
+  background-color: #5daf34 !important;
+  border-color: #5daf34 !important;
+  color: #fff !important;
+}
+.admin-dialog .el-dialog__footer .el-button--primary:last-child:active {
+  background-color: #53a32f !important;
+  border-color: #53a32f !important;
+}
+
+.admin-dialog .el-dialog__footer .el-button:not(.el-button--primary):first-child:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
+}
+
+.admin-dialog .el-dialog__footer .el-button:first-child:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
 }
 </style>

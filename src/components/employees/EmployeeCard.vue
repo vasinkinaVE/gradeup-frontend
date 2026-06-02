@@ -1,4 +1,3 @@
-<!-- src/components/employees/EmployeeCard.vue -->
 <template>
   <el-dialog
     v-model="visible"
@@ -112,7 +111,6 @@
       <div class="detail-section profile-section">
         <h3 class="section-title">Профиль</h3>
 
-        <!-- ✅ Показываем карточку профиля, если он назначен (для всех, только просмотр) -->
         <ProfileCard
           v-if="employee.profileId && (userFullProfile || selectedProfileData)"
           :profile="adaptProfileForCard(userFullProfile || selectedProfileData)"
@@ -123,7 +121,6 @@
           :use-questions-endpoint="true"
         />
 
-        <!-- ✅ Кнопка отвязки только для тех, кто может управлять профилями И может управлять этим сотрудником -->
         <div
           v-if="employee.profileId && canAssignProfile && canManageSpecificEmployee"
           class="unlink-profile-section"
@@ -140,11 +137,9 @@
           </el-button>
         </div>
 
-        <!-- ✅ ИСПРАВЛЕНО: сообщение "не назначен" только когда профиль ДЕЙСТВИТЕЛЬНО не назначен -->
         <div v-if="!employee.profileId" class="profile-unassigned">
           <span class="unassigned-text">Профиль не назначен</span>
 
-          <!-- ✅ Секция назначения только для тех, кто может назначать профили И может управлять этим сотрудником -->
           <div v-if="canAssignProfile && canManageSpecificEmployee" class="assign-profile-section">
             <div class="assign-profile-label">Назначить профиль:</div>
 
@@ -520,11 +515,9 @@ const stageTypes = [
   { key: 'Performance review', label: 'Performance review' },
 ]
 
-// 🔧 Роли для редактирования - загружаются с бэкенда
 const editableRoles = ref<any[]>([])
 const rolesLoading = ref(false)
 
-// 🔧 Словарь для перевода названий ролей
 const ROLE_TRANSLATIONS: Record<string, string> = {
   Employee: 'Сотрудник',
   Supervisor: 'Руководитель',
@@ -607,12 +600,10 @@ const filteredAvailableProfiles = computed(() => {
   return props.availableProfiles
 })
 
-// ✅ ИСПОЛЬЗУЕМ prop из родителя
 const canManageSpecificEmployee = computed(() => {
   return props.canManageSpecificEmployee ?? false
 })
 
-// 🔧 Вспомогательная функция для нормализации роли (добавление displayName)
 const normalizeRole = (role: any): any => {
   if (!role) return null
   const roleName = role.name || role.role_name || ''
@@ -623,7 +614,6 @@ const normalizeRole = (role: any): any => {
   }
 }
 
-// 🔧 Проверка: является ли роль руководителем (исключаем из выбора)
 const isSupervisorRole = (role: any): boolean => {
   const name = (role.name || role.role_name || role.displayName || '').toLowerCase().trim()
   const displayName = (role.displayName || '').toLowerCase().trim()
@@ -635,7 +625,6 @@ const isSupervisorRole = (role: any): boolean => {
   )
 }
 
-// 🔧 Загрузка ролей с бэкенда (исключая Руководитель/Supervisor)
 const fetchEditableRoles = async () => {
   try {
     rolesLoading.value = true
@@ -645,14 +634,12 @@ const fetchEditableRoles = async () => {
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    // 🔧 Исключаем роль Руководитель/Supervisor и нормализуем роли
     editableRoles.value = (Array.isArray(data) ? data : [])
       .filter((role: any) => !isSupervisorRole(role))
       .map((role: any) => normalizeRole(role))
   } catch (err) {
     console.error('Error fetching roles:', err)
     ElMessage.error('Не удалось загрузить список ролей')
-    // Фоллбэк: использовать props.availableRoles с фильтрацией и нормализацией
     editableRoles.value = props.availableRoles
       .filter((role) => !isSupervisorRole(role))
       .map((role: any) => normalizeRole(role))
@@ -1027,7 +1014,6 @@ watch(
     if (v && props.employee) {
       enableEditMode()
       isEditMode.value = false
-      // 🔧 Загружаем роли при открытии диалога в режиме редактирования
       if (props.canEditRole) {
         fetchEditableRoles()
       }
@@ -1382,9 +1368,6 @@ watch(
   font-style: italic;
 }
 
-/* ✅ АДАПТИВНОСТЬ МОДАЛЬНОГО ОКНА (только диалог, внутренние компоненты не трогаем) */
-
-/* Базовые стили для центрирования и ограничения высоты */
 :deep(.el-dialog) {
   margin: 0 auto !important;
   max-height: 90vh;
@@ -1414,8 +1397,6 @@ watch(
   font-weight: var(--font-weight-semibold);
 }
 
-/* ✅ Адаптивность ширины диалога */
-/* ≤ 1024px: уменьшаем ширину */
 :deep(.el-dialog) {
   width: 90% !important;
   max-width: 750px !important;
@@ -1428,7 +1409,6 @@ watch(
   }
 }
 
-/* ≤ 768px: ещё больше сжимаем */
 @media (max-width: 768px) {
   :deep(.el-dialog) {
     width: 95% !important;
@@ -1444,7 +1424,6 @@ watch(
   }
 }
 
-/* ≤ 480px: минимальные отступы */
 @media (max-width: 480px) {
   :deep(.el-dialog) {
     width: 98% !important;
@@ -1460,7 +1439,6 @@ watch(
   }
 }
 
-/* ✅ Корректное отображение скролла внутри диалога */
 :deep(.el-dialog__body) {
   scrollbar-width: thin;
   scrollbar-color: #c0c4cc #f0f2f5;
@@ -1480,9 +1458,6 @@ watch(
   background: #909399;
 }
 
-/* ✅ КАСТОМИЗАЦИЯ КНОПОК */
-
-/* Кнопка "Редактировать" — цвет #4a2c6d (только когда она одна в detail-actions) */
 :deep(.detail-actions .el-button--primary:not(:last-child)),
 :deep(.detail-actions .el-button--primary:only-child) {
   --el-button-bg-color: #4a2c6d !important;
@@ -1507,7 +1482,6 @@ watch(
   border-color: #3a2356 !important;
 }
 
-/* Кнопка "Сохранить" (в режиме редактирования) — зелёная, как "Повысить" */
 :deep(.detail-actions .el-button--primary:last-child:not(:only-child)) {
   --el-button-bg-color: #67c23a !important;
   --el-button-border-color: #67c23a !important;
@@ -1529,7 +1503,6 @@ watch(
   border-color: #5daf34 !important;
 }
 
-/* Кнопка "Назначить профиль" — зелёная, как "Повысить" */
 :deep(.assign-profile-actions .el-button--primary) {
   --el-button-bg-color: #67c23a !important;
   --el-button-border-color: #67c23a !important;
@@ -1551,14 +1524,12 @@ watch(
   border-color: #5daf34 !important;
 }
 
-/* Кнопка "Отмена" — серый при наведении (как в окне подтверждения) */
 :deep(.detail-actions .el-button:not(.el-button--primary):hover) {
-  background-color: #c5c5c5 !important;
-  border-color: #909399 !important;
-  color: #fff !important;
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
 }
 
-/* ✅ КАСТОМИЗАЦИЯ РАДИО-КНОПОК (выбор профиля) — цвет #6a4c8d */
 :deep(.profile-radio .el-radio__input .el-radio__inner) {
   border-color: #6a4c8d !important;
 }

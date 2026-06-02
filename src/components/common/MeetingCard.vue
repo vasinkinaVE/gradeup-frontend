@@ -1,7 +1,5 @@
-<!-- src/components/common/MeetingCard.vue -->
 <template>
   <div class="meeting-card">
-    <!-- Верхняя строка: тип (слева) + статус (справа) -->
     <div class="meeting-header-top">
       <span class="confirmation-badge" :class="getTypeBadgeClass(meeting.confirmation_type)">
         {{ getMeetingTypeText(meeting.confirmation_type) }}
@@ -12,7 +10,6 @@
       </span>
     </div>
 
-    <!-- Заголовок: название встречи (кликабельное) -->
     <div class="meeting-header-bottom">
       <h3
         class="meeting-title meeting-title-clickable"
@@ -23,7 +20,6 @@
       </h3>
     </div>
 
-    <!-- Информация: дата, место, длительность -->
     <div class="meeting-info">
       <div class="info-item">
         <el-icon class="info-icon"><Clock /></el-icon>
@@ -50,7 +46,6 @@
       </div>
     </div>
 
-    <!-- Участники -->
     <div class="participants-section">
       <span class="participants-title">Участники:</span>
       <div class="participants-list">
@@ -66,9 +61,7 @@
       </div>
     </div>
 
-    <!-- Футер с кнопками -->
     <div class="meeting-footer">
-      <!-- ✅ Кнопка "Завершить встречу" - только для Аттестующего, если встреча запланирована -->
       <el-button
         v-if="meeting.role === 'examiner' && meeting.status === 'planned'"
         class="btn-complete"
@@ -80,7 +73,6 @@
         Завершить встречу
       </el-button>
 
-      <!-- ✅ Кнопка "Оценить" - для руководителя, если встреча завершена, не одобрена, и пользователь НЕ аттестуемый -->
       <el-button
         v-if="
           meeting.status === 'completed' &&
@@ -96,7 +88,6 @@
         Оценить
       </el-button>
 
-      <!-- ✅ Кнопка "Результаты" - доступна, если встреча завершена и одобрена -->
       <el-button
         v-if="meeting.status === 'completed' && meeting.is_approved === true"
         class="btn-results"
@@ -108,7 +99,6 @@
       </el-button>
     </div>
 
-    <!-- Модалка с деталями встречи -->
     <el-dialog
       v-model="isModalVisible"
       :title="meeting.skill_name"
@@ -126,7 +116,6 @@
         </div>
 
         <template v-else>
-          <!-- Описание встречи -->
           <div class="modal-section">
             <h4 class="section-title">Описание</h4>
             <p class="section-text" :class="{ 'placeholder-text': !meetingDetails.description }">
@@ -134,7 +123,6 @@
             </p>
           </div>
 
-          <!-- Материалы для подготовки -->
           <div class="modal-section">
             <h4 class="section-title">Материалы для подготовки</h4>
             <div v-if="meetingDetails.materials?.length" class="materials-text">
@@ -149,7 +137,6 @@
             <div v-else class="placeholder-text">Материалы пока не добавлены</div>
           </div>
 
-          <!-- ✅ Вопросы и ответы - без проверки роли, сервер сам фильтрует контент -->
           <div v-if="meetingDetails.questions?.length" class="modal-section">
             <h4 class="section-title">{{ getQuestionsTitle(meeting.confirmation_type) }}</h4>
             <div class="questions-list">
@@ -183,7 +170,6 @@
       </div>
     </el-dialog>
 
-    <!-- Модалка оценки -->
     <el-dialog
       v-model="isGradingModalVisible"
       title="Оценка встречи"
@@ -241,7 +227,6 @@
       </template>
     </el-dialog>
 
-    <!-- Модалка результатов -->
     <el-dialog
       v-model="isResultsModalVisible"
       title="Результаты встречи"
@@ -404,7 +389,6 @@ const resultsMeeting = ref<Meeting | null>(null)
 const resultsLoading = ref(false)
 const resultsData = ref<EvaluationData | null>(null)
 
-// ✅ Проверка: является ли текущий пользователь Аттестуемым в этой встрече
 const isCurrentUserAttested = computed(() => {
   return props.meeting.participants.some(
     (p) => p.is_current_user && (p.role === 'Аттестуемый' || p.role === 'student'),
@@ -420,7 +404,6 @@ const fetchMeetingMaterials = async () => {
   meetingDetails.value = { description: undefined, materials: [], questions: [] }
 
   try {
-    // ✅ Просто вызываем эндпоинт — авторизация и фильтрация на сервере
     const response = await axios.get(`${API_BASE}/meetings/${props.meeting.id}/materials`, {
       headers: { 'Content-Type': 'application/json' },
       withCredentials: true,
@@ -674,7 +657,6 @@ const getMeetingTypeText = (type: string) => {
   return typeMap[type] || type
 }
 
-// ✅ Возвращает класс для типа встречи
 const getTypeBadgeClass = (type: string): string => {
   const classMap: Record<string, string> = {
     certification: 'type-certification',
@@ -709,7 +691,6 @@ defineExpose({
 </script>
 
 <style scoped>
-/* ✅ Базовый стиль для бейджа типа встречи */
 .confirmation-badge {
   border: 1px solid;
   border-radius: 4px;
@@ -722,21 +703,18 @@ defineExpose({
   transition: all 0.2s;
 }
 
-/* ✅ Аттестация - оранжевый */
 .confirmation-badge.type-certification {
   color: #ff9800 !important;
   border-color: #ff9800 !important;
   background-color: rgba(255, 152, 0, 0.1) !important;
 }
 
-/* ✅ Практическое задание - зеленый */
 .confirmation-badge.type-practice {
   color: #4caf50 !important;
   border-color: #4caf50 !important;
   background-color: rgba(76, 175, 80, 0.1) !important;
 }
 
-/* ✅ Performance review - красный */
 .confirmation-badge.type-performance_review {
   color: #f44336 !important;
   border-color: #f44336 !important;
@@ -1139,7 +1117,6 @@ defineExpose({
   background-color: rgba(244, 67, 54, 0.1) !important;
 }
 
-/* Остальные стили модальных окон */
 .grading-modal-content {
   padding: var(--spacing-sm) 0;
 }

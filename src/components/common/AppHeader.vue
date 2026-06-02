@@ -1,15 +1,12 @@
-<!-- src/components/layout/MainHeader.vue -->
 <template>
   <header class="main-header">
     <div class="header-left">
-      <!-- Кнопка гамбургер (видна только на мобильных и планшетах) -->
       <el-button text :icon="Fold" class="mobile-menu-btn" @click="mobileMenuVisible = true" />
 
       <div class="logo">
         <span class="logo-text">GradeUp</span>
       </div>
 
-      <!-- Десктопная навигация -->
       <nav class="main-nav desktop-nav">
         <router-link to="/dashboard" class="nav-link" active-class="active">
           <el-icon><HomeFilled /></el-icon>
@@ -20,7 +17,6 @@
           <span class="nav-text">Календарь</span>
         </router-link>
 
-        <!-- 🔹 Ссылка: Сотрудники (только для SPO/Admin/Supervisor) -->
         <router-link
           v-if="isSPOOrAdminOrManager"
           to="/admin/users"
@@ -57,7 +53,6 @@
       </el-dropdown>
     </div>
 
-    <!-- Мобильное меню (Drawer) -->
     <el-drawer
       v-model="mobileMenuVisible"
       title="Меню"
@@ -80,7 +75,6 @@
           <span>{{ item.label }}</span>
         </router-link>
 
-        <!-- 🔹 Ссылка в мобильном меню: Сотрудники -->
         <router-link
           v-if="isSPOOrAdminOrManager"
           to="/admin/users"
@@ -128,7 +122,6 @@ const mobileMenuVisible = ref(false)
 
 const currentUser = computed(() => authStore.user)
 
-// ✅ Проверка по массиву roles вместо role_name
 const isManager = computed(() => {
   const roles = currentUser.value?.roles?.map((r) => r.toLowerCase()) || []
   return roles.some((r) => ['supervisor', 'руководитель', 'manager'].includes(r))
@@ -169,14 +162,9 @@ const handleLogout = async () => {
       icon: markRaw(WarningFilled),
     })
 
-    // 1. Выполняем логаут (очистка куки + состояния)
     await authStore.logout()
-
-    // 2. 🔥 Принудительный редирект на /login
-    // replace — чтобы нельзя было вернуться кнопкой "Назад"
     await router.replace('/login')
 
-    // 3. Сообщение об успехе
     ElMessage.success('Вы успешно вышли из системы')
   } catch (err: any) {
     const isCancel =
@@ -429,9 +417,9 @@ const navItems = [
 }
 
 .el-message-box .el-message-box__btns button:first-child:hover {
-  background-color: #c5c5c5 !important;
-  border-color: #909399 !important;
-  color: #fff !important;
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
 }
 
 .el-message-box .el-message-box__btns button:last-child {

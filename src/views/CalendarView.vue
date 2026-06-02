@@ -1,4 +1,3 @@
-<!-- src/views/CalendarView.vue -->
 <template>
   <div class="calendar-page">
     <div class="page-header"><h1 class="page-title">Календарь</h1></div>
@@ -146,7 +145,6 @@ const isEmployee = computed(() => {
 })
 const showMeetingsFilter = computed(() => !isEmployee.value)
 
-// ✅ Кэш отделов пользователей
 const userDepartmentCache = ref<Record<number, number | undefined>>({})
 const fetchUserDepartment = async (userId: number): Promise<number | undefined> => {
   if (userDepartmentCache.value[userId] !== undefined) return userDepartmentCache.value[userId]
@@ -163,7 +161,6 @@ const fetchUserDepartment = async (userId: number): Promise<number | undefined> 
   }
 }
 
-// ✅ Кэш отделов направления
 const divisionDepartmentsCache = ref<Record<number, number[]>>({})
 const fetchDivisionDepartments = async (divisionId: number): Promise<number[]> => {
   if (divisionDepartmentsCache.value[divisionId]) return divisionDepartmentsCache.value[divisionId]
@@ -197,7 +194,6 @@ const checkSupervisorRole = (u: any): boolean => {
   return false
 }
 
-// ✅ Проверка прав на оценку для КОНКРЕТНОЙ встречи
 const canUserGradeMeeting = (meeting: Meeting): boolean => {
   const user = currentUser.value
   if (!user || !meeting || meeting.status !== 'completed' || meeting.is_approved !== false)
@@ -316,7 +312,6 @@ const fetchMeetings = async () => {
     })
     const mapped = (res.data || []).map(mapApiMeetingToMeeting)
 
-    // ✅ Пакетно загружаем отделы аттестуемых
     const attestedIds = [
       ...new Set(
         mapped
@@ -329,7 +324,6 @@ const fetchMeetings = async () => {
     ]
     await Promise.all(attestedIds.map((id) => fetchUserDepartment(id)))
 
-    // ✅ Присваиваем department_id встречам
     mapped.forEach((m) => {
       const att = m.participants.find((p) => p.role === 'Аттестуемый' || p.role === 'student')
       if (att) m.department_id = userDepartmentCache.value[att.user_id]
@@ -426,7 +420,6 @@ onMounted(() => fetchMeetings())
 </script>
 
 <style scoped>
-/* Стили идентичны предыдущей версии */
 .calendar-page {
   padding: var(--spacing-lg);
   max-width: 1200px;

@@ -1,4 +1,3 @@
-<!-- src/views/DashboardView.vue -->
 <template>
   <div class="employee-dashboard">
     <div class="dashboard-content">
@@ -137,7 +136,6 @@ const userProfile = ref<{
   ready_gradeup: boolean
 } | null>(null)
 
-// ✅ Кэш отделов пользователей
 const userDepartmentCache = ref<Record<number, number | undefined>>({})
 
 const fetchUserDepartment = async (userId: number): Promise<number | undefined> => {
@@ -155,7 +153,6 @@ const fetchUserDepartment = async (userId: number): Promise<number | undefined> 
   }
 }
 
-// ✅ Проверка прав на оценку (зависит от department_id, который подгрузится асинхронно)
 const canGradeMeeting = computed(() => {
   const user = currentUser.value
   const meeting = upcomingMeeting.value
@@ -178,7 +175,7 @@ const canGradeMeeting = computed(() => {
 
   if (user.managed_division_id === null && user.department_id)
     return meeting.department_id === user.department_id
-  if (user.managed_division_id != null) return true // Детальная проверка отделов направления делается при загрузке
+  if (user.managed_division_id != null) return true
   return false
 })
 
@@ -240,7 +237,6 @@ const fetchUpcomingMeeting = async () => {
     if (user?.managed_division_id === null && user?.department_id)
       params.department_id = user.department_id
     else if (user?.managed_division_id != null) {
-      /* Логика направления */
     }
 
     const res = await axios.get(`${API_BASE}/meetings/next`, {
@@ -264,7 +260,6 @@ const fetchUpcomingMeeting = async () => {
 
     const meeting = mapMeetingData(data, currentUserId.value)
 
-    // ✅ Вычисляем department_id через профиль аттестуемого
     const attested = meeting.participants.find(
       (p) => p.role === 'Аттестуемый' || p.role === 'student',
     )

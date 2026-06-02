@@ -1,4 +1,3 @@
-<!-- src/views/NotFoundView.vue -->
 <template>
   <div class="not-found">
     <div class="not-found-content">

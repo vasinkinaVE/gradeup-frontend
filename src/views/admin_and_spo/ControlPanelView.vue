@@ -1,4 +1,3 @@
-<!-- src/views/admin_and_spo/ControlPanelView.vue -->
 <template>
   <div class="control-panel">
     <header class="panel-header">
@@ -71,7 +70,6 @@
       @refresh="handleRefresh"
     />
 
-    <!-- ✅ Исправлено: убран @update:logs, fetchLogs вызывается только через @refresh -->
     <LogsSection
       v-if="activeTab === 'logs'"
       v-model:logs="logs"
@@ -230,12 +228,12 @@ const fetchSkills = async () => {
         }
         newSkills.push(skillObj)
       } catch (err) {
-        console.error('❌ Error normalizing skill:', s, err)
+        console.error('Error normalizing skill:', s, err)
       }
     }
     skills.value = newSkills
   } catch (err) {
-    console.error('❌ Error fetching skills:', err)
+    console.error('Error fetching skills:', err)
     ElMessage.error('Не удалось загрузить навыки')
     skills.value = []
   } finally {
@@ -253,7 +251,7 @@ const fetchEmployees = async () => {
     const data = await res.json()
 
     if (data.length > 0) {
-      console.log('📦 Raw employee sample:', data[0])
+      console.log('Raw employee sample:', data[0])
     }
 
     employees.value = data.map((emp) => ({
@@ -265,12 +263,12 @@ const fetchEmployees = async () => {
       is_supervisor: emp.is_supervisor ?? false,
     }))
 
-    console.log('✅ Employees loaded:', employees.value.length)
+    console.log('Employees loaded:', employees.value.length)
     if (employees.value.length > 0) {
-      console.log('✅ Mapped employee sample:', employees.value[0])
+      console.log('Mapped employee sample:', employees.value[0])
     }
   } catch (err) {
-    console.error('❌ Error fetching employees:', err)
+    console.error('Error fetching employees:', err)
     ElMessage.error('Не удалось загрузить список сотрудников')
     employees.value = []
   }
@@ -393,7 +391,6 @@ const fetchProfiles = async (deptIds = null) => {
   }
 }
 
-// ✅ Загрузка логов с сервера: GET /admin/events
 const fetchLogs = async (filters = {}) => {
   try {
     logsLoading.value = true
@@ -428,7 +425,6 @@ const fetchLogs = async (filters = {}) => {
 
     const data = await res.json()
 
-    // ✅ Маппинг ответа API — БЕЗ target_type
     logs.value = Array.isArray(data)
       ? data.map((log) => ({
           id: log.id,
@@ -449,22 +445,18 @@ const fetchLogs = async (filters = {}) => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: Только обновляем фильтры, запрос выполняется через @refresh
 const handleLogsFiltersUpdate = (newFilters) => {
-  // МЕРДЖИМ новые фильтры с существующими
   currentLogsFilters.value = {
     ...currentLogsFilters.value,
     ...newFilters,
   }
 
-  // Удаляем ключи со значениями null/''/пустой массив — это сигнал "очистить фильтр"
   Object.keys(currentLogsFilters.value).forEach((key) => {
     const val = currentLogsFilters.value[key]
     if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) {
       delete currentLogsFilters.value[key]
     }
   })
-  // ✅ Запрос к API выполняется отдельно через событие @refresh
 }
 
 const handleRefresh = () => {}
@@ -509,7 +501,6 @@ const onTabChange = async (tabId) => {
   if (tabId === 'profiles' && !profiles.value.length) {
     await fetchProfiles(profileDepartmentFilter.value.length ? profileDepartmentFilter.value : null)
   }
-  // ✅ Для logs не вызываем fetchLogs вручную — LogsSection сделает это сам при монтировании
 }
 
 const reloadDepartments = async () => {
@@ -611,7 +602,7 @@ defineExpose({
   background: rgba(255, 255, 255, 0.1);
 }
 .tab-btn.active {
-  background: var(--primary);
+  background: var(--secondary);
   color: #fff;
 }
 .tab-btn .el-icon {

@@ -1,4 +1,3 @@
-<!-- src/components/control/MeetingSection.vue -->
 <template>
   <section class="tab-content">
     <div class="section-header">
@@ -9,7 +8,6 @@
       </el-button>
     </div>
 
-    <!-- Поиск -->
     <div class="filters-row">
       <el-input
         v-model="searchQuery"
@@ -20,7 +18,6 @@
       />
     </div>
 
-    <!-- Таблица встреч -->
     <el-table
       :data="filteredMeetings"
       stripe
@@ -60,8 +57,6 @@
       </el-table-column>
     </el-table>
 
-    <!-- Модальное окно создания/редактирования -->
-    <!-- ✅ employees больше не передаётся — MeetingDialog загружает их сам -->
     <MeetingDialog
       v-model="dialogVisible"
       :meeting="selectedMeeting"
@@ -69,7 +64,6 @@
       @close="onDialogClose"
     />
 
-    <!-- Модальное окно просмотра (только чтение + кнопки) -->
     <el-dialog
       v-model="viewDialogVisible"
       title="Просмотр встречи"
@@ -150,7 +144,6 @@ interface Meeting {
   examiner?: { id: number; full_name: string }
 }
 
-// ✅ Employee интерфейс оставлен для типов встреч (student/examiner)
 interface Employee {
   id: number
   first_name: string
@@ -159,7 +152,6 @@ interface Employee {
   department_name?: string
 }
 
-// ✅ employees prop оставлен для совместимости, но не используется для диалога
 const props = defineProps<{
   employees?: Employee[]
 }>()
@@ -175,7 +167,6 @@ const viewDialogVisible = ref(false)
 const selectedMeeting = ref<Meeting | null>(null)
 const viewMeeting = ref<Meeting | null>(null)
 
-// === Загрузка встреч ===
 const fetchMeetings = async () => {
   try {
     const res = await axios.get<Meeting[]>(`${API_BASE}/meetings/`)
@@ -194,7 +185,6 @@ const fetchMeetings = async () => {
   }
 }
 
-// === Фильтрация ===
 const filteredMeetings = computed(() => {
   if (!Array.isArray(meetings.value)) return []
   if (!searchQuery.value) return meetings.value
@@ -207,7 +197,6 @@ const filteredMeetings = computed(() => {
   })
 })
 
-// === Хелперы ===
 const getStageTypeLabel = (type: string) => {
   const map: Record<string, string> = {
     Аттестация: 'Аттестация',
@@ -237,7 +226,6 @@ const formatDateTime = (dt: string) => {
   }).format(new Date(dt))
 }
 
-// === Диалоги ===
 const openCreateDialog = () => {
   selectedMeeting.value = null
   dialogVisible.value = true
@@ -254,7 +242,6 @@ const openViewDialog = (meeting: Meeting) => {
   viewDialogVisible.value = true
 }
 
-// === Обработчики событий ===
 const onMeetingSaved = () => {
   fetchMeetings()
 }
@@ -311,13 +298,11 @@ onMounted(() => {
   cursor: pointer;
 }
 
-/* ✅ Горизонтальная прокрутка таблицы */
 :deep(.data-table.el-table),
 :deep(.data-table .el-table__body-wrapper) {
   overflow-x: auto;
 }
 
-/* ✅ Фиксация первого столбца (Навык) */
 :deep(.data-table .el-table__body tr > td:first-child),
 :deep(.data-table .el-table__header tr > th:first-child) {
   position: sticky;
@@ -327,7 +312,6 @@ onMounted(() => {
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
 }
 
-/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
 :deep(.data-table .el-table__body tr:hover > td:first-child) {
   background: #f5f7fa !important;
 }
@@ -335,12 +319,10 @@ onMounted(() => {
   background: #fafafa !important;
 }
 
-/* ✅ Фон заголовка фиксированного столбца */
 :deep(.data-table .el-table__header tr > th:first-child) {
   background: #fafafa;
 }
 
-/* ✅ Ячейки таблицы: контент не обрезается, ячейка расширяется */
 :deep(.data-table .el-table__cell) {
   padding: 8px 0;
 }
@@ -382,7 +364,6 @@ onMounted(() => {
   gap: var(--spacing-sm);
 }
 
-/* ✅ Адаптивность: кнопка под заголовком при ширине <= 440px */
 @media (max-width: 440px) {
   .section-header {
     flex-direction: column;

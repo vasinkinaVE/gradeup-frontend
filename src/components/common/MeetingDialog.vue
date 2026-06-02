@@ -1,4 +1,3 @@
-<!-- src/components/common/MeetingDialog.vue -->
 <template>
   <el-dialog
     v-model="dialogVisible"
@@ -11,10 +10,8 @@
     align-center
   >
     <el-form :model="form" :rules="rules" ref="formRef" label-position="top" class="meeting-form">
-      <!-- ✅ Участники -->
       <el-form-item label="Участники" prop="participants">
         <div class="participants-section">
-          <!-- Аттестуемый -->
           <div class="participant-row">
             <span class="participant-label">Аттестуемый:</span>
             <el-select
@@ -44,7 +41,6 @@
             </el-select>
           </div>
 
-          <!-- Аттестующий -->
           <div class="participant-row">
             <span class="participant-label">Аттестующий:</span>
             <el-select
@@ -75,7 +71,6 @@
         </div>
       </el-form-item>
 
-      <!-- ✅ Навык -->
       <el-form-item label="Навык">
         <el-select
           v-model="selectedSkillId"
@@ -95,7 +90,6 @@
         <div v-if="skillsLoading" class="loading-text">Загрузка навыков...</div>
       </el-form-item>
 
-      <!-- ✅ Тип этапа -->
       <el-form-item label="Тип этапа" prop="stage_id">
         <el-select
           v-model="form.stage_id"
@@ -112,7 +106,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- ✅ Дата/время и Длительность -->
       <div class="form-row with-top-margin">
         <el-form-item label="Дата и время" prop="started_at" class="form-col">
           <el-date-picker
@@ -136,12 +129,10 @@
         </el-form-item>
       </div>
 
-      <!-- ✅ Место -->
       <el-form-item label="Место" prop="location" class="with-top-margin">
         <el-input v-model="form.location" placeholder="Например: Переговорная 305, Zoom" />
       </el-form-item>
 
-      <!-- ✅ Описание -->
       <el-form-item label="Описание" prop="description">
         <el-input
           v-model="form.description"
@@ -255,16 +246,13 @@ const selectedSkillId = ref<number | null>(null)
 const availableSkills = ref<Skill[]>([])
 const availableStages = ref<Array<{ id: number; confirmation_type: string }>>([])
 
-// 🔥 Вспомогательные computed для отображения текущих значений
 const currentStudentLabel = computed(() => {
   if (!form.value.student_id || !props.meeting) return ''
-  // 🔥 Используем полное ФИО из встречи
   return props.meeting.student?.full_name || ''
 })
 
 const currentExaminerLabel = computed(() => {
   if (!form.value.examiner_id || !props.meeting) return ''
-  // 🔥 Используем полное ФИО из встречи
   return props.meeting.examiner?.full_name || ''
 })
 
@@ -282,7 +270,6 @@ const currentStageLabel = computed(() => {
   return props.meeting?.confirmation_type || ''
 })
 
-// ✅ Правила валидации
 const rules = {
   student_id: [{ required: true, message: 'Выберите аттестуемого', trigger: 'change' }],
   examiner_id: [{ required: true, message: 'Выберите аттестующего', trigger: 'change' }],
@@ -292,13 +279,11 @@ const rules = {
   duration: [{ required: true, message: 'Укажите длительность', trigger: 'blur' }],
 }
 
-// ✅ Фильтрация аттестующих: исключаем выбранного аттестуемого
 const availableExaminers = computed(() => {
   if (!Array.isArray(employeesList.value)) return []
   return employeesList.value.filter((emp) => emp.id !== form.value.student_id)
 })
 
-// ✅ Загрузка сотрудников
 const fetchAvailableEmployees = async () => {
   try {
     employeesLoading.value = true
@@ -323,20 +308,17 @@ const fetchAvailableEmployees = async () => {
   }
 }
 
-// ✅ Загрузка формы при редактировании - 🔥 ИСПРАВЛЕНО: используем user_id
 const loadMeeting = async () => {
   if (!props.meeting) {
     resetForm()
     return
   }
 
-  // Ждем загрузки списка сотрудников
   if (employeesLoading.value) {
     await new Promise((res) => setTimeout(res, 150))
     if (employeesLoading.value) return
   }
 
-  // 🔥 ИСПРАВЛЕНО: используем user_id для формы (а не id записи)
   const studentId =
     props.meeting.student?.user_id ??
     props.meeting.student?.id ??
@@ -350,7 +332,6 @@ const loadMeeting = async () => {
   const stageId = props.meeting.stage_id ?? null
   const skillId = (props.meeting as any).skill_id ?? null
 
-  // 🔥 Заполняем форму используя user_id
   form.value.student_id = studentId
   form.value.examiner_id = examinerId
   form.value.started_at = props.meeting.started_at || null
@@ -360,11 +341,9 @@ const loadMeeting = async () => {
   form.value.stage_id = null
   selectedSkillId.value = null
 
-  // Загружаем навыки используя user_id
   if (studentId) {
     await loadAvailableSkills(studentId)
 
-    // 🔥 ВОССТАНОВЛЕНИЕ КАСКАДА: навык → этапы → выбранный этап
     if (stageId && availableSkills.value.length > 0) {
       const matchedSkill = availableSkills.value.find(
         (skill) => Array.isArray(skill.stages) && skill.stages.some((s) => s.id === stageId),
@@ -375,7 +354,6 @@ const loadMeeting = async () => {
         availableStages.value = matchedSkill.stages || []
         form.value.stage_id = stageId
       } else if (skillId) {
-        // Фолбэк: если этап не найден, но есть skill_id
         selectedSkillId.value = skillId
         const skill = availableSkills.value.find((s) => s.id === skillId)
         if (skill) {
@@ -402,7 +380,6 @@ const resetForm = () => {
   availableStages.value = []
 }
 
-// ✅ Загрузка навыков
 const loadAvailableSkills = async (userId: number) => {
   if (!userId || typeof userId !== 'number' || isNaN(userId)) {
     ElMessage.error('Некорректный ID аттестуемого')
@@ -434,7 +411,6 @@ const loadAvailableSkills = async (userId: number) => {
   }
 }
 
-// ✅ Обработчик изменения аттестуемого
 const onStudentChange = (userId: number) => {
   if (userId) {
     loadAvailableSkills(userId)
@@ -454,7 +430,6 @@ const onStudentChange = (userId: number) => {
   }
 }
 
-// ✅ Обработчик изменения навыка
 const onSkillChange = (skillId: number) => {
   const skill = availableSkills.value.find((s) => s.id === skillId)
   availableStages.value = skill?.stages || []
@@ -463,7 +438,6 @@ const onSkillChange = (skillId: number) => {
   }
 }
 
-// ✅ Хелперы
 const getStageTypeLabel = (type: string) => {
   const map: Record<string, string> = {
     Аттестация: 'Аттестация',
@@ -475,7 +449,6 @@ const getStageTypeLabel = (type: string) => {
 
 const disablePastDates = (date: Date) => date.getTime() < Date.now() - 60 * 60 * 1000
 
-// ✅ Сохранение
 const handleSave = async () => {
   if (!formRef.value) return
   try {
@@ -526,7 +499,6 @@ const handleClose = () => {
   resetForm()
 }
 
-// ✅ Watchers
 watch(
   () => props.modelValue,
   async (val) => {
@@ -634,7 +606,7 @@ onMounted(async () => {
   }
   .participant-label {
     min-width: auto;
-    margin-bottom: 2px; /* Уменьшен отступ */
+    margin-bottom: 2px;
   }
   .participant-select {
     width: 100%;

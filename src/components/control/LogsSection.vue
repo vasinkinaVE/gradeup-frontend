@@ -1,14 +1,10 @@
-<!-- src/components/control/LogsSection.vue -->
 <template>
   <section class="tab-content">
-    <!-- Заголовок секции (кнопка обновить удалена) -->
     <div class="section-header">
       <h2>Журнал событий</h2>
     </div>
 
-    <!-- Поиск и фильтры -->
     <div class="filters-row">
-      <!-- Поиск по сообщению (локальный, так как нет в API) -->
       <el-input
         v-model="logSearch"
         placeholder="Поиск по сообщению"
@@ -18,7 +14,6 @@
         @input="applyLocalFilters"
       />
 
-      <!-- Тип события (event_type) -->
       <el-select
         v-model="eventTypeFilter"
         placeholder="Тип события"
@@ -35,7 +30,6 @@
         />
       </el-select>
 
-      <!-- Доступ (access_scope) -->
       <el-select
         v-model="accessScopeFilter"
         placeholder="Доступ"
@@ -46,7 +40,6 @@
         <el-option v-for="scope in ACCESS_SCOPES" :key="scope" :label="scope" :value="scope" />
       </el-select>
 
-      <!-- Диапазон дат (по умолчанию: вчера — сегодня) -->
       <el-date-picker
         v-model="dateRange"
         type="daterange"
@@ -61,7 +54,6 @@
       />
     </div>
 
-    <!-- Таблица логов -->
     <el-table
       :data="displayedLogs"
       stripe
@@ -69,14 +61,12 @@
       class="data-table"
       :empty-text="loading ? 'Загрузка...' : 'Нет записей'"
     >
-      <!-- Дата и время -->
       <el-table-column prop="created_at" label="Дата и время" width="170" sortable>
         <template #default="{ row }">
           {{ formatDateTime(row.created_at) }}
         </template>
       </el-table-column>
 
-      <!-- Тип события -->
       <el-table-column prop="event_type" label="Тип события" width="160">
         <template #default="{ row }">
           <el-tag size="small" :type="getEventTypeTag(row.event_type)">
@@ -85,7 +75,6 @@
         </template>
       </el-table-column>
 
-      <!-- Доступ (access_scope) -->
       <el-table-column prop="access_scope" label="Доступ" width="120">
         <template #default="{ row }">
           <el-tag size="small" effect="plain">
@@ -94,14 +83,12 @@
         </template>
       </el-table-column>
 
-      <!-- Кто (actor_name) -->
       <el-table-column prop="actor_name" label="Кто" min-width="140" show-overflow-tooltip>
         <template #default="{ row }">
           {{ row.actor_name || `ID: ${row.actor_id}` }}
         </template>
       </el-table-column>
 
-      <!-- Сообщение -->
       <el-table-column prop="message" label="Сообщение" min-width="220" show-overflow-tooltip>
         <template #default="{ row }">
           {{ row.message || '—' }}
@@ -135,27 +122,21 @@ const emit = defineEmits(['update:logs', 'refresh', 'update:apiFilters'])
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-// === Серверные данные ===
 const eventTypes = ref([])
 const eventTypesLoading = ref(false)
 
-// === Статические значения (из API spec) ===
 const ACCESS_SCOPES = ['Admin', 'Specialist', 'Supervisor', 'Employee']
 
-// === Локальные фильтры ===
 const logSearch = ref('')
 const eventTypeFilter = ref('')
 const accessScopeFilter = ref('')
 const dateRange = ref(null)
 
-// === Для отслеживания "эха" от родителя ===
 const lastEmittedFilters = ref(null)
 
-// === Загрузка типов событий с сервера ===
 const fetchEventTypes = async () => {
   try {
     eventTypesLoading.value = true
-    // Предполагаем, что эндпоинт для типов событий отдельный
     const res = await fetch(`${API_BASE}/admin/event-types`, {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -166,7 +147,6 @@ const fetchEventTypes = async () => {
     const data = await res.json()
 
     if (data && typeof data === 'object') {
-      // Фильтруем значения, доступные для event_type
       eventTypes.value = Object.values(data).filter((v) => typeof v === 'string' && v.trim())
     }
   } catch (err) {
@@ -178,13 +158,11 @@ const fetchEventTypes = async () => {
   }
 }
 
-// === Инициализация дат по умолчанию (формат: YYYY-MM-DD) ===
 const getDefaultDateRange = () => {
   const today = new Date()
   const yesterday = new Date(today)
   yesterday.setDate(today.getDate() - 1)
 
-  // ✅ Форматируем как YYYY-MM-DD (без времени)
   const formatDate = (date) => {
     const pad = (n) => String(n).padStart(2, '0')
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
@@ -193,18 +171,14 @@ const getDefaultDateRange = () => {
   return [formatDate(yesterday), formatDate(today)]
 }
 
-// === Локальная фильтрация (только поиск по сообщению) ===
-// Этот метод НЕ триггерит запрос к серверу
 const displayedLogs = computed(() => {
   let result = [...props.logs]
 
-  // Применяем только локальный поиск по тексту
   if (logSearch.value?.trim()) {
     const q = logSearch.value.toLowerCase()
     result = result.filter((log) => log.message?.toLowerCase().includes(q))
   }
 
-  // Сортировка по дате (новые сверху)
   return result.sort((a, b) => {
     const timeA = new Date(a.created_at || 0).getTime()
     const timeB = new Date(b.created_at || 0).getTime()
@@ -212,45 +186,33 @@ const displayedLogs = computed(() => {
   })
 })
 
-// === Сбор ВСЕХ фильтров для отправки на сервер ===
 const collectAllFilters = () => ({
   event_type: eventTypeFilter.value || null,
   access_scope: accessScopeFilter.value || null,
   start_date: dateRange.value?.[0] || null,
   end_date: dateRange.value?.[1] || null,
-  // actor_id и target_id не реализованы в UI, но могут быть добавлены при необходимости
 })
 
-// === Применение фильтров (отправка родителю) ===
-// Родитель должен перехватить 'update:apiFilters' и выполнить запрос к /admin/events
 const applyFilters = () => {
   const filters = collectAllFilters()
 
-  // Отправляем фильтры родителю
   emit('update:apiFilters', filters)
-  emit('refresh') // Сигнал родителю, что нужно обновить данные
+  emit('refresh')
 
-  // Сохраняем копию для защиты от "эха"
   lastEmittedFilters.value = { ...filters }
 }
 
-// === Единый обработчик изменений фильтров ===
 const onFilterChange = () => {
   applyFilters()
 }
 
-// === Обработчик очистки дат ===
 const onDateRangeClear = () => {
   dateRange.value = null
   applyFilters()
 }
 
-// === Локальный поиск (не триггерит сервер) ===
-const applyLocalFilters = () => {
-  // Просто пересчитывает displayedLogs через computed свойство
-}
+const applyLocalFilters = () => {}
 
-// === Форматирование даты для отображения в таблице ===
 const formatDateTime = (timestamp) => {
   if (!timestamp) return '—'
   const date = new Date(timestamp)
@@ -263,7 +225,6 @@ const formatDateTime = (timestamp) => {
   })
 }
 
-// === Маппинг меток для типов событий ===
 const getEventTypeLabel = (type) => {
   const labels = {
     EVALUATE: 'Оценка этапа',
@@ -281,7 +242,6 @@ const getEventTypeLabel = (type) => {
   return labels[type] || type || '—'
 }
 
-// === Цвета тегов для типов событий ===
 const getEventTypeTag = (type) => {
   const map = {
     EVALUATE: 'success',
@@ -299,14 +259,12 @@ const getEventTypeTag = (type) => {
   return map[type] || 'info'
 }
 
-// === Сброс всех фильтров ===
 const resetFilters = () => {
   logSearch.value = ''
   eventTypeFilter.value = ''
   accessScopeFilter.value = ''
   dateRange.value = getDefaultDateRange()
 
-  // Сбрасываем фильтры для сервера (оставляем только даты по умолчанию)
   const filters = {
     event_type: null,
     access_scope: null,
@@ -319,41 +277,33 @@ const resetFilters = () => {
   lastEmittedFilters.value = { ...filters }
 }
 
-// === Синхронизация локальных фильтров с пропсами (от родителя) ===
 const syncFiltersFromProps = (newFilters) => {
-  // Синхронизация дат
   if (newFilters?.start_date && newFilters?.end_date) {
     dateRange.value = [newFilters.start_date, newFilters.end_date]
   } else {
     dateRange.value = null
   }
 
-  // Синхронизация типа события
   if (newFilters?.event_type !== undefined) {
     eventTypeFilter.value = newFilters.event_type || ''
   }
 
-  // Синхронизация доступа
   if (newFilters?.access_scope !== undefined) {
     accessScopeFilter.value = newFilters.access_scope || ''
   }
 }
 
-// === Инициализация при монтировании ===
 onMounted(async () => {
   await fetchEventTypes()
 
-  // Если есть фильтры от родителя — синхронизируем
   if (Object.keys(props.apiFilters).length > 0) {
     syncFiltersFromProps(props.apiFilters)
   } else {
-    // Иначе устанавливаем дефолтные даты и применяем
     dateRange.value = getDefaultDateRange()
     applyFilters()
   }
 })
 
-// Watch на apiFilters с защитой от "эха" (когда родитель отдает обратно то, что мы отправили)
 watch(
   () => props.apiFilters,
   (newFilters) => {
@@ -377,7 +327,6 @@ defineExpose({
 </script>
 
 <style scoped>
-/* === Секция === */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -421,13 +370,11 @@ defineExpose({
   margin-bottom: var(--spacing-md);
 }
 
-/* ✅ Горизонтальная прокрутка таблицы */
 :deep(.data-table.el-table),
 :deep(.data-table .el-table__body-wrapper) {
   overflow-x: auto;
 }
 
-/* ✅ Фиксация первого столбца (Дата и время) */
 :deep(.data-table .el-table__body tr > td:first-child),
 :deep(.data-table .el-table__header tr > th:first-child) {
   position: sticky;
@@ -437,7 +384,6 @@ defineExpose({
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
 }
 
-/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
 :deep(.data-table .el-table__body tr:hover > td:first-child) {
   background: #f5f7fa !important;
 }
@@ -445,19 +391,16 @@ defineExpose({
   background: #fafafa !important;
 }
 
-/* ✅ Фон заголовка фиксированного столбца */
 :deep(.data-table .el-table__header tr > th:first-child) {
   background: #fafafa;
 }
 
-/* ✅ Адаптивность: при ≤ 1180px — два ряда фильтров */
 @media (max-width: 1180px) {
   .filters-row {
     flex-wrap: wrap;
     gap: var(--spacing-xs);
   }
 
-  /* Поиск всегда первый */
   .search-input {
     order: 0;
     flex: 1 1 45%;
@@ -465,7 +408,6 @@ defineExpose({
     min-width: 160px;
   }
 
-  /* Даты сразу после поиска (в том же ряду) */
   .filter-select.date-range {
     order: 1;
     flex: 1 1 45%;
@@ -473,7 +415,6 @@ defineExpose({
     min-width: 200px;
   }
 
-  /* Фильтры на втором ряду */
   .filter-select:not(.date-range) {
     order: 2;
     flex: 1 1 45%;
@@ -482,7 +423,6 @@ defineExpose({
   }
 }
 
-/* Адаптивность */
 @media (max-width: 1024px) {
   .filter-select {
     min-width: 120px;
@@ -492,7 +432,6 @@ defineExpose({
   }
 }
 
-/* ✅ При ≤ 768px: чёткое разделение на две строки */
 @media (max-width: 768px) {
   .section-header {
     flex-direction: column;
@@ -505,7 +444,6 @@ defineExpose({
     gap: var(--spacing-xs);
   }
 
-  /* Строка 1: Поиск + Даты */
   .search-input {
     order: 0;
     flex: 1 1 48%;
@@ -520,7 +458,6 @@ defineExpose({
     min-width: 160px;
   }
 
-  /* Строка 2: Тип события + Доступ */
   .filter-select:not(.date-range) {
     order: 2;
     flex: 1 1 48%;
@@ -529,7 +466,6 @@ defineExpose({
   }
 }
 
-/* ✅ При ≤ 480px: всё в одну колонку для удобства */
 @media (max-width: 480px) {
   .filters-row {
     flex-direction: column;

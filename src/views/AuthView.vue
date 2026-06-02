@@ -77,7 +77,6 @@ const formValues = reactive({
   password: '',
 })
 
-// 🔹 При загрузке: восстанавливаем сохранённый email (если есть)
 onMounted(() => {
   const savedEmail = localStorage.getItem('saved_login_email')
   if (savedEmail) {
@@ -99,23 +98,17 @@ const rules = reactive<FormRules>({
 const handleSubmit = async () => {
   if (!formRef.value) return
 
-  // 1️⃣ Валидация формы (Element Plus сам подсветит ошибки в полях)
   const isValid = await formRef.value.validate().catch(() => false)
   if (!isValid) return
 
-  // 2️ Попытка входа на сервер
   try {
     await authStore.login(formValues.email, formValues.password)
 
-    // 🔹 При успешном входе: сохраняем email для удобства (но НЕ пароль!)
     localStorage.setItem('saved_login_email', formValues.email)
 
-    // Если код дошёл сюда — логин успешен
     ElMessage.success('Добро пожаловать!')
     router.push('/dashboard')
   } catch (error: any) {
-    // 3️ Обработка ошибки сервера или сети
-    // Берём сообщение от бэкенда, если есть. Иначе — стандартное
     const serverMessage =
       error?.response?.data?.message || error?.message || 'Неверный email или пароль'
     ElMessage.error(serverMessage)

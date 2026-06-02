@@ -1,9 +1,13 @@
-<!-- src/components/control/DepartmentsSection.vue -->
 <template>
   <section class="tab-content">
     <div class="section-header">
       <h2>Управление отделами</h2>
-      <el-button type="primary" @click="openDepartmentDialog()" :loading="loading">
+      <el-button
+        type="primary"
+        class="btn-create-dept"
+        @click="openDepartmentDialog()"
+        :loading="loading"
+      >
         <el-icon><Plus /></el-icon>
         Создать отдел
       </el-button>
@@ -75,17 +79,6 @@
                   `${viewingDepartment.supervisor.last_name} ${viewingDepartment.supervisor.first_name} ${viewingDepartment.supervisor.patronymic || ''}`.trim()
                 }}
               </span>
-              <el-button
-                v-if="canManageSupervisor"
-                type="danger"
-                link
-                size="small"
-                @click="confirmUnlinkSupervisor"
-                :loading="actionLoading"
-                class="unlink-btn"
-              >
-                Отвязать
-              </el-button>
             </div>
             <span v-else>—</span>
           </div>
@@ -109,7 +102,11 @@
         </div>
       </div>
       <template #footer>
-        <el-button :icon="Edit" @click="handleEditDepartment" :loading="actionLoading"
+        <el-button
+          class="btn-edit-dept"
+          :icon="Edit"
+          @click="handleEditDepartment"
+          :loading="actionLoading"
           >Редактировать</el-button
         >
         <el-button
@@ -168,13 +165,18 @@
               <span>{{ `${emp.last_name} ${emp.first_name} ${emp.patronymic || ''}`.trim() }}</span>
             </el-option>
           </el-select>
-          <div class="form-hint">
-            {{
-              departmentForm.supervisor_id
-                ? 'Нажмите "Сохранить" для применения'
-                : 'Можно назначить позже через редактирование'
-            }}
-          </div>
+
+          <el-button
+            v-if="editingDepartment && canManageSupervisor && departmentForm.supervisor_id"
+            type="danger"
+            size="small"
+            @click="confirmUnlinkSupervisorInEdit"
+            :loading="actionLoading"
+            style="margin-top: 8px"
+          >
+            <el-icon><Remove /></el-icon>
+            Отвязать руководителя
+          </el-button>
         </el-form-item>
 
         <el-form-item label="Доступные профили" prop="profiles">
@@ -205,10 +207,17 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="departmentDialogVisible = false" :disabled="actionLoading"
+        <el-button
+          class="btn-cancel-dept"
+          @click="departmentDialogVisible = false"
+          :disabled="actionLoading"
           >Отмена</el-button
         >
-        <el-button type="primary" @click="saveDepartment" :loading="actionLoading"
+        <el-button
+          class="btn-save-dept"
+          type="primary"
+          @click="saveDepartment"
+          :loading="actionLoading"
           >Сохранить</el-button
         >
       </template>
@@ -219,7 +228,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit, Search } from '@element-plus/icons-vue'
+import { Plus, Delete, Edit, Search, Remove } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
@@ -247,7 +256,6 @@ const isAdmin = computed(() => {
   return role.includes('admin') || role.includes('администратор')
 })
 
-// ✅ Только администраторы могут управлять руководителем отдела
 const canManageSupervisor = computed(() => {
   const role = authStore.user?.role_name?.toLowerCase() || ''
   return role.includes('admin') || role.includes('администратор')
@@ -348,7 +356,6 @@ const normalizeDepartmentFromBackend = (backendDept) => {
   }
 }
 
-// ✅ Для создания: отправляем всё в одном запросе
 const prepareDepartmentForCreate = (frontendDept) => {
   return {
     department_name: frontendDept.name || frontendDept.department_name || '',
@@ -358,7 +365,6 @@ const prepareDepartmentForCreate = (frontendDept) => {
   }
 }
 
-// ✅ Для обновления отдела: только основные поля (без profiles)
 const prepareDepartmentForUpdate = (frontendDept) => {
   return {
     department_name: frontendDept.name || frontendDept.department_name || '',
@@ -367,7 +373,6 @@ const prepareDepartmentForUpdate = (frontendDept) => {
   }
 }
 
-// ✅ Для обновления профилей отдела: отдельный запрос
 const prepareProfilesForUpdate = (profileIds) => {
   return {
     profiles: Array.isArray(profileIds) ? profileIds : [],
@@ -435,7 +440,6 @@ const createDepartment = async (departmentData) => {
   }
 }
 
-// ✅ Обновление основных данных отдела (без профилей)
 const updateDepartment = async (departmentId, departmentData) => {
   try {
     const payload = prepareDepartmentForUpdate(departmentData)
@@ -459,7 +463,6 @@ const updateDepartment = async (departmentId, departmentData) => {
   }
 }
 
-// ✅ Обновление списка профилей отдела (отдельный эндпоинт)
 const updateDepartmentProfiles = async (departmentId, profileIds) => {
   try {
     const payload = prepareProfilesForUpdate(profileIds)
@@ -578,11 +581,11 @@ const confirmDeleteDepartment = async () => {
   }
 }
 
-const confirmUnlinkSupervisor = async () => {
-  if (!viewingDepartment.value?.id) return
+const confirmUnlinkSupervisorInEdit = async () => {
+  if (!editingDepartment.value?.id) return
   try {
     await ElMessageBox.confirm(
-      `Открепить руководителя от отдела "${viewingDepartment.value.name}"?`,
+      `Открепить руководителя от отдела "${editingDepartment.value.name}"?`,
       'Подтверждение',
       {
         type: 'warning',
@@ -591,11 +594,16 @@ const confirmUnlinkSupervisor = async () => {
       },
     )
     actionLoading.value = true
-    await unlinkSupervisor(viewingDepartment.value.id)
+    await unlinkSupervisor(editingDepartment.value.id)
     ElMessage.success('Руководитель отвязан')
-    const updated = await fetchDepartmentById(viewingDepartment.value.id)
+
+    departmentForm.value.supervisor_id = null
+
+    const updated = await fetchDepartmentById(editingDepartment.value.id)
     if (updated) {
-      viewingDepartment.value = updated
+      if (viewingDepartment.value?.id === updated.id) {
+        viewingDepartment.value = updated
+      }
       const idx = props.departments.findIndex((d) => d.id === updated.id)
       if (idx !== -1) {
         const newDepts = [...props.departments]
@@ -605,12 +613,18 @@ const confirmUnlinkSupervisor = async () => {
     }
   } catch (err) {
     if (err !== 'cancel') {
-      console.error('Error unlinking supervisor:', err)
+      console.error('Error unlinking supervisor in edit:', err)
       ElMessage.error(err.message || 'Ошибка при отвязке руководителя')
     }
   } finally {
     actionLoading.value = false
   }
+}
+
+const confirmUnlinkSupervisor = async () => {
+  if (!viewingDepartment.value?.id) return
+  handleEditDepartment()
+  ElMessage.info('Перейдите в режим редактирования для управления руководителем')
 }
 
 const onDialogOpen = () => {
@@ -655,14 +669,10 @@ const saveDepartment = async () => {
     const isUpdate = !!editingDepartment.value?.id
 
     if (isUpdate) {
-      // ✅ При обновлении: два отдельных запроса
-      // 1. Обновляем основные данные отдела
       await updateDepartment(editingDepartment.value.id, departmentForm.value)
-      // 2. Обновляем список профилей
       await updateDepartmentProfiles(editingDepartment.value.id, departmentForm.value.profiles)
       ElMessage.success('Отдел обновлён')
     } else {
-      // ✅ При создании: один запрос с данными и профилями
       await createDepartment(departmentForm.value)
       ElMessage.success('Отдел создан')
     }
@@ -729,13 +739,11 @@ defineExpose({
   background-color: var(--background);
 }
 
-/* ✅ Горизонтальная прокрутка таблицы */
 :deep(.data-table.el-table),
 :deep(.data-table .el-table__body-wrapper) {
   overflow-x: auto;
 }
 
-/* ✅ Фиксация первого столбца (Название отдела) */
 :deep(.data-table .el-table__body tr > td:first-child),
 :deep(.data-table .el-table__header tr > th:first-child) {
   position: sticky;
@@ -745,7 +753,6 @@ defineExpose({
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
 }
 
-/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
 :deep(.data-table .el-table__body tr:hover > td:first-child) {
   background: #f5f7fa !important;
 }
@@ -753,7 +760,6 @@ defineExpose({
   background: #fafafa !important;
 }
 
-/* ✅ Фон заголовка фиксированного столбца */
 :deep(.data-table .el-table__header tr > th:first-child) {
   background: #fafafa;
 }
@@ -822,7 +828,6 @@ defineExpose({
   margin: 2px 0;
 }
 
-/* ✅ Адаптивность модального окна */
 :deep(.admin-dialog .el-dialog) {
   margin: 0 auto !important;
   max-height: 90vh;
@@ -885,7 +890,6 @@ defineExpose({
   }
 }
 
-/* ✅ Адаптивность: кнопка под заголовком при ширине <= 420px */
 @media (max-width: 420px) {
   .section-header {
     flex-direction: column;
@@ -901,5 +905,59 @@ defineExpose({
     align-self: flex-end;
     width: auto;
   }
+}
+</style>
+
+<style>
+.btn-create-dept.el-button--primary {
+  background-color: #4a2c6d !important;
+  border-color: #4a2c6d !important;
+  color: #fff !important;
+}
+.btn-create-dept.el-button--primary:hover {
+  background-color: #3a2255 !important;
+  border-color: #3a2255 !important;
+  color: #fff !important;
+}
+.btn-create-dept.el-button--primary:active {
+  background-color: #2d1a42 !important;
+  border-color: #2d1a42 !important;
+}
+
+.btn-save-dept.el-button--primary {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  color: #fff !important;
+}
+.btn-save-dept.el-button--primary:hover {
+  background-color: #5daf34 !important;
+  border-color: #5daf34 !important;
+  color: #fff !important;
+}
+.btn-save-dept.el-button--primary:active {
+  background-color: #53a32f !important;
+  border-color: #53a32f !important;
+}
+
+.btn-cancel-dept.el-button {
+  background-color: #fff !important;
+  border-color: #dcdfe6 !important;
+  color: #606266 !important;
+}
+.btn-cancel-dept.el-button:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
+}
+
+.btn-edit-dept.el-button {
+  background-color: #fff !important;
+  border-color: #dcdfe6 !important;
+  color: #606266 !important;
+}
+.btn-edit-dept.el-button:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
 }
 </style>

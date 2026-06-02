@@ -2,21 +2,17 @@ import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
-// ✅ Единый экземпляр axios для cookie-аутентификации
 export const apiClient = axios.create({
   baseURL: API_URL,
-  withCredentials: true, // 🔥 Обязательно: отправлять/получать cookies
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// ❌ Никаких интерцепторов с localStorage — токен в HttpOnly cookie
-
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 401 обрабатываем в компоненте или store, не здесь
     return Promise.reject(error)
   },
 )

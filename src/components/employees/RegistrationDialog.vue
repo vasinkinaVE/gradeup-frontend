@@ -1,4 +1,3 @@
-<!-- src/components/employees/RegistrationDialog.vue -->
 <template>
   <el-dialog
     v-model="visible"
@@ -84,7 +83,6 @@
       </div>
     </el-form>
     <template #footer>
-      <!-- ✅ Добавлены кастомные классы -->
       <el-button class="btn-cancel" @click="handleCancel">Отмена</el-button>
       <el-button
         class="btn-register"
@@ -102,7 +100,6 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 
-// 🔹 Интерфейсы для типизации
 interface Department {
   id: number
   name: string
@@ -184,12 +181,11 @@ const rules: FormRules = {
           callback()
         }
       },
-      trigger: ['blur', 'change'], // 🔹 Добавлен 'change' для реактивности
+      trigger: ['blur', 'change'],
     },
   ],
 }
 
-// 🔹 Отдельная функция для форматирования ошибок
 const formatErrorMessage = (data: ApiErrorResponse): string => {
   if (data.detail) {
     if (Array.isArray(data.detail)) {
@@ -218,7 +214,6 @@ const formatErrorMessage = (data: ApiErrorResponse): string => {
   return 'Ошибка регистрации'
 }
 
-// 🔹 Отмена с сбросом формы
 const handleCancel = () => {
   visible.value = false
   formRef.value?.resetFields()
@@ -236,7 +231,6 @@ const submitRegistration = async () => {
   try {
     await formRef.value.validate()
 
-    // 🔹 Типизированный пейлоад
     const payload: RegistrationPayload = {
       email: form.email,
       first_name: form.firstName,
@@ -247,14 +241,12 @@ const submitRegistration = async () => {
       confirm_password: form.confirmPassword,
     }
 
-    // 🔧 Если отдел выбран — добавляем в запрос
     if (form.departmentId != null) {
       payload.department_id = form.departmentId
     }
 
     const url = `${API_BASE}/auth/registration`
 
-    // 🔹 Логирование только в режиме разработки
     if (import.meta.env.DEV) {
       console.log('📤 Registration request:', { url, payload })
     }
@@ -295,20 +287,16 @@ const submitRegistration = async () => {
     emit('registered')
     visible.value = false
 
-    // 🔹 Корректный сброс формы с очисткой валидации
     formRef.value?.resetFields()
 
     ElMessage.success('Сотрудник успешно зарегистрирован')
   } catch (err: any) {
-    // 🔹 Игнорируем только ошибки валидации Element Plus
     if (err?.errors) {
-      // Ошибки валидации уже отображены визуально, ничего не делаем
       return
     }
 
     console.error('💥 Error in submitRegistration:', err)
 
-    // 🔹 Отображение ошибок с поддержкой переносов строк
     ElMessage.error({
       message: (err.message || 'Ошибка регистрации').replace(/\n/g, '<br>'),
       dangerouslyUseHTMLString: true,
@@ -337,14 +325,12 @@ const submitRegistration = async () => {
   margin-bottom: 0;
 }
 
-/* Адаптивность формы */
 @media (max-width: 650px) {
   .form-row {
     flex-direction: column;
   }
 }
 
-/* ✅ Центрирование диалога по вертикали и горизонтали */
 :deep(.registration-dialog) {
   display: flex !important;
   align-items: center !important;

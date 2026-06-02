@@ -1,4 +1,3 @@
-// src/types/index.ts
 export type UserRole = 'employee' | 'manager' | 'spo' | 'admin'
 
 // Роль в конкретной аттестации (временная)

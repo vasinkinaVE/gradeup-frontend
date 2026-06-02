@@ -1,4 +1,3 @@
-<!-- src/components/common/ProfileCard.vue -->
 <template>
   <div class="profile-card">
     <div class="profile-header">
@@ -111,7 +110,6 @@
             :name="stage.uniqueKey"
           >
             <div class="stage-content">
-              <!-- ✅ Блок 1: Статус защиты (независимый) -->
               <div
                 v-if="stage.is_accepted !== undefined && stage.is_accepted !== null"
                 class="stage-defended"
@@ -132,7 +130,6 @@
               </div>
               <div v-else class="placeholder-text">Этот этап навыка еще не был защищен</div>
 
-              <!-- ✅ Блок 2: Вопросы/задания (независимый) -->
               <div v-if="hasQuestions(stage)" class="stage-questions">
                 <h4 class="section-title">{{ getQuestionsTitle(stage.confirmation_type) }}</h4>
                 <div class="questions-list">
@@ -161,7 +158,6 @@
                   </div>
                 </div>
               </div>
-              <!-- ✅ Показываем сообщение только если useQuestionsEndpoint=true и вопросов нет -->
               <div v-else-if="props.useQuestionsEndpoint" class="placeholder-text">
                 Вопросы/задания не добавлены
               </div>
@@ -322,7 +318,6 @@ const normalizeQuestions = (raw: any[], confirmationType: string): Question[] =>
 const normalizeStages = (skill: Skill | null): Stage[] => {
   if (!skill?.stages || !Array.isArray(skill.stages)) return []
   return skill.stages.map((st: any, i) => {
-    // ✅ Если normalizedQuestions уже есть — используем их
     if (st.normalizedQuestions && Array.isArray(st.normalizedQuestions)) {
       return {
         uniqueKey: `${st.id ?? `s_${i}`}_${st.confirmation_type}`,
@@ -357,7 +352,6 @@ const toggleLevel = (id: number) => {
   i > -1 ? expandedLevels.value.splice(i, 1) : expandedLevels.value.push(id)
 }
 
-// ✅ ИСПРАВЛЕНО: Нормализация стадий при получении данных из API
 const openSkillModal = async (skill: Skill) => {
   selectedSkill.value = { ...skill }
   isModalVisible.value = true
@@ -374,11 +368,9 @@ const openSkillModal = async (skill: Skill) => {
     }
 
     if (apiData && selectedSkill.value) {
-      // Обновляем базовые поля
       if (apiData.description) selectedSkill.value.description = apiData.description
       if (apiData.literature) selectedSkill.value.literature = apiData.literature
 
-      // ✅ ИСПРАВЛЕНО: Если API вернул стадии — нормализуем их сразу
       if (apiData.stages && Array.isArray(apiData.stages)) {
         selectedSkill.value.stages = apiData.stages.map((st: any) => ({
           id: st?.id ?? null,
@@ -387,7 +379,6 @@ const openSkillModal = async (skill: Skill) => {
           is_accepted: st.is_accepted,
           comment: st.comment,
           updated_at: st.updated_at,
-          // ✅ Преобразуем вопросы в формат Question с normalizedQuestions
           normalizedQuestions: (Array.isArray(st.questions) ? st.questions : []).map(
             (q: any, idx: number) => ({
               uniqueKey: q?.id ?? q?.num ?? `q_${idx}`,

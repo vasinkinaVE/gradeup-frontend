@@ -1,4 +1,3 @@
-<!-- src/views/admin_and_spo/EmployeesView.vue -->
 <template>
   <div class="employees-view">
     <header class="view-header">
@@ -399,9 +398,7 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 
 const fetchDepartments = async () => {
   try {
-    // ✅ ИСПРАВЛЕНО: Для СПО+руководитель направления используем тот же эндпоинт, что и для обычного руководителя направления
     if (isSPOAndDivisionSupervisor.value && supervisorDivisionId.value) {
-      // 1. Загружаем отделы направления (для divisionDepartmentIds)
       const res = await fetchWithAuth(`${API_BASE}/admin/divisions/${supervisorDivisionId.value}`)
       if (!res) throw new Error('Auth error')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -409,7 +406,6 @@ const fetchDepartments = async () => {
 
       divisionDepartmentIds.value = data.departments.map((d) => d.id)
 
-      // 2. Загружаем ВСЕ отделы (для отображения в фильтре)
       const allDeptsRes = await fetchWithAuth(`${API_BASE}/admin/departments/`)
       if (allDeptsRes && allDeptsRes.ok) {
         const allDeptsData = await allDeptsRes.json()
@@ -421,7 +417,6 @@ const fetchDepartments = async () => {
             }))
           : []
       } else {
-        // Фоллбэк: если не удалось загрузить все отделы, используем отделы направления
         departments.value = data.departments.map((d) => ({
           id: d.id,
           name: d.department_name || d.name || '',
@@ -431,7 +426,6 @@ const fetchDepartments = async () => {
       return
     }
 
-    // Для СПО+руководитель отдела
     if (isSPOAndDepartmentSupervisor.value && supervisorDepartmentId.value) {
       const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
       if (!res) throw new Error('Auth error')
@@ -448,7 +442,6 @@ const fetchDepartments = async () => {
       return
     }
 
-    // Обычный руководитель направления
     if (isSupervisorWithDivision.value && supervisorDivisionId.value) {
       const res = await fetchWithAuth(`${API_BASE}/admin/divisions/${supervisorDivisionId.value}`)
       if (!res) throw new Error('Auth error')
@@ -463,7 +456,6 @@ const fetchDepartments = async () => {
       return
     }
 
-    // Обычный руководитель отдела
     if (isSupervisor.value && supervisorDepartmentId.value) {
       departments.value = [
         {
@@ -476,7 +468,6 @@ const fetchDepartments = async () => {
       return
     }
 
-    // Админ или СПО без роли руководителя
     const res = await fetchWithAuth(`${API_BASE}/admin/departments/`)
     if (!res) throw new Error('Auth error')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -558,9 +549,7 @@ const fetchEmployees = async () => {
     let url = `${API_BASE}/users/profiles/`
     const params = new URLSearchParams()
 
-    // ✅ ИСПРАВЛЕНО: Для СПО+руководитель направления загружаем ВСЕХ сотрудников (без фильтра)
     if (isSPOAndSupervisor.value) {
-      // Не добавляем фильтры - загружаем всех
     } else if (isSupervisorWithDivision.value) {
       if (divisionDepartmentIds.value.length > 0) {
         divisionDepartmentIds.value.forEach((id) => params.append('departments_id', String(id)))
@@ -1006,7 +995,6 @@ defineExpose({
   --el-button-active-text-color: #fff !important;
 }
 
-/* ✅ Фоллбэк для старых версий Element Plus */
 :deep(.header-actions .el-button--primary.el-button) {
   background-color: #4a2c6d !important;
   border-color: #4a2c6d !important;
@@ -1039,14 +1027,12 @@ defineExpose({
   width: 100%;
   margin-bottom: var(--spacing-md);
 }
-/* ✅ Горизонтальная прокрутка таблицы */
 :deep(.el-table) {
   overflow-x: auto;
 }
 :deep(.el-table__body-wrapper) {
   overflow-x: auto;
 }
-/* ✅ Фиксация первого столбца (ФИО) */
 :deep(.el-table__body tr > td:first-child),
 :deep(.el-table__header tr > th:first-child) {
   position: sticky;
@@ -1055,14 +1041,12 @@ defineExpose({
   background: #fff;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
 }
-/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
 :deep(.el-table__body tr:hover > td:first-child) {
   background: #f5f7fa !important;
 }
 :deep(.el-table__body tr.el-table__row--striped:hover > td:first-child) {
   background: #fafafa !important;
 }
-/* ✅ Фон заголовка фиксированного столбца */
 :deep(.el-table__header tr > th:first-child) {
   background: #fafafa;
 }
@@ -1126,8 +1110,6 @@ defineExpose({
 .no-rights-text {
   color: #999;
 }
-/* ✅ Адаптивность фильтров */
-/* 630px – 768px: фильтр рядом с поиском */
 @media (max-width: 768px) and (min-width: 630px) {
   .view-header {
     flex-direction: column;
@@ -1151,7 +1133,6 @@ defineExpose({
     flex-shrink: 0;
   }
 }
-/* < 630px: фильтр под поиском, но не на всю ширину */
 @media (max-width: 629px) {
   .view-header {
     flex-direction: column;

@@ -1,4 +1,3 @@
-<!-- src/components/control/ProfilesSection.vue -->
 <template>
   <section class="tab-content">
     <div class="section-header">
@@ -56,7 +55,6 @@
       </el-table-column>
     </el-table>
 
-    <!-- 🔹 Модальное окно: ПРОСМОТР ПРОФИЛЯ -->
     <el-dialog
       v-model="viewProfileVisible"
       title="Просмотр профиля"
@@ -280,7 +278,6 @@
       </template>
     </el-dialog>
 
-    <!-- 🔹 Модальное окно: Профиль (редактирование) -->
     <el-dialog
       v-model="profileDialogVisible"
       :title="editingProfile ? 'Редактирование профиля' : 'Новый профиль'"
@@ -700,7 +697,6 @@ const deleteProfile = async (profileId) => {
   return await res.json()
 }
 
-// ✅ ИСПРАВЛЕНО: сохраняем id уровней и профиля при обновлении
 const normalizeProfileFromBackend = (backendProfile) => {
   if (!backendProfile) return null
   let data = backendProfile
@@ -717,7 +713,7 @@ const normalizeProfileFromBackend = (backendProfile) => {
     description: data.description || '',
     levels: Array.isArray(data.levels)
       ? data.levels.map((lvl) => ({
-          id: lvl.id, // ✅ Сохраняем ID уровня
+          id: lvl.id,
           num: lvl.num,
           level_name: lvl.level_name || lvl.name || '',
           level_skills: Array.isArray(lvl.level_skills)
@@ -735,11 +731,10 @@ const normalizeProfileFromBackend = (backendProfile) => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: передаём id профиля и id уровней при обновлении
 const prepareProfileForBackend = (frontendProfile) => {
   const payload = {
     profile: {
-      id: frontendProfile.id || null, // ✅ ID профиля для PUT-запроса
+      id: frontendProfile.id || null,
       title: (frontendProfile.title || '').trim(),
       description: frontendProfile.description || '',
     },
@@ -755,7 +750,6 @@ const prepareProfileForBackend = (frontendProfile) => {
         skills: skillIds,
       }
 
-      // ✅ Ключевое: передаём id уровня при обновлении, чтобы бэкенд обновлял, а не создавал дубликаты
       if (lvl.id != null) {
         levelPayload.id = lvl.id
       }
@@ -820,12 +814,12 @@ const openProfileDialog = (profile = null) => {
     editingProfile.value = profile
     const normalized = normalizeProfileFromBackend(profile)
     profileForm.value = {
-      id: normalized.id, // ✅ Сохраняем ID профиля
+      id: normalized.id,
       title: normalized.title || '',
       description: normalized.description || '',
       levels:
         normalized.levels?.map((lvl) => ({
-          id: lvl.id, // ✅ Сохраняем ID уровня
+          id: lvl.id,
           num: lvl.num,
           level_name: lvl.level_name,
           skills: lvl.skills || [],
@@ -928,13 +922,11 @@ defineExpose({ reload, fetchProfilesWithLevels })
   background-color: var(--background);
 }
 
-/* ✅ Горизонтальная прокрутка таблицы */
 :deep(.data-table.el-table),
 :deep(.data-table .el-table__body-wrapper) {
   overflow-x: auto;
 }
 
-/* ✅ Фиксация первого столбца (Название профиля) */
 :deep(.data-table .el-table__body tr > td:first-child),
 :deep(.data-table .el-table__header tr > th:first-child) {
   position: sticky;
@@ -944,7 +936,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
 }
 
-/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
 :deep(.data-table .el-table__body tr:hover > td:first-child) {
   background: #f5f7fa !important;
 }
@@ -952,7 +943,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
   background: #fafafa !important;
 }
 
-/* ✅ Фон заголовка фиксированного столбца */
 :deep(.data-table .el-table__header tr > th:first-child) {
   background: #fafafa;
 }
@@ -1223,7 +1213,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
   padding: var(--spacing-sm) 0;
 }
 
-/* ✅ Адаптивность: кнопка под заголовком при ширине <= 460px */
 @media (max-width: 460px) {
   .section-header {
     flex-direction: column;
@@ -1283,7 +1272,6 @@ defineExpose({ reload, fetchProfilesWithLevels })
   margin-bottom: 4px;
 }
 
-/* ✅ Адаптивность модального окна */
 :deep(.admin-dialog .el-dialog) {
   margin: 0 auto !important;
   max-height: 90vh;

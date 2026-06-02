@@ -2,70 +2,59 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { authApi } from '@/api/auth'
 
-// 🔹 Тип пользователя — замените на ваш реальный интерфейс
 export interface User {
   id: number
   email: string
   name?: string
   roles: string[]
-  // ... остальные поля
 }
 
 export const useAuthStore = defineStore(
   'auth',
   () => {
     const user = ref<User | null>(null)
-    const isInitialized = ref(false) // 🔥 Флаг: завершена ли проверка аутентификации
+    const isInitialized = ref(false)
 
-    // Загрузка данных текущего пользователя
     const fetchCurrentUser = async () => {
       const data = await authApi.getCurrentUser()
       user.value = data
       return data
     }
 
-    // 🔥 Инициализация при старте приложения
     const initAuth = async () => {
       try {
-        // Пытаемся получить пользователя — браузер автоматически приложит куку
         await fetchCurrentUser()
       } catch (error: any) {
-        // 401 = не авторизован, это нормальная ситуация
         if (error?.response?.status === 401) {
           user.value = null
         } else {
           console.error('Ошибка при инициализации аутентификации:', error)
         }
       } finally {
-        // ✅ Всегда устанавливаем флаг, чтобы роутер продолжил работу
         isInitialized.value = true
       }
     }
 
-    // Логин
     const login = async (email: string, password: string) => {
       await authApi.login(email, password)
-      // После успешного логина сервер установит куку, загружаем данные пользователя
       await fetchCurrentUser()
     }
 
     // Логаут
     const logout = async () => {
       try {
-        await authApi.logout() // Сервер удалит куку
+        await authApi.logout()
       } catch (error) {
         console.error('Ошибка при логауте:', error)
       } finally {
-        user.value = null // Очищаем состояние на фронтенде
+        user.value = null
       }
     }
 
-    // Проверка наличия роли
     const hasRole = (role: string): boolean => {
       return user.value?.roles?.some((r) => r.toLowerCase() === role.toLowerCase()) ?? false
     }
 
-    // Проверка наличия одной из ролей
     const hasAnyRole = (roles: string[]): boolean => {
       if (!user.value?.roles) return false
       const userRoles = user.value.roles.map((r) => r.toLowerCase())
@@ -84,10 +73,9 @@ export const useAuthStore = defineStore(
     }
   },
   {
-    // ✅ Persist только для user (данные), НЕ для токена!
     persist: {
       key: 'gradeup-auth',
-      paths: ['user'], // Кэшируем данные пользователя для мгновенного отображения
+      paths: ['user'],
       storage: localStorage,
     },
   },

@@ -1,21 +1,28 @@
-<!-- src/components/control/SkillSection.vue -->
 <template>
   <section class="tab-content">
     <div class="section-header">
       <h2>Управление навыками</h2>
       <div class="header-actions">
-        <el-button @click="openCategoriesDialog" :loading="categoriesLoading">
+        <el-button
+          class="btn-categories"
+          @click="openCategoriesDialog"
+          :loading="categoriesLoading"
+        >
           <el-icon><Collection /></el-icon>
           Категории
         </el-button>
-        <el-button type="primary" @click="openSkillDialog()" :loading="skillsLoading">
+        <el-button
+          type="primary"
+          class="btn-create-skill"
+          @click="openSkillDialog()"
+          :loading="skillsLoading"
+        >
           <el-icon><Plus /></el-icon>
           Создать навык
         </el-button>
       </div>
     </div>
 
-    <!-- Поиск -->
     <div class="filters-row">
       <el-input
         v-model="skillSearch"
@@ -26,7 +33,6 @@
       />
     </div>
 
-    <!-- Таблица навыков -->
     <el-table
       :data="filteredSkills"
       stripe
@@ -37,7 +43,6 @@
     >
       <el-table-column prop="name" label="Название навыка" min-width="250" />
 
-      <!-- 🔧 Динамическое вычисление имён категорий -->
       <el-table-column label="Категории" width="200" show-overflow-tooltip>
         <template #default="{ row }">
           {{ getSkillCategoryNames(row) }}
@@ -52,7 +57,6 @@
       </el-table-column>
     </el-table>
 
-    <!-- 🔹 Модальное окно: КАТЕГОРИИ -->
     <el-dialog
       v-model="categoriesDialogVisible"
       title="Управление категориями"
@@ -95,12 +99,9 @@
         </el-input>
       </div>
 
-      <template #footer>
-        <el-button @click="categoriesDialogVisible = false">Закрыть</el-button>
-      </template>
+      <template #footer> </template>
     </el-dialog>
 
-    <!-- 🔹 Модальное окно: ПРОСМОТР НАВЫКА -->
     <el-dialog
       v-model="viewSkillVisible"
       title="Просмотр навыка"
@@ -135,7 +136,6 @@
         <div class="view-row">
           <div class="view-label">Этапы</div>
 
-          <!-- 🔧 1. Если этапов нет вообще -->
           <div
             v-if="!viewingSkill.stages || viewingSkill.stages.length === 0"
             class="empty-message"
@@ -143,7 +143,6 @@
             Этапы не добавлены
           </div>
 
-          <!-- 🔧 2. Если этапы есть -->
           <template v-else>
             <div class="stages-tabs">
               <div
@@ -158,7 +157,6 @@
             </div>
 
             <div class="stage-content">
-              <!-- Если нет этапов выбранного типа (например, выбрана вкладка "Практика", а её нет) -->
               <div
                 v-if="!getStagesByType(viewingSkill.stages, selectedViewStageType)?.length"
                 class="empty-message"
@@ -166,7 +164,6 @@
                 Нет данных для этого этапа
               </div>
 
-              <!-- Отображение списка этапов -->
               <template v-else>
                 <div
                   v-for="(stage, idx) in getStagesByType(
@@ -176,12 +173,10 @@
                   :key="stage.id || idx"
                   class="stage-item"
                 >
-                  <!-- Заголовок типа этапа (например "Вопросы и ответы") -->
                   <div class="stage-title">
                     {{ getStageContentTitle(selectedViewStageType) }}
                   </div>
 
-                  <!-- 🔧 3. Если этап есть, но вопросов/заданий нет -->
                   <div
                     v-if="!stage.questions || stage.questions.length === 0"
                     class="empty-message"
@@ -189,7 +184,6 @@
                     Вопросы/задания не добавлены
                   </div>
 
-                  <!-- 🔧 4. Если вопросы/задания есть -->
                   <div v-else class="stage-qa-list">
                     <div v-for="(q, qIdx) in stage.questions" :key="qIdx" class="qa-item">
                       <div
@@ -232,12 +226,11 @@
         </div>
       </div>
       <template #footer>
-        <el-button :icon="Edit" @click="handleEditSkill">Редактировать</el-button>
+        <el-button class="btn-edit" :icon="Edit" @click="handleEditSkill">Редактировать</el-button>
         <el-button type="danger" :icon="Delete" @click="confirmDeleteSkill">Удалить</el-button>
       </template>
     </el-dialog>
 
-    <!-- 🔹 Модальное окно: НАВЫК (редактирование) -->
     <el-dialog
       v-model="skillDialogVisible"
       :title="editingSkill ? 'Редактирование навыка' : 'Новый навык'"
@@ -285,7 +278,6 @@
           />
         </el-form-item>
 
-        <!-- Этапы подтверждения -->
         <div class="form-section">
           <h4 class="section-title">Этапы подтверждения</h4>
           <div class="stages-list">
@@ -314,7 +306,6 @@
                 />
               </div>
 
-              <!-- Вопросы/Задания внутри этапа -->
               <div class="stage-questions">
                 <div v-for="(q, qIdx) in stage.questions" :key="qIdx" class="question-item">
                   <div class="question-header">
@@ -381,8 +372,10 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="skillDialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="saveSkill" :loading="skillsLoading">Сохранить</el-button>
+        <el-button class="btn-cancel" @click="skillDialogVisible = false">Отмена</el-button>
+        <el-button class="btn-save" type="primary" @click="saveSkill" :loading="skillsLoading"
+          >Сохранить</el-button
+        >
       </template>
     </el-dialog>
   </section>
@@ -416,7 +409,6 @@ const categoriesLoading = ref(false)
 const viewSkillLoading = ref(false)
 const skillSearch = ref('')
 
-// 🔧 Добавлена зависимость от categories для реактивности
 const filteredSkills = computed(() => {
   const _ = props.categories
   if (!skillSearch.value) return props.skills || []
@@ -473,7 +465,6 @@ const mapTypeToBackend = (frontendType) => {
 
 const isPracticeOrPerformance = (type) => type === 'practice' || type === 'performance'
 
-// 🔧 Вспомогательная: имена категорий по ID
 const getCategoryNamesByIds = (ids, categoriesList) => {
   if (!ids || !Array.isArray(ids) || ids.length === 0) return ''
   if (!categoriesList || !Array.isArray(categoriesList)) return ''
@@ -486,14 +477,11 @@ const getCategoryNamesByIds = (ids, categoriesList) => {
   return names.join(', ')
 }
 
-//  УПРОЩЕНО: категории теперь приходят с бэкенда в правильном формате
 const getSkillCategoryNames = (skill) => {
-  // 1. Если имя уже вычислено в родителе
   if (skill?.categoryNames?.trim()) {
     return skill.categoryNames
   }
 
-  // 2. Фоллбэк: извлекаем из skill.categories (массив объектов с category_name)
   if (Array.isArray(skill.categories) && skill.categories.length > 0) {
     const names = skill.categories
       .map((c) => c?.category_name || c?.name)
@@ -501,7 +489,6 @@ const getSkillCategoryNames = (skill) => {
     if (names.length > 0) return names.join(', ')
   }
 
-  // 3. Последний фоллбэк: поиск по ID в props.categories
   let ids = []
   if (Array.isArray(skill.categoryIds)) ids.push(...skill.categoryIds)
   if (Array.isArray(skill.category_ids)) ids.push(...skill.category_ids)
@@ -569,7 +556,6 @@ const extractCategoryIds = (categoriesData) => {
     .filter((id) => id != null)
 }
 
-// 🔧 Вспомогательная функция для перенумерации вопросов в этапе (1, 2, 3...)
 const renumberQuestions = (stage) => {
   if (!stage.questions || !Array.isArray(stage.questions)) return
   stage.questions.forEach((q, idx) => {
@@ -577,7 +563,6 @@ const renumberQuestions = (stage) => {
   })
 }
 
-// === Категории: API ===
 const addCategory = async () => {
   const name = newCategoryName.value.trim()
   if (!name) return ElMessage.warning('Введите название')
@@ -635,7 +620,6 @@ const saveSkill = async () => {
   try {
     skillsLoading.value = true
 
-    // 🔧 Принудительно перенумеровываем все вопросы перед отправкой на сервер
     skillForm.value.stages.forEach((stage) => {
       renumberQuestions(stage)
     })
@@ -814,7 +798,6 @@ const openSkillDialog = (skill = null) => {
           questions: s.questions?.map((q) => ({ ...q, text: q.text || q.question || '' })) || [],
         })) || [],
     }
-    // 🔧 Перенумеровываем вопросы при открытии формы редактирования
     skillForm.value.stages.forEach((stage) => {
       renumberQuestions(stage)
     })
@@ -850,9 +833,7 @@ const addQuestion = (idx) => {
     if (!skillForm.value.stages[idx].questions) {
       skillForm.value.stages[idx].questions = []
     }
-    // Добавляем пустой вопрос
     skillForm.value.stages[idx].questions.push({ text: '', answer: '' })
-    // 🔧 Сразу перенумеровываем, чтобы новый вопрос получил правильный порядковый номер
     renumberQuestions(skillForm.value.stages[idx])
   }
 }
@@ -860,12 +841,10 @@ const addQuestion = (idx) => {
 const removeQuestion = (sIdx, qIdx) => {
   if (skillForm.value.stages?.[sIdx]?.questions?.[qIdx]) {
     skillForm.value.stages[sIdx].questions.splice(qIdx, 1)
-    // 🔧 Перенумеровываем оставшиеся вопросы после удаления
     renumberQuestions(skillForm.value.stages[sIdx])
   }
 }
 
-// 🔧 Watch для принудительного обновления при изменении категорий
 watch(
   () => props.categories,
   () => {
@@ -916,12 +895,10 @@ watch(
 .data-table :deep(.el-table__row:hover) {
   background-color: var(--background);
 }
-/* ✅ Горизонтальная прокрутка таблицы */
 :deep(.data-table.el-table),
 :deep(.data-table .el-table__body-wrapper) {
   overflow-x: auto;
 }
-/* ✅ Фиксация первого столбца (Название навыка) */
 :deep(.data-table .el-table__body tr > td:first-child),
 :deep(.data-table .el-table__header tr > th:first-child) {
   position: sticky;
@@ -930,14 +907,12 @@ watch(
   background: #fff;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
 }
-/* ✅ Корректный фон при наведении на строку для фиксированной ячейки */
 :deep(.data-table .el-table__body tr:hover > td:first-child) {
   background: #f5f7fa !important;
 }
 :deep(.data-table .el-table__body tr.el-table__row--striped:hover > td:first-child) {
   background: #fafafa !important;
 }
-/* ✅ Фон заголовка фиксированного столбца */
 :deep(.data-table .el-table__header tr > th:first-child) {
   background: #fafafa;
 }
@@ -1031,7 +1006,6 @@ watch(
   color: var(--text);
   line-height: 1.5;
 }
-/* 🔧 Новый класс для сохранения переносов строк в многострочных полях */
 .view-value-multiline {
   white-space: pre-wrap;
   word-break: break-word;
@@ -1146,15 +1120,13 @@ watch(
   padding-top: var(--spacing-md);
 }
 
-/* 🔧 Стили для текстовых заглушек (вместо картинок) */
 .empty-message {
-  color: #909399; /* Серый цвет */
+  color: #909399;
   font-size: 13px;
   padding: 8px 0;
   font-style: italic;
 }
 
-/* ✅ АДАПТИВНОСТЬ: кнопки под заголовком выравниваем вправо */
 @media (max-width: 768px) {
   .section-header {
     flex-direction: column;
@@ -1162,7 +1134,7 @@ watch(
   }
   .header-actions {
     width: 100%;
-    justify-content: flex-end; /* ✅ Выравнивание кнопок по правому краю */
+    justify-content: flex-end;
   }
   .filters-row {
     flex-direction: column;
@@ -1175,7 +1147,6 @@ watch(
   }
 }
 
-/* ✅ АДАПТИВНОСТЬ МОДАЛЬНЫХ ОКОН: только ширина, без изменения содержимого */
 @media (max-width: 1200px) {
   :deep(.admin-dialog .el-dialog) {
     width: 85% !important;
@@ -1228,5 +1199,70 @@ watch(
 }
 :deep(.category-select .el-tag) {
   margin-right: 4px;
+}
+</style>
+
+<style>
+.btn-create-skill.el-button--primary {
+  background-color: #4a2c6d !important;
+  border-color: #4a2c6d !important;
+  color: #fff !important;
+}
+.btn-create-skill.el-button--primary:hover {
+  background-color: #3a2255 !important;
+  border-color: #3a2255 !important;
+  color: #fff !important;
+}
+.btn-create-skill.el-button--primary:active {
+  background-color: #2d1a42 !important;
+  border-color: #2d1a42 !important;
+}
+
+.btn-categories.el-button {
+  background-color: #fff !important;
+  border-color: #dcdfe6 !important;
+  color: #606266 !important;
+}
+.btn-categories.el-button:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
+}
+
+.btn-save.el-button--primary {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  color: #fff !important;
+}
+.btn-save.el-button--primary:hover {
+  background-color: #5daf34 !important;
+  border-color: #5daf34 !important;
+  color: #fff !important;
+}
+.btn-save.el-button--primary:active {
+  background-color: #53a32f !important;
+  border-color: #53a32f !important;
+}
+
+.btn-cancel.el-button {
+  background-color: #fff !important;
+  border-color: #dcdfe6 !important;
+  color: #606266 !important;
+}
+.btn-cancel.el-button:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
+}
+
+.btn-edit.el-button {
+  background-color: #fff !important;
+  border-color: #dcdfe6 !important;
+  color: #606266 !important;
+}
+.btn-edit.el-button:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
 }
 </style>
