@@ -70,7 +70,7 @@
       width="90%"
       :style="{ maxWidth: '500px' }"
       :close-on-click-modal="true"
-      class="view-dialog"
+      class="admin-dialog"
       align-center
     >
       <div v-if="viewMeeting" class="view-content">
@@ -111,12 +111,8 @@
       </div>
 
       <template #footer>
-        <div class="view-footer">
-          <el-button type="danger" size="small" @click="confirmDelete">Удалить</el-button>
-          <el-button type="primary" size="small" @click="openEditDialog(viewMeeting)">
-            Редактировать
-          </el-button>
-        </div>
+        <el-button :icon="Edit" @click="openEditDialog(viewMeeting)">Редактировать</el-button>
+        <el-button type="danger" :icon="Delete" @click="confirmDelete">Удалить</el-button>
       </template>
     </el-dialog>
   </section>
@@ -125,7 +121,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus, Search, Edit, Delete } from '@element-plus/icons-vue'
 import MeetingDialog from '@/components/common/MeetingDialog.vue'
 import axios from 'axios'
 
@@ -358,11 +354,6 @@ onMounted(() => {
 .view-row .value {
   color: var(--text);
 }
-.view-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-}
 
 @media (max-width: 440px) {
   .section-header {
@@ -384,5 +375,19 @@ onMounted(() => {
     grid-template-columns: 1fr;
     gap: var(--spacing-xs);
   }
+}
+</style>
+
+<style>
+.admin-dialog .el-dialog__footer .el-button:not(.el-button--primary):first-child:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
+}
+
+.admin-dialog .el-dialog__footer .el-button:first-child:hover {
+  background-color: #e8e8e8 !important;
+  border-color: #c0c4cc !important;
+  color: #606266 !important;
 }
 </style>
