@@ -190,7 +190,7 @@
                         class="qa-question"
                         @click="toggleQAExpand(viewingSkill.id || 'view', stage.id || idx, qIdx)"
                       >
-                        <span>{{ qIdx + 1 }}.</span>
+                        <span class="qa-question-num">{{ qIdx + 1 }}.</span>
                         <span class="qa-question-text">{{ q.text || 'Без текста' }}</span>
                         <el-icon
                           class="collapse-icon"
@@ -1055,7 +1055,7 @@ watch(
 }
 .qa-question {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--spacing-xs);
   padding: var(--spacing-xs) var(--spacing-sm);
   background: #f5f5f5;
@@ -1065,8 +1065,16 @@ watch(
 .qa-question:hover {
   background: #ebebeb;
 }
+.qa-question-num {
+  flex-shrink: 0;
+  min-width: 24px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text);
+  line-height: 1.5;
+}
 .qa-question-text {
   flex: 1;
+  line-height: 1.5;
 }
 .qa-answer {
   padding: var(--spacing-sm);
@@ -1079,6 +1087,7 @@ watch(
   transition: transform 0.2s;
   color: var(--gray);
   font-size: 14px;
+  align-self: center;
 }
 .collapse-icon.expanded {
   transform: rotate(90deg);
